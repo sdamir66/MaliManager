@@ -152,8 +152,8 @@ fun FinanceApp(db: AppDb) {
                         NavigationBarItem(
                             selected = section == 2,
                             onClick = { section = 2 },
-                            icon = { Text("☁", style = MaterialTheme.typography.titleLarge) },
-                            label = { Text("پشتیبان") }
+                            icon = { Text("⚙️", style = MaterialTheme.typography.titleLarge) },
+                            label = { Text("تنظیمات") }
                         )
                     }
                 }
@@ -479,6 +479,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     }
     if (profit) ProfitSettingsEditor(db, a, setting, accounts) { profit = false }
 }
+
 @Composable
 fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, onCancel: () -> Unit) {
     var type by remember(old) { mutableStateOf(old?.type ?: "بدهکار") }
@@ -677,7 +678,7 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "حساب‌های کالایی",
+                "کالاها",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
@@ -738,10 +739,10 @@ fun GoodEditor(old: Good?, onSave: (Good) -> Unit, onCancel: () -> Unit) {
     var u by remember(old) { mutableStateOf(old?.unit ?: "") }
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(if (old == null) "حساب کالایی جدید" else "ویرایش کالا") },
+        title = { Text(if (old == null) "کالای جدید" else "ویرایش کالا") },
         text = {
             Column {
-                OutlinedTextField(n, { n = it }, label = { Text("نام کالا") },
+                OutlinedTextField(n, { n = it }, label = { Text("نام") },
                     modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(t, { t = it }, label = { Text("نوع کالا") },
@@ -896,11 +897,18 @@ fun BackupScreen(db: AppDb) {
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text(
-            "پشتیبان و بازیابی",
+            "تنظیمات",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
         Spacer(Modifier.height(16.dp))
+
+        Text(
+            "پشتیبان و بازیابی",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(8.dp))
         Card(
             Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -914,7 +922,7 @@ fun BackupScreen(db: AppDb) {
                 )
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         Button(
             { create.launch("MaliManager-backup.json") },
             modifier = Modifier.fillMaxWidth()
@@ -979,6 +987,42 @@ fun BackupScreen(db: AppDb) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        // ✅ کارت درباره
+        Spacer(Modifier.height(20.dp))
+        Text(
+            "درباره",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(8.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            )
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    "مدیریت مالی",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "نسخه ۱.۰",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "سازنده: sdamir66",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
     }
 }
 
