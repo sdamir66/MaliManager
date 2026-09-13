@@ -1,52 +1,108 @@
 package com.example.maliplus.util
 
 import java.util.Calendar
+import java.util.GregorianCalendar
 import java.util.Locale
 
 object Jalali {
-    fun format(millis: Long): String {
-        val c = Calendar.getInstance().apply { timeInMillis = millis }
-        val r = gregorianToJalali(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
-        return "%04d/%02d/%02d".format(Locale.US, r[0], r[1], r[2])
-    }
-    fun nowJalali(): IntArray { return fromMillis(System.currentTimeMillis()) }
-    fun fromMillis(millis: Long): IntArray {
-        val c = Calendar.getInstance().apply { timeInMillis = millis }
-        return gregorianToJalali(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
-    }
-    fun startOfJalaliMonth(year: Int, month: Int): Long = jalaliToMillis(year, month, 1)
-    fun endOfJalaliMonth(year: Int, month: Int): Long = jalaliToMillis(year, month, daysInMonth(year, month), true)
-    fun daysInMonth(year: Int, month: Int): Int = if (month <= 6) 31 else if (month <= 11) 30 else if (isLeap(year)) 30 else 29
-    fun isLeap(jy: Int): Boolean { val r = ((jy % 33) + 33) % 33; return r in setOf(1, 5, 9, 13, 17, 22, 26, 30) }
-    fun parse(s: String): Long? {
-        val p = s.trim().replace('-', '/').split('/')
-        if (p.size != 3) return null
-        val y = p[0].toIntOrNull() ?: return null; val m = p[1].toIntOrNull() ?: return null; val d = p[2].toIntOrNull() ?: return null
-        if (m !in 1..12 || d !in 1..daysInMonth(y, m)) return null
-        return jalaliToMillis(y, m, d)
-    }
-    fun monthName(m: Int) = listOf("", "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند")[m]
+    private val monthNames = arrayOf(
+        "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+        "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
+    )
 
-    private fun jalaliToMillis(jy:Int,jm:Int,jd:Int,end:Boolean=false):Long {
-        val g = jalaliToGregorian(jy,jm,jd) ?: error("invalid date")
-        return Calendar.getInstance().apply { set(g[0], g[1]-1, g[2], if(end)23 else 0, if(end)59 else 0, if(end)59 else 0); set(Calendar.MILLISECOND, if(end)999 else 0) }.timeInMillis
+    fun monthName(m: Int): String = monthNames[(m - 1).coerceIn(0, 11)]
+
+    fun nowJalali(): IntArray = toJalali(System.currentTimeMillis())
+
+    fun format(millis: Long): String {
+        val j = toJalali(millis)
+        return "%04d/%02d/%02d".format(Locale.US, j[0], j[1], j[2])
     }
-    private fun jalaliToGregorian(jy:Int,jm:Int,jd:Int):IntArray? {
-        val gy=jy+621; val days = (jy-979)*365 + ((jy-979)/33)*8 + (((jy-979)%33)+3)/4 + if(jm<=6)(jm-1)*31 else (jm-1)*30+6 + jd-1
-        var gDays=days+79; var gy2=1600 + 400*(gDays/146097); var rem=gDays%146097
-        if(rem>=36525){rem--;gy2 += 100*(rem/36524); rem%=36524; if(rem>=365) rem++}
-        gy2 += 4*(rem/1461); rem%=1461
-        if(rem>=366){rem--;gy2 += rem/365; rem%=365}
-        val gd=rem+1; val leap=((gy2%4==0 && gy2%100!=0)||gy2%400==0)
-        val mdays=intArrayOf(0,31,if(leap)29 else 28,31,30,31,30,31,31,30,31,30,31); var gm=1; var x=gd
-        while(gm<=12 && x>mdays[gm]){x-=mdays[gm];gm++}
-        return if(gm<=12) intArrayOf(gy2,gm,x) else null
+
+    fun parse(s: String): Long? {
+        val parts = s.trim().split("/")
+        if (parts.size != 3) return null
+        val y = parts[0].toIntOrNull() ?: return null
+        val m = parts[1].toIntOrNull() ?: return null
+        val d = parts[2].toIntOrNull() ?: return null
+        if (m !in 1..12 || d !in 1..31) return null
+        return toGregorian(y, m, d)
     }
-    private fun gregorianToJalali(gy:Int,gm:Int,gd:Int):IntArray {
-        val gdm=intArrayOf(0,31,59,90,120,151,181,212,243,273,304,334); var jy=gy-621
-        var days=365*(gy-1600)+(gy-1600+3)/4-(gy-1600+99)/100+(gy-1600+399)/400; days += gd+gdm[gm-1]; if(gm>2 && ((gy%4==0&&gy%100!=0)||gy%400==0)) days++; days-=79
-        val jy2=jy-979; val cycle=jy2/33; val rem=jy2%33; var jday=days-33*cycle*12053-(rem/4)*1461; var jyear=979+33*cycle+4*(rem/4)
-        if(rem%4==0 && jday<=0){jyear--;jday+=365}; if(jday>186){jyear+=(jday-1)/365;jday=(jday-1)%365}else{jyear+=(jday-1)/366;jday=(jday-1)%366}
-        val jm=if(jday<=186)(jday-1)/31+1 else (jday-187)/30+7; val jd=if(jday<=186)(jday-1)%31+1 else (jday-187)%30+1; return intArrayOf(jyear,jm,jd)
+
+    fun daysInMonth(y: Int, m: Int): Int = when {
+        m in 1..6 -> 31
+        m in 7..11 -> 30
+        m == 12 -> if (isLeap(y)) 30 else 29
+        else -> 30
+    }
+
+    fun startOfJalaliMonth(y: Int, m: Int): Long = toGregorian(y, m, 1)
+
+    private fun isLeap(y: Int): Boolean {
+        val r = y % 33
+        return r in intArrayOf(1, 5, 9, 13, 17, 22, 26, 30)
+    }
+
+    private fun toJalali(millis: Long): IntArray {
+        val cal = GregorianCalendar().apply { timeInMillis = millis }
+        val gy = cal.get(Calendar.YEAR)
+        val gm = cal.get(Calendar.MONTH) + 1
+        val gd = cal.get(Calendar.DAY_OF_MONTH)
+        return gregorianToJalali(gy, gm, gd)
+    }
+
+    private fun toGregorian(jy: Int, jm: Int, jd: Int): Long {
+        val g = jalaliToGregorian(jy, jm, jd)
+        val cal = GregorianCalendar(g[0], g[1] - 1, g[2], 0, 0, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
+    }
+
+    private fun gregorianToJalali(gy: Int, gm: Int, gd: Int): IntArray {
+        val g_d_m = intArrayOf(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
+        var jy = if (gy <= 1600) 0 else 979
+        var gy2 = if (gy <= 1600) gy - 621 else gy - 1600
+        var gm2 = gm
+        var gd2 = gd
+        var days = 365 * gy2 + ((gy2 + 3) / 4) - ((gy2 + 99) / 100) + ((gy2 + 399) / 400) - 80 + gd2 + g_d_m[gm2 - 1]
+        jy += 33 * (days / 12053)
+        days %= 12053
+        jy += 4 * (days / 1461)
+        days %= 1461
+        if (days > 365) {
+            jy += (days - 1) / 365
+            days = (days - 1) % 365
+        }
+        val jm = if (days < 186) 1 + days / 31 else 7 + (days - 186) / 30
+        val jd = if (days < 186) 1 + days % 31 else 1 + (days - 186) % 30
+        return intArrayOf(jy, jm, jd)
+    }
+
+    private fun jalaliToGregorian(jy: Int, jm: Int, jd: Int): IntArray {
+        var jy2 = jy + 1595
+        var days = -355668 + 365 * jy2 + ((jy2 / 33) * 8) + (((jy2 % 33) + 3) / 4) + jd
+        days += if (jm < 7) (jm - 1) * 31 else ((jm - 7) * 30) + 186
+        var gy = 400 * (days / 146097)
+        days %= 146097
+        if (days > 36524) {
+            gy += 100 * (--days / 36524)
+            days %= 36524
+            if (days >= 365) days++
+        }
+        gy += 4 * (days / 1461)
+        days %= 1461
+        if (days > 365) {
+            gy += (days - 1) / 365
+            days = (days - 1) % 365
+        }
+        var gd = days + 1
+        val sal_a = intArrayOf(0, 31, if ((gy % 4 == 0 && gy % 100 != 0) || gy % 400 == 0) 29 else 28,
+            31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+        var gm = 0
+        while (gm < 13 && gd > sal_a[gm]) {
+            gd -= sal_a[gm]
+            gm++
+        }
+        return intArrayOf(gy, gm, gd)
     }
 }
