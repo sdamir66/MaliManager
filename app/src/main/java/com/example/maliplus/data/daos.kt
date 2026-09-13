@@ -29,10 +29,10 @@ interface AccountDao {
 
 @Dao
 interface TxDao {
-    @Query("SELECT * FROM transactions WHERE accountId = :id ORDER BY dateMillis DESC")
+    @Query("SELECT * FROM transactions WHERE accountId = :id ORDER BY dateMillis DESC, id DESC")
     fun byAccount(id: Long): Flow<List<Transaction>>
 
-    @Query("SELECT * FROM transactions WHERE accountId = :id ORDER BY dateMillis DESC")
+    @Query("SELECT * FROM transactions WHERE accountId = :id ORDER BY dateMillis DESC, id DESC")
     suspend fun byAccountNow(id: Long): List<Transaction>
 
     @Insert
@@ -83,10 +83,10 @@ interface GoodDao {
 
 @Dao
 interface GoodTxDao {
-    @Query("SELECT * FROM goods_transactions WHERE goodId = :id ORDER BY dateMillis DESC")
+    @Query("SELECT * FROM goods_transactions WHERE goodId = :id ORDER BY dateMillis DESC, id DESC")
     fun byGood(id: Long): Flow<List<GoodTransaction>>
 
-    @Query("SELECT * FROM goods_transactions WHERE goodId = :id ORDER BY dateMillis DESC")
+    @Query("SELECT * FROM goods_transactions WHERE goodId = :id ORDER BY dateMillis DESC, id DESC")
     suspend fun byGoodNow(id: Long): List<GoodTransaction>
 
     @Insert
