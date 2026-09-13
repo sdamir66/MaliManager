@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -33,8 +34,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.room.Room
 import com.example.maliplus.data.*
+import com.example.maliplus.ui.theme.BgLight
+import com.example.maliplus.ui.theme.CreditGreen
+import com.example.maliplus.ui.theme.DebitRed
+import com.example.maliplus.ui.theme.HeaderBlue
 import com.example.maliplus.ui.theme.MaliManagerTheme
 import com.example.maliplus.util.Jalali
 import kotlinx.coroutines.CoroutineScope
@@ -104,10 +110,6 @@ private fun money(v: Long) = NumberFormat.getNumberInstance(Locale.US).format(v)
 private fun qty(v: Double): String =
     if (v % 1.0 == 0.0) v.toLong().toString() else "%.3f".format(Locale.US, v)
 
-/**
- * برای هر تراکنش، مانده حساب بعد از اون تراکنش رو محاسبه می‌کنه.
- * لیست تراکنش‌ها باید از قدیمی به جدید مرتب باشه.
- */
 fun calculateRunningBalances(transactions: List<Transaction>): Map<Long, Long> {
     val sorted = transactions.sortedBy { it.dateMillis }
     val balances = mutableMapOf<Long, Long>()
@@ -204,108 +206,13 @@ fun BackButton(onClick: () -> Unit) {
 }
 
 @Composable
-fun SwipeableTransactionItem(
-    transaction: Transaction,
-    currency: String,
-    runningBalance: Long,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    onEdit()
-                    false
-                }
-                SwipeToDismissBoxValue.EndToStart -> {
-                    onDelete()
-                    false
-                }
-                else -> false
-            }
-        }
-    )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = true,
-        enableDismissFromEndToStart = true,
-        backgroundContent = {
-            val value = dismissState.targetValue
-            val (color, icon, alignment) = when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> Triple(
-                    Color(0xFF2E7D6B),
-                    Icons.Default.Edit,
-                    Alignment.CenterStart
-                )
-                SwipeToDismissBoxValue.EndToStart -> Triple(
-                    Color(0xFFBA1A1A),
-                    Icons.Default.Delete,
-                    Alignment.CenterEnd
-                )
-                else -> Triple(Color.Transparent, Icons.Default.Edit, Alignment.Center)
-            }
-            Box(
-                Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                contentAlignment = alignment
-            ) {
-                if (color != Color.Transparent) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(color, shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-            }
-        }
-    ) {
-        ListItem(
-            headlineContent = {
-                Text(
-                    "${transaction.type}: ${money(transaction.amount)} $currency",
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            supportingContent = {
-                Column {
-                    Text(
-                        "${Jalali.format(transaction.dateMillis)}  ${transaction.note}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        "مانده: ${money(kotlin.math.abs(runningBalance))} $currency",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (runningBalance >= 0) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            },
-            colors = ListItemDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
-        )
-    }
-}
-
-@Composable
 fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
     val list by db.accounts().all().collectAsState(emptyList())
     var edit by remember { mutableStateOf<Account?>(null) }
     var add by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().background(BgLight).padding(16.dp)) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -319,41 +226,64 @@ fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
             Button({ add = true }) { Text("+ حساب") }
         }
         Spacer(Modifier.height(12.dp))
-        LazyColumn {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(list) { a ->
                 val tx by db.tx().byAccount(a.id).collectAsState(emptyList())
                 val bal = tx.sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+                val isCredit = bal >= 0
                 Card(
                     Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp)
                         .clickable { onOpen(a) },
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
                     Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier
+                                    .size(44.dp)
+                                    .background(
+                                        color = if (isCredit) CreditGreen else DebitRed,
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    a.name.take(1),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    a.name,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "ارز: ${a.currency}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
                         Text(
-                            a.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
+                            "مانده: ${money(kotlin.math.abs(bal))} ${a.currency}",
+                            fontWeight = FontWeight.Bold,
+                            color = if (isCredit) CreditGreen else DebitRed,
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Spacer(Modifier.height(4.dp))
                         Text(
-                            "ارز: ${a.currency}",
+                            if (isCredit) "بستانکار" else "بدهکار",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color.Gray
                         )
-                        Spacer(Modifier.height(4.dp))
-                        val isCredit = bal >= 0
-                        Text(
-                            "مانده: ${money(kotlin.math.abs(bal))} ${a.currency}  ${if (isCredit) "بستانکار" else "بدهکار"}",
-                            color = if (isCredit) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(10.dp))
                         Row {
                             TextButton({ onOpen(a) }) { Text("گردش") }
                             TextButton({ edit = a }) { Text("ویرایش") }
@@ -444,117 +374,235 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     var profit by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val bal = tx.sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+    val isCredit = bal >= 0
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            BackButton(onBack)
-            Spacer(Modifier.width(12.dp))
-            Text(
-                a.name,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-        val isCredit = bal >= 0
-        Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("مانده حساب", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${money(kotlin.math.abs(bal))} ${a.currency}",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Text(
-                    if (isCredit) "بستانکار" else "بدهکار",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Row {
-            Button({ add = true }, modifier = Modifier.weight(1f)) { Text("+ تراکنش") }
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton({ profit = true }, modifier = Modifier.weight(1f)) { Text("تنظیم سود") }
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "برای ویرایش به راست، برای حذف به چپ بکش",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 4.dp)
-        )
+    Box(Modifier.fillMaxSize().background(BgLight)) {
+        Column(Modifier.fillMaxSize()) {
 
-        val runningBalances = remember(tx) { calculateRunningBalances(tx) }
-
-        LazyColumn {
-            items(tx, key = { it.id }) { t ->
-                val running = runningBalances[t.id] ?: 0L
-                if (!t.isAutoProfit) {
-                    SwipeableTransactionItem(
-                        transaction = t,
-                        currency = a.currency,
-                        runningBalance = running,
-                        onEdit = { editor = t },
-                        onDelete = {
-                            scope.launch {
-                                db.tx().delete(t)
-                                ProfitEngine.recalculateAll(db)
-                            }
-                        }
+            // ═══════════ هدر آبی با گوشه‌های گرد ═══════════
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .background(
+                        color = HeaderBlue,
+                        shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                     )
-                } else {
-                    ListItem(
-                        headlineContent = {
-                            Text(
-                                "${t.type}: ${money(t.amount)} ${a.currency}",
-                                fontWeight = FontWeight.SemiBold
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "بازگشت",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
                             )
-                        },
-                        supportingContent = {
-                            Column {
-                                Text("${Jalali.format(t.dateMillis)}  ${t.note}",
-                                    style = MaterialTheme.typography.bodySmall)
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    "مانده: ${money(kotlin.math.abs(running))} ${a.currency}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (running >= 0) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.error,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        },
-                        trailingContent = {
-                            Surface(
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                                shape = MaterialTheme.shapes.small
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            a.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { profit = true }) {
+                            Text("⚙", color = Color.White, fontSize = 22.sp)
+                        }
+                    }
+                }
+            }
+
+            // ═══════════ کارت سفید شناور روی هدر ═══════════
+            Card(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .offset(y = (-80).dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "مانده کل",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Gray
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            money(kotlin.math.abs(bal)),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1B1B1F)
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (isCredit) "بستانکار" else "بدهکار",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isCredit) CreditGreen else DebitRed,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                a.currency,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                    Box(
+                        Modifier
+                            .size(56.dp)
+                            .background(HeaderBlue, shape = CircleShape)
+                            .clickable { add = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "+",
+                            color = Color.White,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Light
+                        )
+                    }
+                }
+            }
+
+            // ═══════════ لیست تراکنش‌ها ═══════════
+            val runningBalances = remember(tx) { calculateRunningBalances(tx) }
+
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .offset(y = (-60).dp)
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text(
+                        "تراکنش‌ها",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1B1B1F),
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    )
+                }
+
+                items(tx, key = { it.id }) { t ->
+                    val running = runningBalances[t.id] ?: 0L
+                    val isTxCredit = t.type == "بستانکار"
+
+                    Card(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !t.isAutoProfit) { editor = t },
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(46.dp)
+                                    .background(
+                                        color = if (isTxCredit) CreditGreen else DebitRed,
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    "خودکار",
+                                    if (isTxCredit) "↓" else "↑",
+                                    color = Color.White,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(Modifier.width(12.dp))
+
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        t.type,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isTxCredit) CreditGreen else DebitRed
+                                    )
+                                    if (t.isAutoProfit) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text(
+                                                "خودکار",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    Jalali.format(t.dateMillis),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
+                                if (t.note.isNotBlank()) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        t.note,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF45464F)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.width(8.dp))
+
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    "${if (isTxCredit) "+" else "−"}${money(t.amount)}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isTxCredit) CreditGreen else DebitRed
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "مانده: ${money(kotlin.math.abs(running))}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    color = Color.Gray
                                 )
                             }
                         }
-                    )
+                    }
                 }
             }
         }
     }
+
     if (add) TxEditor(null, a.id, {
         scope.launch { db.tx().insert(it); ProfitEngine.recalculateAll(db); add = false }
     }, { add = false })
@@ -606,11 +654,9 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
         confirmButton = {
             Button({
                 val n = amount.toLongOrNull()
-                // اگه ویرایش بود، تاریخ اصلی حفظ بشه؛ اگه جدید بود، ساعت فعلی اضافه بشه
                 val d = if (old != null) {
                     val newDate = Jalali.parse(date)
                     if (newDate != null) {
-                        // ساعت اصلی رو حفظ کن
                         val origCal = java.util.Calendar.getInstance().apply { timeInMillis = old.dateMillis }
                         val newCal = java.util.Calendar.getInstance().apply { timeInMillis = newDate }
                         newCal.set(java.util.Calendar.HOUR_OF_DAY, origCal.get(java.util.Calendar.HOUR_OF_DAY))
@@ -776,7 +822,7 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
     var edit by remember { mutableStateOf<Good?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().background(BgLight).padding(16.dp)) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -790,19 +836,17 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
             Button({ add = true }) { Text("+ کالا") }
         }
         Spacer(Modifier.height(12.dp))
-        LazyColumn {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(list) { g ->
                 val tx by db.goodTx().byGood(g.id).collectAsState(emptyList())
                 val bal = tx.sumOf { if (it.type == "دریافت") it.quantity else -it.quantity }
                 Card(
                     Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp)
                         .clickable { onOpen(g) },
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
@@ -812,11 +856,13 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
                         )
                         Spacer(Modifier.height(4.dp))
                         Text("نوع: ${g.type}  |  واحد: ${g.unit}",
-                            style = MaterialTheme.typography.bodyMedium)
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Gray)
                         Text(
                             "موجودی: ${qty(bal)} ${g.unit}",
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleMedium
                         )
                         Spacer(Modifier.height(8.dp))
                         Row {
@@ -872,63 +918,162 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val bal = tx.sumOf { if (it.type == "دریافت") it.quantity else -it.quantity }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            BackButton(onBack)
-            Spacer(Modifier.width(12.dp))
-            Text(
-                g.name,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-        Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("موجودی", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${qty(bal)} ${g.unit}",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Button({ add = true }, modifier = Modifier.fillMaxWidth()) { Text("+ گردش کالا") }
-        Spacer(Modifier.height(8.dp))
-        LazyColumn {
-            items(tx) { x ->
-                ListItem(
-                    headlineContent = {
+    Box(Modifier.fillMaxSize().background(BgLight)) {
+        Column(Modifier.fillMaxSize()) {
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .background(
+                        color = HeaderBlue,
+                        shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+                    )
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "بازگشت",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(4.dp))
                         Text(
-                            "${x.type}: ${qty(x.quantity)} ${g.unit}",
-                            fontWeight = FontWeight.SemiBold
+                            g.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
                         )
-                    },
-                    supportingContent = { Text("${Jalali.format(x.dateMillis)}  ${x.note}") },
-                    trailingContent = {
-                        Row {
-                            TextButton({ edit = x }) { Text("ویرایش") }
-                            TextButton({ scope.launch { db.goodTx().delete(x) } }) {
-                                Text("حذف", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+
+            Card(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .offset(y = (-70).dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("موجودی", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "${qty(bal)} ${g.unit}",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1B1B1F)
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .size(56.dp)
+                            .background(HeaderBlue, shape = CircleShape)
+                            .clickable { add = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("+", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Light)
+                    }
+                }
+            }
+
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .offset(y = (-50).dp)
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text(
+                        "گردش کالا",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1B1B1F),
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    )
+                }
+                items(tx) { x ->
+                    val isIn = x.type == "دریافت"
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(46.dp)
+                                    .background(
+                                        color = if (isIn) CreditGreen else DebitRed,
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    if (isIn) "↓" else "↑",
+                                    color = Color.White,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    x.type,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isIn) CreditGreen else DebitRed
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    Jalali.format(x.dateMillis),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
+                                if (x.note.isNotBlank()) {
+                                    Text(x.note, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                            Text(
+                                "${qty(x.quantity)} ${g.unit}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isIn) CreditGreen else DebitRed
+                            )
                         }
                     }
-                )
+                }
             }
         }
     }
+
     if (add) GoodTxEditor(null, g.id, { scope.launch { db.goodTx().insert(it); add = false } }, { add = false })
     edit?.let {
         GoodTxEditor(it, g.id, { scope.launch { db.goodTx().update(it); edit = null } }, { edit = null })
@@ -1017,7 +1162,7 @@ fun BackupScreen(db: AppDb) {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().background(BgLight).padding(16.dp)) {
         Text(
             "تنظیمات",
             style = MaterialTheme.typography.headlineSmall,
@@ -1033,9 +1178,9 @@ fun BackupScreen(db: AppDb) {
         Spacer(Modifier.height(8.dp))
         Card(
             Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(Modifier.padding(16.dp)) {
                 Text(
@@ -1064,9 +1209,11 @@ fun BackupScreen(db: AppDb) {
         Spacer(Modifier.height(8.dp))
         Card(
             Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            )
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(Modifier.padding(16.dp)) {
                 if (autoBackupExists) {
@@ -1119,9 +1266,11 @@ fun BackupScreen(db: AppDb) {
         Spacer(Modifier.height(8.dp))
         Card(
             Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer
-            )
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(Modifier.padding(16.dp)) {
                 Text(
