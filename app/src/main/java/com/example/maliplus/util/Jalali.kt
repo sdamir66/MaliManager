@@ -16,7 +16,10 @@ object Jalali {
 
     fun format(millis: Long): String {
         val j = toJalali(millis)
-        return "%04d/%02d/%02d".format(Locale.US, j[0], j[1], j[2])
+        val cal = Calendar.getInstance().apply { timeInMillis = millis }
+        val h = cal.get(Calendar.HOUR_OF_DAY)
+        val min = cal.get(Calendar.MINUTE)
+        return "%04d/%02d/%02d %02d:%02d".format(Locale.US, j[0], j[1], j[2], h, min)
     }
 
     fun parse(s: String): Long? {
@@ -27,6 +30,21 @@ object Jalali {
         val d = parts[2].toIntOrNull() ?: return null
         if (m !in 1..12 || d !in 1..31) return null
         return toGregorian(y, m, d)
+    }
+
+    /**
+     * تاریخ شمسی رو می‌گیره و ساعت فعلی سیستم رو بهش اضافه می‌کنه.
+     * اینطوری اگه چند تراکنش توی یه روز ثبت بشن، به ترتیب ساعت مرتب می‌شن.
+     */
+    fun parseWithCurrentTime(s: String): Long? {
+        val dateMillis = parse(s) ?: return null
+        val now = Calendar.getInstance()
+        val dateCal = Calendar.getInstance().apply { timeInMillis = dateMillis }
+        dateCal.set(Calendar.HOUR_OF_DAY, now.get(Calendar.HOUR_OF_DAY))
+        dateCal.set(Calendar.MINUTE, now.get(Calendar.MINUTE))
+        dateCal.set(Calendar.SECOND, now.get(Calendar.SECOND))
+        dateCal.set(Calendar.MILLISECOND, now.get(Calendar.MILLISECOND))
+        return dateCal.timeInMillis
     }
 
     fun daysInMonth(y: Int, m: Int): Int = when {
