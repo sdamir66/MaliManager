@@ -1,31 +1,41 @@
-import com.example.maliplus.ui.theme.MaliManagerTheme
 @file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.example.maliplus
 
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.room.Room
 import com.example.maliplus.data.*
+import com.example.maliplus.ui.theme.MaliManagerTheme
 import com.example.maliplus.util.Jalali
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -39,9 +49,11 @@ class MainActivity : ComponentActivity() {
         val db = Room.databaseBuilder(applicationContext, AppDb::class.java, "finance.db")
             .fallbackToDestructiveMigration()
             .build()
-        setContent { 
-    MaliManagerTheme { 
-        FinanceApp(db)
+        setContent {
+            MaliManagerTheme {
+                FinanceApp(db)
+            }
+        }
     }
 }
 
@@ -56,30 +68,55 @@ fun FinanceApp(db: AppDb) {
     var good by remember { mutableStateOf<Good?>(null) }
     var section by remember { mutableIntStateOf(0) }
 
+    // ✅ مدیریت دکمه بک گوشی
+    BackHandler(enabled = account != null || good != null || section != 0) {
+        when {
+            account != null -> account = null
+            good != null -> good = null
+            section != 0 -> section = 0
+        }
+    }
+
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         when {
             account != null -> AccountScreen(db, account!!) { account = null }
             good != null -> GoodScreen(db, good!!) { good = null }
             else -> Scaffold(
-                topBar = { TopAppBar(title = { Text("مدیریت مالی") }) },
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                "مدیریت مالی",
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                },
                 bottomBar = {
-                    NavigationBar {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 3.dp
+                    ) {
                         NavigationBarItem(
                             selected = section == 0,
                             onClick = { section = 0 },
-                            icon = { Text("👤") },
+                            icon = { Text("👤", style = MaterialTheme.typography.titleLarge) },
                             label = { Text("حساب‌ها") }
                         )
                         NavigationBarItem(
                             selected = section == 1,
                             onClick = { section = 1 },
-                            icon = { Text("📦") },
+                            icon = { Text("📦", style = MaterialTheme.typography.titleLarge) },
                             label = { Text("کالاها") }
                         )
                         NavigationBarItem(
                             selected = section == 2,
                             onClick = { section = 2 },
-                            icon = { Text("☁") },
+                            icon = { Text("☁", style = MaterialTheme.typography.titleLarge) },
                             label = { Text("پشتیبان") }
                         )
                     }
@@ -97,6 +134,115 @@ fun FinanceApp(db: AppDb) {
     }
 }
 
+// ✅ کامپوزبل جدید: دکمه بازگشت بزرگ و مدرن
+@Composable
+fun BackButton(onClick: () -> Unit) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp),
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    ) {
+        Icon(
+            imageVector = Icons.Default.ArrowBack,
+            contentDescription = "بازگشت",
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
+
+// ✅ کامپوزبل جدید: آیتم تراکنش با قابلیت Swipe
+@Composable
+fun SwipeableTransactionItem(
+    transaction: Transaction,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onEdit()
+                    false
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onDelete()
+                    false
+                }
+                else -> false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val value = dismissState.targetValue
+            val (color, icon, alignment) = when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> Triple(
+                    Color(0xFF2E7D6B),
+                    Icons.Default.Edit,
+                    Alignment.CenterStart
+                )
+                SwipeToDismissBoxValue.EndToStart -> Triple(
+                    Color(0xFFBA1A1A),
+                    Icons.Default.Delete,
+                    Alignment.CenterEnd
+                )
+                else -> Triple(
+                    Color.Transparent,
+                    Icons.Default.Edit,
+                    Alignment.Center
+                )
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                contentAlignment = alignment
+            ) {
+                if (color != Color.Transparent) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(color, shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        }
+    ) {
+        ListItem(
+            headlineContent = {
+                Text(
+                    "${transaction.type}: ${money(transaction.amount)} تومان",
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            supportingContent = {
+                Text(
+                    "${Jalali.format(transaction.dateMillis)}  ${transaction.note}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            },
+            colors = ListItemDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        )
+    }
+}
+
 @Composable
 fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
     val list by db.accounts().all().collectAsState(emptyList())
@@ -110,9 +256,14 @@ fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("حساب‌ها", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "حساب‌ها",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
             Button({ add = true }) { Text("+ حساب") }
         }
+        Spacer(Modifier.height(12.dp))
         LazyColumn {
             items(list) { a ->
                 val tx by db.tx().byAccount(a.id).collectAsState(emptyList())
@@ -120,12 +271,28 @@ fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
                 Card(
                     Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable { onOpen(a) }
+                        .padding(vertical = 6.dp)
+                        .clickable { onOpen(a) },
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(a.name, style = MaterialTheme.typography.titleLarge)
-                        Text("مانده: ${money(kotlin.math.abs(bal))} تومان  ${if (bal >= 0) "بستانکار" else "بدهکار"}")
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            a.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        val isCredit = bal >= 0
+                        Text(
+                            "مانده: ${money(kotlin.math.abs(bal))} تومان  ${if (isCredit) "بستانکار" else "بدهکار"}",
+                            color = if (isCredit) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(8.dp))
                         Row {
                             TextButton({ onOpen(a) }) { Text("گردش") }
                             TextButton({ edit = a }) { Text("ویرایش") }
@@ -134,7 +301,9 @@ fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
                                     db.tx().deleteAutoByPrefix(a.id.toString())
                                     db.accounts().delete(a)
                                 }
-                            }) { Text("حذف") }
+                            }) {
+                                Text("حذف", color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
@@ -157,6 +326,7 @@ fun AccountEditor(old: Account?, onSave: (Account) -> Unit, onCancel: () -> Unit
         text = {
             Column {
                 OutlinedTextField(name, { name = it }, label = { Text("نام حساب") })
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(note, { note = it }, label = { Text("توضیحات") })
             }
         },
@@ -179,37 +349,99 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     val bal = tx.sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onBack) { Text("بازگشت") }
-            Text(a.name, style = MaterialTheme.typography.headlineSmall)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            BackButton(onBack)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                a.name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
         }
-        Text(
-            "مانده: ${money(kotlin.math.abs(bal))} تومان  ${if (bal >= 0) "بستانکار" else "بدهکار"}",
-            style = MaterialTheme.typography.titleMedium
-        )
-        Spacer(Modifier.height(8.dp))
-        Row {
-            Button({ add = true }) { Text("+ تراکنش") }
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton({ profit = true }) { Text("تنظیم سود") }
-        }
-        LazyColumn {
-            items(tx) { t ->
-                ListItem(
-                    headlineContent = { Text("${t.type}: ${money(t.amount)} تومان") },
-                    supportingContent = { Text("${Jalali.format(t.dateMillis)}  ${t.note}") },
-                    trailingContent = {
-                        if (!t.isAutoProfit) Row {
-                            TextButton({ editor = t }) { Text("ویرایش") }
-                            TextButton({
-                                scope.launch {
-                                    db.tx().delete(t)
-                                    ProfitEngine.recalculateAll(db)
-                                }
-                            }) { Text("حذف") }
-                        } else Text("خودکار")
-                    }
+        Spacer(Modifier.height(12.dp))
+        val isCredit = bal >= 0
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text("مانده حساب", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${money(kotlin.math.abs(bal))} تومان",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
+                Text(
+                    if (isCredit) "بستانکار" else "بدهکار",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row {
+            Button(
+                { add = true },
+                modifier = Modifier.weight(1f)
+            ) { Text("+ تراکنش") }
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(
+                { profit = true },
+                modifier = Modifier.weight(1f)
+            ) { Text("تنظیم سود") }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "برای ویرایش به راست، برای حذف به چپ بکش",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+        LazyColumn {
+            items(tx, key = { it.id }) { t ->
+                if (!t.isAutoProfit) {
+                    SwipeableTransactionItem(
+                        transaction = t,
+                        onEdit = { editor = t },
+                        onDelete = {
+                            scope.launch {
+                                db.tx().delete(t)
+                                ProfitEngine.recalculateAll(db)
+                            }
+                        }
+                    )
+                } else {
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                "${t.type}: ${money(t.amount)} تومان",
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        },
+                        supportingContent = { Text("${Jalali.format(t.dateMillis)}  ${t.note}") },
+                        trailingContent = {
+                            Surface(
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    "خودکار",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -241,13 +473,25 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                     Spacer(Modifier.width(8.dp))
                     FilterChip(type == "بستانکار", { type = "بستانکار" }, label = { Text("بستانکار") })
                 }
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     amount, { amount = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    label = { Text("مبلغ تومان") }
+                    label = { Text("مبلغ تومان") },
+                    modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(date, { date = it }, label = { Text("تاریخ شمسی 1405/02/31") })
-                OutlinedTextField(note, { note = it }, label = { Text("شرح") })
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    date, { date = it },
+                    label = { Text("تاریخ شمسی 1405/02/31") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    note, { note = it },
+                    label = { Text("شرح") },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
@@ -284,25 +528,31 @@ fun ProfitSettingsEditor(
                     Checkbox(enabled, { enabled = !enabled })
                     Text("فعال باشد")
                 }
-                Text("نوع سود")
+                Spacer(Modifier.height(8.dp))
+                Text("نوع سود", fontWeight = FontWeight.Medium)
                 Row {
                     FilterChip(mode == "DAILY_ANNUAL", { mode = "DAILY_ANNUAL" }, label = { Text("روزشمار سالانه") })
                     Spacer(Modifier.width(6.dp))
                     FilterChip(mode == "MONTHLY", { mode = "MONTHLY" }, label = { Text("ماهانه") })
                 }
+                Spacer(Modifier.height(8.dp))
                 if (mode == "DAILY_ANNUAL")
                     OutlinedTextField(
                         annual, { annual = it },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        label = { Text("نرخ سالانه ٪") }
+                        label = { Text("نرخ سالانه ٪") },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 if (mode == "MONTHLY")
                     OutlinedButton({ ratesOpen = true }) { Text("تنظیم نرخ ماه‌های سال") }
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     day, { day = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    label = { Text("روز واریز ماه") }
+                    label = { Text("روز واریز ماه") },
+                    modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(8.dp))
                 Text("حساب مقصد سود", style = MaterialTheme.typography.titleSmall)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(dest == null, { dest = null })
@@ -314,6 +564,7 @@ fun ProfitSettingsEditor(
                         Text(acc.name)
                     }
                 }
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "با ویرایش تراکنش‌های گذشته، سودهای خودکار دوباره محاسبه می‌شوند.",
                     style = MaterialTheme.typography.bodySmall
@@ -363,7 +614,7 @@ fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     TextButton({ year-- }) { Text("سال قبل") }
-                    Text(year.toString(), style = MaterialTheme.typography.titleMedium)
+                    Text(year.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     TextButton({ year++ }) { Text("سال بعد") }
                 }
                 LazyColumn {
@@ -403,10 +654,19 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
     val scope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("حساب‌های کالایی", style = MaterialTheme.typography.headlineSmall)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "حساب‌های کالایی",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
             Button({ add = true }) { Text("+ کالا") }
         }
+        Spacer(Modifier.height(12.dp))
         LazyColumn {
             items(list) { g ->
                 val tx by db.goodTx().byGood(g.id).collectAsState(emptyList())
@@ -414,17 +674,34 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
                 Card(
                     Modifier
                         .fillMaxWidth()
-                        .padding(4.dp)
-                        .clickable { onOpen(g) }
+                        .padding(vertical = 6.dp)
+                        .clickable { onOpen(g) },
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(g.name, style = MaterialTheme.typography.titleLarge)
-                        Text("نوع: ${g.type}  |  واحد: ${g.unit}")
-                        Text("موجودی: ${qty(bal)} ${g.unit}")
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            g.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text("نوع: ${g.type}  |  واحد: ${g.unit}",
+                            style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "موجودی: ${qty(bal)} ${g.unit}",
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(8.dp))
                         Row {
                             TextButton({ onOpen(g) }) { Text("گردش") }
                             TextButton({ edit = g }) { Text("ویرایش") }
-                            TextButton({ scope.launch { db.goods().delete(g) } }) { Text("حذف") }
+                            TextButton({ scope.launch { db.goods().delete(g) } }) {
+                                Text("حذف", color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
@@ -447,9 +724,14 @@ fun GoodEditor(old: Good?, onSave: (Good) -> Unit, onCancel: () -> Unit) {
         title = { Text(if (old == null) "حساب کالایی جدید" else "ویرایش کالا") },
         text = {
             Column {
-                OutlinedTextField(n, { n = it }, label = { Text("نام کالا") })
-                OutlinedTextField(t, { t = it }, label = { Text("نوع کالا") })
-                OutlinedTextField(u, { u = it }, label = { Text("واحد") })
+                OutlinedTextField(n, { n = it }, label = { Text("نام کالا") },
+                    modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(t, { t = it }, label = { Text("نوع کالا") },
+                    modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(u, { u = it }, label = { Text("واحد") },
+                    modifier = Modifier.fillMaxWidth())
             }
         },
         confirmButton = {
@@ -468,21 +750,59 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
     val bal = tx.sumOf { if (it.type == "دریافت") it.quantity else -it.quantity }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row {
-            TextButton(onBack) { Text("بازگشت") }
-            Text(g.name, style = MaterialTheme.typography.headlineSmall)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            BackButton(onBack)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                g.name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
         }
-        Text("موجودی: ${qty(bal)} ${g.unit}")
-        Button({ add = true }) { Text("+ گردش کالا") }
+        Spacer(Modifier.height(12.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text("موجودی", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${qty(bal)} ${g.unit}",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            { add = true },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("+ گردش کالا") }
+        Spacer(Modifier.height(8.dp))
         LazyColumn {
             items(tx) { x ->
                 ListItem(
-                    headlineContent = { Text("${x.type}: ${qty(x.quantity)} ${g.unit}") },
+                    headlineContent = {
+                        Text(
+                            "${x.type}: ${qty(x.quantity)} ${g.unit}",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
                     supportingContent = { Text("${Jalali.format(x.dateMillis)}  ${x.note}") },
                     trailingContent = {
                         Row {
                             TextButton({ edit = x }) { Text("ویرایش") }
-                            TextButton({ scope.launch { db.goodTx().delete(x) } }) { Text("حذف") }
+                            TextButton({ scope.launch { db.goodTx().delete(x) } }) {
+                                Text("حذف", color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 )
@@ -515,9 +835,15 @@ fun GoodTxEditor(
                     Spacer(Modifier.width(8.dp))
                     FilterChip(type == "پرداخت", { type = "پرداخت" }, label = { Text("پرداخت") })
                 }
-                OutlinedTextField(q, { q = it }, label = { Text("مقدار") })
-                OutlinedTextField(date, { date = it }, label = { Text("تاریخ شمسی") })
-                OutlinedTextField(note, { note = it }, label = { Text("شرح") })
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(q, { q = it }, label = { Text("مقدار") },
+                    modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(date, { date = it }, label = { Text("تاریخ شمسی") },
+                    modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(note, { note = it }, label = { Text("شرح") },
+                    modifier = Modifier.fillMaxWidth())
             }
         },
         confirmButton = {
@@ -543,15 +869,40 @@ fun BackupScreen(db: AppDb) {
         if (uri != null) scope.launch { Backup.restoreOrExport(context, db, uri, true) }
     }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("پشتیبان و بازیابی", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "پشتیبان و بازیابی",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(16.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    "فایل JSON را می‌توان در حافظه یا Google Drive ذخیره کرد.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Button(
+            { create.launch("MaliManager-backup.json") },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("گرفتن بکاپ") }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            { open.launch(arrayOf("application/json", "text/*")) },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("بازیابی بکاپ") }
         Spacer(Modifier.height(12.dp))
-        Text("فایل JSON را می‌توان در حافظه یا Google Drive ذخیره کرد.")
-        Spacer(Modifier.height(12.dp))
-        Button({ create.launch("MaliManager-backup.json") }) { Text("گرفتن بکاپ") }
-        Button({ open.launch(arrayOf("application/json", "text/*")) }) { Text("بازیابی بکاپ") }
         Text(
             "برای Google Drive، هنگام انتخاب محل فایل، Google Drive را انتخاب کن.",
-            style = MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
