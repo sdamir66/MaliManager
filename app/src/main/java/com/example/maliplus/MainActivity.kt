@@ -191,6 +191,7 @@ fun BackButton(onClick: () -> Unit) {
 @Composable
 fun SwipeableTransactionItem(
     transaction: Transaction,
+    currency: String,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -254,7 +255,7 @@ fun SwipeableTransactionItem(
         ListItem(
             headlineContent = {
                 Text(
-                    "${transaction.type}: ${money(transaction.amount)} تومان",
+                    "${transaction.type}: ${money(transaction.amount)} $currency",
                     fontWeight = FontWeight.SemiBold
                 )
             },
@@ -313,9 +314,15 @@ fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.height(4.dp))
+                        Text(
+                            "ارز: ${a.currency}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
                         val isCredit = bal >= 0
                         Text(
-                            "مانده: ${money(kotlin.math.abs(bal))} تومان  ${if (isCredit) "بستانکار" else "بدهکار"}",
+                            "مانده: ${money(kotlin.math.abs(bal))} ${a.currency}  ${if (isCredit) "بستانکار" else "بدهکار"}",
                             color = if (isCredit) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.Medium
@@ -348,6 +355,11 @@ fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
 fun AccountEditor(old: Account?, onSave: (Account) -> Unit, onCancel: () -> Unit) {
     var name by remember(old) { mutableStateOf(old?.name ?: "") }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
+    var currency by remember(old) { mutableStateOf(old?.currency ?: "تومان") }
+    var currencyExpanded by remember { mutableStateOf(false) }
+
+    val currencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(if (old == null) "حساب عادی جدید" else "ویرایش حساب") },
@@ -358,10 +370,39 @@ fun AccountEditor(old: Account?, onSave: (Account) -> Unit, onCancel: () -> Unit
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(note, { note = it }, label = { Text("توضیحات") },
                     modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+                Text("ارز", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { currencyExpanded = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(currency, modifier = Modifier.weight(1f))
+                        Text("▼")
+                    }
+                    DropdownMenu(
+                        expanded = currencyExpanded,
+                        onDismissRequest = { currencyExpanded = false }
+                    ) {
+                        currencies.forEach { c ->
+                            DropdownMenuItem(
+                                text = { Text(c) },
+                                onClick = {
+                                    currency = c
+                                    currencyExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
-            Button({ if (name.isNotBlank()) onSave(Account(old?.id ?: 0, name, note)) }) { Text("ذخیره") }
+            Button({
+                if (name.isNotBlank())
+                    onSave(Account(old?.id ?: 0, name, note, currency))
+            }) { Text("ذخیره") }
         },
         dismissButton = { TextButton(onCancel) { Text("انصراف") } }
     )
@@ -404,7 +445,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 Text("مانده حساب", style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "${money(kotlin.math.abs(bal))} تومان",
+                    "${money(kotlin.math.abs(bal))} ${a.currency}",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -434,6 +475,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 if (!t.isAutoProfit) {
                     SwipeableTransactionItem(
                         transaction = t,
+                        currency = a.currency,
                         onEdit = { editor = t },
                         onDelete = {
                             scope.launch {
@@ -446,7 +488,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                     ListItem(
                         headlineContent = {
                             Text(
-                                "${t.type}: ${money(t.amount)} تومان",
+                                "${t.type}: ${money(t.amount)} ${a.currency}",
                                 fontWeight = FontWeight.SemiBold
                             )
                         },
@@ -501,7 +543,7 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                 OutlinedTextField(
                     amount, { amount = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    label = { Text("مبلغ تومان") },
+                    label = { Text("مبلغ") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
@@ -988,7 +1030,6 @@ fun BackupScreen(db: AppDb) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        // ✅ کارت درباره
         Spacer(Modifier.height(20.dp))
         Text(
             "درباره",
@@ -1096,7 +1137,9 @@ object Backup {
             for (i in 0 until accounts.length()) {
                 val o = accounts.getJSONObject(i)
                 val old = o.optLong("id", 0)
-                val id = db.accounts().insert(Account(0, o.getString("name"), o.optString("note")))
+                val id = db.accounts().insert(
+                    Account(0, o.getString("name"), o.optString("note"), o.optString("currency", "تومان"))
+                )
                 idMap[old] = id
             }
             val goods = root.optJSONArray("goods") ?: JSONArray()
@@ -1157,6 +1200,7 @@ object Backup {
             for (a in db.accounts().allNow()) {
                 val o = JSONObject()
                 o.put("id", a.id); o.put("name", a.name); o.put("note", a.note)
+                o.put("currency", a.currency)
                 aa.put(o)
             }
             root.put("accounts", aa)
