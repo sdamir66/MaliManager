@@ -7,7 +7,8 @@ import androidx.room.PrimaryKey
 data class Account(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    val note: String = ""
+    val note: String = "",
+    val currency: String = "تومان"
 )
 
 @Entity(tableName = "transactions")
@@ -15,7 +16,7 @@ data class Transaction(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val accountId: Long,
     val dateMillis: Long,
-    val type: String,          // "بدهکار" یا "بستانکار"
+    val type: String,
     val amount: Long,
     val note: String = "",
     val isAutoProfit: Boolean = false,
@@ -35,7 +36,7 @@ data class GoodTransaction(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val goodId: Long,
     val dateMillis: Long,
-    val type: String,          // "دریافت" یا "پرداخت"
+    val type: String,
     val quantity: Double,
     val note: String = ""
 )
@@ -45,7 +46,7 @@ data class ProfitSettings(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val accountId: Long,
     val enabled: Boolean = false,
-    val mode: String = "DAILY_ANNUAL",  // "DAILY_ANNUAL" یا "MONTHLY"
+    val mode: String = "DAILY_ANNUAL",
     val annualRate: Double = 0.0,
     val payoutDay: Int = 30,
     val destinationAccountId: Long? = null
