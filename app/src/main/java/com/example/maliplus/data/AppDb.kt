@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         ProfitSettings::class,
         MonthlyRate::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDb : RoomDatabase() {
