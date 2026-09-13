@@ -104,6 +104,21 @@ private fun money(v: Long) = NumberFormat.getNumberInstance(Locale.US).format(v)
 private fun qty(v: Double): String =
     if (v % 1.0 == 0.0) v.toLong().toString() else "%.3f".format(Locale.US, v)
 
+/**
+ * برای هر تراکنش، مانده حساب بعد از اون تراکنش رو محاسبه می‌کنه.
+ * لیست تراکنش‌ها باید از قدیمی به جدید مرتب باشه.
+ */
+fun calculateRunningBalances(transactions: List<Transaction>): Map<Long, Long> {
+    val sorted = transactions.sortedBy { it.dateMillis }
+    val balances = mutableMapOf<Long, Long>()
+    var running = 0L
+    for (t in sorted) {
+        running += if (t.type == "بستانکار") t.amount else -t.amount
+        balances[t.id] = running
+    }
+    return balances
+}
+
 @Composable
 fun FinanceApp(db: AppDb) {
     var account by remember { mutableStateOf<Account?>(null) }
@@ -192,6 +207,7 @@ fun BackButton(onClick: () -> Unit) {
 fun SwipeableTransactionItem(
     transaction: Transaction,
     currency: String,
+    runningBalance: Long,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -260,10 +276,20 @@ fun SwipeableTransactionItem(
                 )
             },
             supportingContent = {
-                Text(
-                    "${Jalali.format(transaction.dateMillis)}  ${transaction.note}",
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Column {
+                    Text(
+                        "${Jalali.format(transaction.dateMillis)}  ${transaction.note}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "مانده: ${money(kotlin.math.abs(runningBalance))} $currency",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (runningBalance >= 0) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             },
             colors = ListItemDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.surface
@@ -470,12 +496,17 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 4.dp)
         )
+
+        val runningBalances = remember(tx) { calculateRunningBalances(tx) }
+
         LazyColumn {
             items(tx, key = { it.id }) { t ->
+                val running = runningBalances[t.id] ?: 0L
                 if (!t.isAutoProfit) {
                     SwipeableTransactionItem(
                         transaction = t,
                         currency = a.currency,
+                        runningBalance = running,
                         onEdit = { editor = t },
                         onDelete = {
                             scope.launch {
@@ -492,7 +523,20 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                                 fontWeight = FontWeight.SemiBold
                             )
                         },
-                        supportingContent = { Text("${Jalali.format(t.dateMillis)}  ${t.note}") },
+                        supportingContent = {
+                            Column {
+                                Text("${Jalali.format(t.dateMillis)}  ${t.note}",
+                                    style = MaterialTheme.typography.bodySmall)
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "مانده: ${money(kotlin.math.abs(running))} ${a.currency}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (running >= 0) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        },
                         trailingContent = {
                             Surface(
                                 color = MaterialTheme.colorScheme.tertiaryContainer,
@@ -527,7 +571,12 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
     var type by remember(old) { mutableStateOf(old?.type ?: "بدهکار") }
     var amount by remember(old) { mutableStateOf(old?.amount?.toString() ?: "") }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
-    var date by remember(old) { mutableStateOf(Jalali.format(old?.dateMillis ?: System.currentTimeMillis())) }
+    var date by remember(old) {
+        mutableStateOf(
+            if (old != null) Jalali.format(old.dateMillis).substringBefore(" ")
+            else Jalali.format(System.currentTimeMillis()).substringBefore(" ")
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onCancel,
@@ -557,7 +606,21 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
         confirmButton = {
             Button({
                 val n = amount.toLongOrNull()
-                val d = Jalali.parse(date)
+                // اگه ویرایش بود، تاریخ اصلی حفظ بشه؛ اگه جدید بود، ساعت فعلی اضافه بشه
+                val d = if (old != null) {
+                    val newDate = Jalali.parse(date)
+                    if (newDate != null) {
+                        // ساعت اصلی رو حفظ کن
+                        val origCal = java.util.Calendar.getInstance().apply { timeInMillis = old.dateMillis }
+                        val newCal = java.util.Calendar.getInstance().apply { timeInMillis = newDate }
+                        newCal.set(java.util.Calendar.HOUR_OF_DAY, origCal.get(java.util.Calendar.HOUR_OF_DAY))
+                        newCal.set(java.util.Calendar.MINUTE, origCal.get(java.util.Calendar.MINUTE))
+                        newCal.set(java.util.Calendar.SECOND, origCal.get(java.util.Calendar.SECOND))
+                        newCal.timeInMillis
+                    } else null
+                } else {
+                    Jalali.parseWithCurrentTime(date)
+                }
                 if (n != null && n > 0 && d != null)
                     onSave(Transaction(old?.id ?: 0, accountId, d, type, n, note, false, null))
             }) { Text("ذخیره") }
@@ -879,7 +942,12 @@ fun GoodTxEditor(
 ) {
     var type by remember(old) { mutableStateOf(old?.type ?: "دریافت") }
     var q by remember(old) { mutableStateOf(old?.quantity?.toString() ?: "") }
-    var date by remember(old) { mutableStateOf(Jalali.format(old?.dateMillis ?: System.currentTimeMillis())) }
+    var date by remember(old) {
+        mutableStateOf(
+            if (old != null) Jalali.format(old.dateMillis).substringBefore(" ")
+            else Jalali.format(System.currentTimeMillis()).substringBefore(" ")
+        )
+    }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
 
     AlertDialog(
@@ -906,7 +974,19 @@ fun GoodTxEditor(
         confirmButton = {
             Button({
                 val n = q.toDoubleOrNull()
-                val d = Jalali.parse(date)
+                val d = if (old != null) {
+                    val newDate = Jalali.parse(date)
+                    if (newDate != null) {
+                        val origCal = java.util.Calendar.getInstance().apply { timeInMillis = old.dateMillis }
+                        val newCal = java.util.Calendar.getInstance().apply { timeInMillis = newDate }
+                        newCal.set(java.util.Calendar.HOUR_OF_DAY, origCal.get(java.util.Calendar.HOUR_OF_DAY))
+                        newCal.set(java.util.Calendar.MINUTE, origCal.get(java.util.Calendar.MINUTE))
+                        newCal.set(java.util.Calendar.SECOND, origCal.get(java.util.Calendar.SECOND))
+                        newCal.timeInMillis
+                    } else null
+                } else {
+                    Jalali.parseWithCurrentTime(date)
+                }
                 if (n != null && n > 0 && d != null)
                     onSave(GoodTransaction(old?.id ?: 0, id, d, type, n, note))
             }) { Text("ذخیره") }
