@@ -1,3 +1,4 @@
+import com.example.maliplus.ui.theme.MaliManagerTheme
 @file:OptIn(ExperimentalMaterial3Api::class)
 package com.example.maliplus
 
@@ -38,7 +39,9 @@ class MainActivity : ComponentActivity() {
         val db = Room.databaseBuilder(applicationContext, AppDb::class.java, "finance.db")
             .fallbackToDestructiveMigration()
             .build()
-        setContent { FinanceApp(db) }
+        setContent { 
+    MaliManagerTheme { 
+        FinanceApp(db)
     }
 }
 
