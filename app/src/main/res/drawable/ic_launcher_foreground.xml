@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- دایره پس‌زمینه -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54m-20,0a20,20 0,1 1,40 0a20,20 0,1 1,-40 0" />
+    <!-- علامت + (حساب) -->
+    <path
+        android:fillColor="#2E7D6B"
+        android:pathData="M52,44h4v8h8v4h-8v8h-4v-8h-8v-4h8z" />
+</vector>
