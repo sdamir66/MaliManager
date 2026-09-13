@@ -47,10 +47,6 @@ import org.json.JSONObject
 import java.text.NumberFormat
 import java.util.Locale
 
-/**
- * بکاپ خودکار به حافظه داخلی برنامه.
- * فایل توی پوشه‌ی filesDir ذخیره می‌شه و نیازی به دسترسی خاصی نداره.
- */
 suspend fun autoBackupToInternal(context: Context, db: AppDb): Boolean {
     return try {
         val file = java.io.File(context.filesDir, "auto_backup.json")
@@ -74,10 +70,9 @@ class MainActivity : ComponentActivity() {
             .fallbackToDestructiveMigration()
             .build()
 
-        // ✅ بکاپ خودکار هر ۱ دقیقه
         backupScope.launch {
             while (true) {
-                delay(60_000L) // ۱ دقیقه
+                delay(60_000L)
                 autoBackupToInternal(applicationContext, db)
             }
         }
@@ -89,7 +84,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ✅ بکاپ خودکار وقتی برنامه به پس‌زمینه می‌ره
     override fun onStop() {
         super.onStop()
         backupScope.launch {
@@ -97,7 +91,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ✅ بکاپ خودکار موقع خروج کامل
     override fun onDestroy() {
         backupScope.launch {
             autoBackupToInternal(applicationContext, db)
@@ -234,16 +227,10 @@ fun SwipeableTransactionItem(
                     Icons.Default.Delete,
                     Alignment.CenterEnd
                 )
-                else -> Triple(
-                    Color.Transparent,
-                    Icons.Default.Edit,
-                    Alignment.Center
-                )
+                else -> Triple(Color.Transparent, Icons.Default.Edit, Alignment.Center)
             }
             Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
+                Modifier.fillMaxSize().padding(horizontal = 20.dp),
                 contentAlignment = alignment
             ) {
                 if (color != Color.Transparent) {
@@ -492,7 +479,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     }
     if (profit) ProfitSettingsEditor(db, a, setting, accounts) { profit = false }
 }
-
 @Composable
 fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, onCancel: () -> Unit) {
     var type by remember(old) { mutableStateOf(old?.type ?: "بدهکار") }
@@ -897,7 +883,6 @@ fun BackupScreen(db: AppDb) {
         if (uri != null) scope.launch { Backup.restoreOrExport(context, db, uri, true) }
     }
 
-    // ✅ وضعیت بکاپ خودکار
     var autoBackupExists by remember { mutableStateOf(false) }
     var autoBackupInfo by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
@@ -909,4 +894,281 @@ fun BackupScreen(db: AppDb) {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Text(
+            "پشتیبان و بازیابی",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(16.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    "فایل JSON را می‌توان در حافظه یا Google Drive ذخیره کرد.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Button(
+            { create.launch("MaliManager-backup.json") },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("گرفتن بکاپ") }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            { open.launch(arrayOf("application/json", "text/*")) },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("بازیابی بکاپ") }
+
+        Spacer(Modifier.height(20.dp))
+        Text(
+            "بکاپ خودکار",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(8.dp))
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+            )
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                if (autoBackupExists) {
+                    Text(
+                        "✅ بکاپ خودکار موجود است",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "آخرین بکاپ: $autoBackupInfo",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        {
+                            scope.launch {
+                                val file = java.io.File(context.filesDir, "auto_backup.json")
+                                if (file.exists()) {
+                                    Backup.restoreOrExport(context, db, Uri.fromFile(file), true)
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("بازیابی از بکاپ خودکار") }
+                } else {
+                    Text(
+                        "هنوز بکاپ خودکاری ذخیره نشده است.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "بکاپ خودکار هر ۱ دقیقه، هنگام خروج از برنامه و رفتن به پس‌زمینه ذخیره می‌شود.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+object ProfitEngine {
+    suspend fun recalculateAll(db: AppDb) {
+        db.tx().deleteAllAuto()
+        for (a in db.accounts().allNow()) recalculateWithoutDeletingAuto(db, a.id)
+    }
+
+    suspend fun recalculate(db: AppDb, accountId: Long) {
+        recalculateAll(db)
+    }
+
+    private suspend fun recalculateWithoutDeletingAuto(db: AppDb, accountId: Long) {
+        val s = db.profit().byAccountNow(accountId) ?: return
+        if (!s.enabled) return
+        val base = db.tx().byAccountNow(accountId).filter { !it.isAutoProfit }
+        val rates = db.profit().ratesNow(accountId)
+        val today = Jalali.nowJalali()
+        val out = mutableListOf<Transaction>()
+        val months = rates.map { it.year * 12 + it.month }.toMutableSet()
+        if (s.mode == "DAILY_ANNUAL") {
+            for (y in (today[0] - 2)..today[0]) for (m in 1..12) months.add(y * 12 + m)
+        }
+        for (key in months.sorted()) {
+            val y = key / 12
+            val m = key % 12
+            if (y > today[0] || (y == today[0] && m > today[1])) continue
+            val days = Jalali.daysInMonth(y, m)
+            val rate = if (s.mode == "MONTHLY") rates.find { it.year == y && it.month == m }?.ratePercent ?: continue
+            else s.annualRate
+            var total = 0.0
+            for (d in 1..days) {
+                val t = Jalali.startOfJalaliMonth(y, m) + ((d - 1) * 86400000L)
+                val bal = balanceAt(base, t)
+                total += if (s.mode == "MONTHLY") bal * (rate / 100.0) / days
+                else bal * (rate / 100.0) / 365.0
+            }
+            val amount = kotlin.math.round(total).toLong()
+            if (amount <= 0) continue
+            val payout = jalaliPayout(y, m, s.payoutDay)
+            if (payout > System.currentTimeMillis()) continue
+            val destCandidate = s.destinationAccountId ?: accountId
+            val dest = if (db.accounts().byId(destCandidate) != null) destCandidate else accountId
+            val text = if (s.mode == "MONTHLY")
+                "سود ماهانه ${Jalali.monthName(m)} $y — نرخ ${rate}%"
+            else
+                "سود روزشمار ${Jalali.monthName(m)} $y — نرخ ${s.annualRate}% سالانه"
+            out.add(Transaction(0, dest, payout, "بستانکار", amount, text, true, "$accountId:$y:$m"))
+        }
+        db.tx().insertAll(out)
+    }
+
+    private fun balanceAt(base: List<Transaction>, t: Long): Long =
+        base.filter { it.dateMillis <= t }.sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+}
+
+private fun jalaliPayout(y: Int, m: Int, day: Int): Long =
+    Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, day.coerceAtMost(Jalali.daysInMonth(y, m))))!!
+
+object Backup {
+    suspend fun restoreOrExport(context: Context, db: AppDb, uri: Uri, restore: Boolean) {
+        if (restore) {
+            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return
+            val root = JSONObject(text)
+            db.tx().clear(); db.goodTx().clear(); db.goods().clear()
+            db.profit().clearRates(); db.profit().clearSettings(); db.accounts().clear()
+
+            val accounts = root.optJSONArray("accounts") ?: JSONArray()
+            val idMap = mutableMapOf<Long, Long>()
+            for (i in 0 until accounts.length()) {
+                val o = accounts.getJSONObject(i)
+                val old = o.optLong("id", 0)
+                val id = db.accounts().insert(Account(0, o.getString("name"), o.optString("note")))
+                idMap[old] = id
+            }
+            val goods = root.optJSONArray("goods") ?: JSONArray()
+            val goodMap = mutableMapOf<Long, Long>()
+            for (i in 0 until goods.length()) {
+                val o = goods.getJSONObject(i)
+                val old = o.optLong("id", 0)
+                val id = db.goods().insert(Good(0, o.getString("name"), o.optString("type"), o.getString("unit")))
+                goodMap[old] = id
+            }
+            val tx = root.optJSONArray("transactions") ?: JSONArray()
+            for (i in 0 until tx.length()) {
+                val o = tx.getJSONObject(i)
+                val aid = idMap[o.optLong("accountId")]
+                if (aid != null) db.tx().insert(
+                    Transaction(0, aid, o.getLong("dateMillis"), o.getString("type"),
+                        o.getLong("amount"), o.optString("note"),
+                        o.optBoolean("isAutoProfit", false),
+                        o.optString("profitKey").ifBlank { null })
+                )
+            }
+            val gtx = root.optJSONArray("goodsTransactions") ?: JSONArray()
+            for (i in 0 until gtx.length()) {
+                val o = gtx.getJSONObject(i)
+                val gid = goodMap[o.optLong("goodId")]
+                if (gid != null) db.goodTx().insert(
+                    GoodTransaction(0, gid, o.getLong("dateMillis"), o.getString("type"),
+                        o.getDouble("quantity"), o.optString("note"))
+                )
+            }
+            val ps = root.optJSONArray("profitSettings") ?: JSONArray()
+            for (i in 0 until ps.length()) {
+                val o = ps.getJSONObject(i)
+                val aid = idMap[o.optLong("accountId")]
+                if (aid != null) {
+                    val did = idMap[o.optLong("destinationAccountId")]
+                    db.profit().upsert(
+                        ProfitSettings(0, aid, o.optBoolean("enabled"),
+                            o.optString("mode", "DAILY_ANNUAL"),
+                            o.optDouble("annualRate"),
+                            o.optInt("payoutDay", 30), did)
+                    )
+                }
+            }
+            val mr = root.optJSONArray("monthlyRates") ?: JSONArray()
+            for (i in 0 until mr.length()) {
+                val o = mr.getJSONObject(i)
+                val aid = idMap[o.optLong("accountId")]
+                if (aid != null) db.profit().upsertRate(
+                    MonthlyRate(aid, o.getInt("year"), o.getInt("month"), o.getDouble("ratePercent"))
+                )
+            }
+        } else {
+            val root = JSONObject()
+            fun arr() = JSONArray()
+
+            val aa = arr()
+            for (a in db.accounts().allNow()) {
+                val o = JSONObject()
+                o.put("id", a.id); o.put("name", a.name); o.put("note", a.note)
+                aa.put(o)
+            }
+            root.put("accounts", aa)
+
+            val gg = arr()
+            for (g in db.goods().allNow()) {
+                val o = JSONObject()
+                o.put("id", g.id); o.put("name", g.name); o.put("type", g.type); o.put("unit", g.unit)
+                gg.put(o)
+            }
+            root.put("goods", gg)
+
+            val tt = arr()
+            for (a in db.accounts().allNow()) for (t in db.tx().byAccountNow(a.id)) {
+                val o = JSONObject()
+                o.put("accountId", t.accountId); o.put("dateMillis", t.dateMillis)
+                o.put("type", t.type); o.put("amount", t.amount)
+                o.put("note", t.note); o.put("isAutoProfit", t.isAutoProfit)
+                o.put("profitKey", t.profitKey)
+                tt.put(o)
+            }
+            root.put("transactions", tt)
+
+            val gt = arr()
+            for (g in db.goods().allNow()) for (t in db.goodTx().byGoodNow(g.id)) {
+                val o = JSONObject()
+                o.put("goodId", t.goodId); o.put("dateMillis", t.dateMillis)
+                o.put("type", t.type); o.put("quantity", t.quantity); o.put("note", t.note)
+                gt.put(o)
+            }
+            root.put("goodsTransactions", gt)
+
+            val ps = arr()
+            for (a in db.accounts().allNow()) {
+                val s = db.profit().byAccountNow(a.id)
+                if (s != null) {
+                    val o = JSONObject()
+                    o.put("accountId", a.id); o.put("enabled", s.enabled)
+                    o.put("mode", s.mode); o.put("annualRate", s.annualRate)
+                    o.put("payoutDay", s.payoutDay)
+                    o.put("destinationAccountId", s.destinationAccountId ?: JSONObject.NULL)
+                    ps.put(o)
+                }
+            }
+            root.put("profitSettings", ps)
+
+            val mr = arr()
+            for (a in db.accounts().allNow()) for (r in db.profit().ratesNow(a.id)) {
+                val o = JSONObject()
+                o.put("accountId", r.accountId); o.put("year", r.year)
+                o.put("month", r.month); o.put("ratePercent", r.ratePercent)
+                mr.put(o)
+            }
+            root.put("monthlyRates", mr)
+
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(root.toString(2)) }
+        }
+    }
+}
