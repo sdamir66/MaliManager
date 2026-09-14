@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -72,6 +74,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
+        enableEdgeToEdge()  // ← این خط برای رفع تداخل با status bar
         db = Room.databaseBuilder(applicationContext, AppDb::class.java, "finance.db")
             .fallbackToDestructiveMigration()
             .build()
@@ -140,47 +143,96 @@ fun FinanceApp(db: AppDb) {
             account != null -> AccountScreen(db, account!!) { account = null }
             good != null -> GoodScreen(db, good!!) { good = null }
             else -> Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { Text("مدیریت مالی", fontWeight = FontWeight.Bold) },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = HeaderBlue,
-                            titleContentColor = Color.White
-                        )
-                    )
-                },
+                containerColor = BgLight,
                 bottomBar = {
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 3.dp
-                    ) {
-                        NavigationBarItem(
-                            selected = section == 0,
-                            onClick = { section = 0 },
-                            icon = { Text("👤", style = MaterialTheme.typography.titleLarge) },
-                            label = { Text("حساب‌ها") }
-                        )
-                        NavigationBarItem(
-                            selected = section == 1,
-                            onClick = { section = 1 },
-                            icon = { Text("📦", style = MaterialTheme.typography.titleLarge) },
-                            label = { Text("کالاها") }
-                        )
-                        NavigationBarItem(
-                            selected = section == 2,
-                            onClick = { section = 2 },
-                            icon = { Text("⚙️", style = MaterialTheme.typography.titleLarge) },
-                            label = { Text("تنظیمات") }
-                        )
-                    }
+                    CustomBottomNav(
+                        selectedIndex = section,
+                        onSelect = { section = it }
+                    )
                 }
             ) { p ->
-                Box(Modifier.padding(p)) {
+                Box(Modifier.fillMaxSize().padding(p)) {
                     when (section) {
                         0 -> Accounts(db) { account = it }
                         1 -> Goods(db) { good = it }
                         else -> BackupScreen(db)
                     }
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// Bottom Navigation سفارشی با قوس
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun CustomBottomNav(
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    val items = listOf(
+        Triple("👤", "حساب‌ها", 0),
+        Triple("📦", "کالاها", 1),
+        Triple("⚙️", "تنظیمات", 2)
+    )
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(90.dp)
+    ) {
+        // پس‌زمینه با قوس
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(70.dp)
+                .align(Alignment.BottomCenter)
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .background(Color(0xFF1E1F25))
+        )
+
+        // آیتم‌ها
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(70.dp)
+                .align(Alignment.BottomCenter),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEach { (icon, label, index) ->
+                val isSelected = selectedIndex == index
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onSelect(index) }
+                        .padding(vertical = 8.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .size(if (isSelected) 44.dp else 36.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) HeaderBlue.copy(alpha = 0.25f)
+                                else Color.Transparent
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            icon,
+                            fontSize = if (isSelected) 22.sp else 20.sp
+                        )
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        label,
+                        fontSize = 11.sp,
+                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.6f),
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
                 }
             }
         }
@@ -497,14 +549,12 @@ fun SwipeableTransactionCard(
                 Spacer(Modifier.width(12.dp))
 
                 Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            transaction.type,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isTxCredit) CreditGreen else DebitRed
-                        )
-                    }
+                    Text(
+                        transaction.type,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isTxCredit) CreditGreen else DebitRed
+                    )
                     Spacer(Modifier.height(2.dp))
                     Text(
                         Jalali.format(transaction.dateMillis),
@@ -554,46 +604,55 @@ fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize().background(BgLight)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(BgLight)
+    ) {
+        // هدر آبی با statusBarsPadding
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(120.dp)
                 .background(
                     color = HeaderBlue,
                     shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                 )
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.Center
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "حساب‌ها",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${list.size} حساب",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Box(Modifier.padding(horizontal = 20.dp)) {
-            Button(
-                onClick = { add = true },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text("+ حساب جدید", fontWeight = FontWeight.Bold)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "حساب‌ها",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "${list.size} حساب",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+                // دکمه گرد + با رنگ معکوس (سفید با آیکون آبی)
+                Box(
+                    Modifier
+                        .size(52.dp)
+                        .background(Color.White, shape = CircleShape)
+                        .clickable { add = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "+",
+                        color = HeaderBlue,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
@@ -603,7 +662,7 @@ fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
             Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 24.dp),
+            contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(list) { a ->
@@ -718,44 +777,39 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
 
-            // هدر آبی جمع‌تر
+            // هدر آبی جمع‌تر با statusBarsPadding
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(170.dp)
                     .background(
                         color = HeaderBlue,
                         shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                     )
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
             ) {
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "بازگشت",
-                                tint = Color.White,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            a.name,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.weight(1f)
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "بازگشت",
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
                         )
-                        IconButton(onClick = { profit = true }) {
-                            Text("⚙", color = Color.White, fontSize = 24.sp)
-                        }
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        a.name,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { profit = true }) {
+                        Text("⚙", color = Color.White, fontSize = 24.sp)
                     }
                 }
             }
@@ -765,7 +819,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .offset(y = (-60).dp),
+                    .offset(y = (-30).dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -805,6 +859,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                             )
                         }
                     }
+                    // دکمه گرد + آبی
                     Box(
                         Modifier
                             .size(56.dp)
@@ -827,7 +882,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             LazyColumn(
                 Modifier
                     .fillMaxSize()
-                    .offset(y = (-45).dp)
+                    .offset(y = (-15).dp)
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -853,7 +908,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                             onDeleteRequest = { deleteTarget = t }
                         )
                     } else {
-                        // تراکنش خودکار
                         Card(
                             Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(18.dp),
@@ -1180,46 +1234,53 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
     var deleteTarget by remember { mutableStateOf<Good?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize().background(BgLight)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(BgLight)
+    ) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(120.dp)
                 .background(
                     color = HeaderBlue,
                     shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                 )
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.Center
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "کالاها",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${list.size} کالا",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Box(Modifier.padding(horizontal = 20.dp)) {
-            Button(
-                onClick = { add = true },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text("+ کالای جدید", fontWeight = FontWeight.Bold)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "کالاها",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "${list.size} کالا",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+                Box(
+                    Modifier
+                        .size(52.dp)
+                        .background(Color.White, shape = CircleShape)
+                        .clickable { add = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "+",
+                        color = HeaderBlue,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
@@ -1229,7 +1290,7 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
             Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 24.dp),
+            contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(list) { g ->
@@ -1355,38 +1416,33 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(170.dp)
                     .background(
                         color = HeaderBlue,
                         shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                     )
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
             ) {
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "بازگشت",
-                                tint = Color.White,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            g.name,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.weight(1f)
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "بازگشت",
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
                         )
                     }
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        g.name,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
 
@@ -1394,7 +1450,7 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .offset(y = (-60).dp),
+                    .offset(y = (-30).dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -1430,7 +1486,7 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
             LazyColumn(
                 Modifier
                     .fillMaxSize()
-                    .offset(y = (-45).dp)
+                    .offset(y = (-15).dp)
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1598,20 +1654,23 @@ fun BackupScreen(db: AppDb) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(BgLight)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(BgLight)
+    ) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(120.dp)
                 .background(
                     color = HeaderBlue,
                     shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                 )
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
             Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
@@ -1620,7 +1679,7 @@ fun BackupScreen(db: AppDb) {
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Text(
                     "مدیریت بکاپ و اطلاعات",
                     style = MaterialTheme.typography.bodyMedium,
@@ -1635,10 +1694,9 @@ fun BackupScreen(db: AppDb) {
             Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 24.dp),
+            contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // بخش بکاپ دستی
             item {
                 Text(
                     "پشتیبان و بازیابی",
@@ -1674,7 +1732,6 @@ fun BackupScreen(db: AppDb) {
                 }
             }
 
-            // بخش بکاپ خودکار
             item {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -1754,7 +1811,6 @@ fun BackupScreen(db: AppDb) {
                 }
             }
 
-            // بخش درباره
             item {
                 Spacer(Modifier.height(8.dp))
                 Text(
