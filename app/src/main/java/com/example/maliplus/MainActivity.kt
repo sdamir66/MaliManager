@@ -3,13 +3,13 @@
 package com.example.maliplus
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +37,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import com.example.maliplus.data.*
 import com.example.maliplus.ui.theme.BgLight
@@ -53,9 +54,75 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
+// ═══════════════════════════════════════════════════════
+// بکاپ خودکار — با پشتیبانی از محل دلخواه
+// ═══════════════════════════════════════════════════════
+
+private const val PREFS_NAME = "mali_prefs"
+private const val KEY_AUTO_BACKUP_URI = "auto_backup_uri"
+
+fun getSavedBackupFolderUri(context: Context): Uri? {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val uriString = prefs.getString(KEY_AUTO_BACKUP_URI, null) ?: return null
+    return try {
+        Uri.parse(uriString)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+fun saveBackupFolderUri(context: Context, uri: Uri) {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    prefs.edit().putString(KEY_AUTO_BACKUP_URI, uri.toString()).apply()
+}
+
+fun clearBackupFolderUri(context: Context) {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    prefs.edit().remove(KEY_AUTO_BACKUP_URI).apply()
+}
+
+/**
+ * بکاپ خودکار:
+ * - اگه کاربر پوشه‌ای انتخاب کرده باشه → توی همون پوشه ذخیره می‌شه
+ * - وگرنه → توی حافظه داخلی برنامه ذخیره می‌شه
+ */
 suspend fun autoBackupToInternal(context: Context, db: AppDb): Boolean {
+    return try {
+        val customFolderUri = getSavedBackupFolderUri(context)
+        
+        if (customFolderUri != null) {
+            // ذخیره در پوشه انتخاب شده توسط کاربر
+            val folder = DocumentFile.fromTreeUri(context, customFolderUri)
+            if (folder == null || !folder.exists() || !folder.canWrite()) {
+                // پوشه معتبر نیست → پاکش کن و برگرد به حالت پیش‌فرض
+                clearBackupFolderUri(context)
+                return autoBackupToDefault(context, db)
+            }
+            
+            // فایل جدید بساز (بازنویسی اگر وجود داره)
+            val existing = folder.findFile("auto_backup.json")
+            existing?.delete()
+            val newFile = folder.createFile("application/json", "auto_backup")
+                ?: return autoBackupToDefault(context, db)
+            
+            context.contentResolver.openOutputStream(newFile.uri)?.bufferedWriter()?.use {
+                it.write(Backup.exportToJson(db))
+            }
+            true
+        } else {
+            autoBackupToDefault(context, db)
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
+    }
+}
+
+private suspend fun autoBackupToDefault(context: Context, db: AppDb): Boolean {
     return try {
         val file = java.io.File(context.filesDir, "auto_backup.json")
         val uri = Uri.fromFile(file)
@@ -74,10 +141,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        enableEdgeToEdge()  // ← این خط برای رفع تداخل با status bar
         db = Room.databaseBuilder(applicationContext, AppDb::class.java, "finance.db")
             .fallbackToDestructiveMigration()
             .build()
+
+        window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
+        window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
 
         backupScope.launch {
             while (true) {
@@ -145,10 +214,101 @@ fun FinanceApp(db: AppDb) {
             else -> Scaffold(
                 containerColor = BgLight,
                 bottomBar = {
-                    CustomBottomNav(
-                        selectedIndex = section,
-                        onSelect = { section = it }
-                    )
+                    NavigationBar(
+                        containerColor = Color(0xFF1E1F25),
+                        tonalElevation = 0.dp
+                    ) {
+                        NavigationBarItem(
+                            selected = section == 0,
+                            onClick = { section = 0 },
+                            icon = {
+                                Box(
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (section == 0) HeaderBlue.copy(alpha = 0.3f)
+                                            else Color.Transparent
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("👤", fontSize = 18.sp)
+                                }
+                            },
+                            label = {
+                                Text(
+                                    "حساب‌ها",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (section == 0) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedTextColor = Color.White,
+                                unselectedTextColor = Color.White.copy(alpha = 0.6f),
+                                indicatorColor = Color.Transparent
+                            )
+                        )
+                        NavigationBarItem(
+                            selected = section == 1,
+                            onClick = { section = 1 },
+                            icon = {
+                                Box(
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (section == 1) HeaderBlue.copy(alpha = 0.3f)
+                                            else Color.Transparent
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("📦", fontSize = 18.sp)
+                                }
+                            },
+                            label = {
+                                Text(
+                                    "کالاها",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (section == 1) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedTextColor = Color.White,
+                                unselectedTextColor = Color.White.copy(alpha = 0.6f),
+                                indicatorColor = Color.Transparent
+                            )
+                        )
+                        NavigationBarItem(
+                            selected = section == 2,
+                            onClick = { section = 2 },
+                            icon = {
+                                Box(
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (section == 2) HeaderBlue.copy(alpha = 0.3f)
+                                            else Color.Transparent
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("⚙️", fontSize = 18.sp)
+                                }
+                            },
+                            label = {
+                                Text(
+                                    "تنظیمات",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (section == 2) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedTextColor = Color.White,
+                                unselectedTextColor = Color.White.copy(alpha = 0.6f),
+                                indicatorColor = Color.Transparent
+                            )
+                        )
+                    }
                 }
             ) { p ->
                 Box(Modifier.fillMaxSize().padding(p)) {
@@ -164,74 +324,74 @@ fun FinanceApp(db: AppDb) {
 }
 
 // ═══════════════════════════════════════════════════════
-// Bottom Navigation سفارشی با قوس
+// PageHeader
 // ═══════════════════════════════════════════════════════
 
 @Composable
-fun CustomBottomNav(
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit
+fun PageHeader(
+    title: String,
+    subtitle: String,
+    showAddButton: Boolean = false,
+    onAddClick: () -> Unit = {},
+    onBackClick: (() -> Unit)? = null,
+    extraAction: (@Composable () -> Unit)? = null
 ) {
-    val items = listOf(
-        Triple("👤", "حساب‌ها", 0),
-        Triple("📦", "کالاها", 1),
-        Triple("⚙️", "تنظیمات", 2)
-    )
-
     Box(
         Modifier
             .fillMaxWidth()
-            .height(90.dp)
+            .background(
+                color = HeaderBlue,
+                shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+            )
+            .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
-        // پس‌زمینه با قوس
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(70.dp)
-                .align(Alignment.BottomCenter)
-                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .background(Color(0xFF1E1F25))
-        )
-
-        // آیتم‌ها
         Row(
-            Modifier
-                .fillMaxWidth()
-                .height(70.dp)
-                .align(Alignment.BottomCenter),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            items.forEach { (icon, label, index) ->
-                val isSelected = selectedIndex == index
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onSelect(index) }
-                        .padding(vertical = 8.dp)
+            if (onBackClick != null) {
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "بازگشت",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+            }
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            }
+
+            extraAction?.invoke()
+
+            if (showAddButton) {
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier
+                        .size(52.dp)
+                        .background(Color.White, shape = CircleShape)
+                        .clickable { onAddClick() },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        Modifier
-                            .size(if (isSelected) 44.dp else 36.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) HeaderBlue.copy(alpha = 0.25f)
-                                else Color.Transparent
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            icon,
-                            fontSize = if (isSelected) 22.sp else 20.sp
-                        )
-                    }
-                    Spacer(Modifier.height(2.dp))
                     Text(
-                        label,
-                        fontSize = 11.sp,
-                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.6f),
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        "+",
+                        color = HeaderBlue,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -609,52 +769,12 @@ fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
             .fillMaxSize()
             .background(BgLight)
     ) {
-        // هدر آبی با statusBarsPadding
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(
-                    color = HeaderBlue,
-                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
-                )
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 14.dp)
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "حساب‌ها",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        "${list.size} حساب",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
-                }
-                // دکمه گرد + با رنگ معکوس (سفید با آیکون آبی)
-                Box(
-                    Modifier
-                        .size(52.dp)
-                        .background(Color.White, shape = CircleShape)
-                        .clickable { add = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "+",
-                        color = HeaderBlue,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
+        PageHeader(
+            title = "حساب‌ها",
+            subtitle = "${list.size} حساب",
+            showAddButton = true,
+            onAddClick = { add = true }
+        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -777,49 +897,22 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
 
-            // هدر آبی جمع‌تر با statusBarsPadding
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = HeaderBlue,
-                        shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
-                    )
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "بازگشت",
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        a.name,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.weight(1f)
-                    )
+            PageHeader(
+                title = a.name,
+                subtitle = a.currency,
+                onBackClick = onBack,
+                extraAction = {
                     IconButton(onClick = { profit = true }) {
                         Text("⚙", color = Color.White, fontSize = 24.sp)
                     }
                 }
-            }
+            )
 
-            // کارت سفید شناور
             Card(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .offset(y = (-30).dp),
+                    .offset(y = (-40).dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -859,7 +952,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                             )
                         }
                     }
-                    // دکمه گرد + آبی
                     Box(
                         Modifier
                             .size(56.dp)
@@ -882,7 +974,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             LazyColumn(
                 Modifier
                     .fillMaxSize()
-                    .offset(y = (-15).dp)
+                    .offset(y = (-25).dp)
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1013,10 +1105,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     }
 }
 
-// ═══════════════════════════════════════════════════════
-// ویرایشگر تراکنش
-// ═══════════════════════════════════════════════════════
-
 @Composable
 fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, onCancel: () -> Unit) {
     var type by remember(old) { mutableStateOf(old?.type ?: "بدهکار") }
@@ -1077,10 +1165,6 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
         dismissButton = { TextButton(onCancel) { Text("انصراف") } }
     )
 }
-
-// ═══════════════════════════════════════════════════════
-// تنظیم سود
-// ═══════════════════════════════════════════════════════
 
 @Composable
 fun ProfitSettingsEditor(
@@ -1239,50 +1323,12 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
             .fillMaxSize()
             .background(BgLight)
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(
-                    color = HeaderBlue,
-                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
-                )
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 14.dp)
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "کالاها",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        "${list.size} کالا",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
-                }
-                Box(
-                    Modifier
-                        .size(52.dp)
-                        .background(Color.White, shape = CircleShape)
-                        .clickable { add = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "+",
-                        color = HeaderBlue,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
+        PageHeader(
+            title = "کالاها",
+            subtitle = "${list.size} کالا",
+            showAddButton = true,
+            onAddClick = { add = true }
+        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -1397,60 +1443,28 @@ fun GoodEditor(old: Good?, onSave: (Good) -> Unit, onCancel: () -> Unit) {
     )
 }
 
-// ═══════════════════════════════════════════════════════
-// صفحه گردش کالا
-// ═══════════════════════════════════════════════════════
-
 @Composable
 fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
     val tx by db.goodTx().byGood(g.id).collectAsState(emptyList())
     var edit by remember { mutableStateOf<GoodTransaction?>(null) }
     var add by remember { mutableStateOf(false) }
-    var deleteTarget by remember { mutableStateOf<GoodTransaction?>(null) }
     val scope = rememberCoroutineScope()
     val bal = tx.sumOf { if (it.type == "دریافت") it.quantity else -it.quantity }
 
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
 
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = HeaderBlue,
-                        shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
-                    )
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "بازگشت",
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        g.name,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+            PageHeader(
+                title = g.name,
+                subtitle = "واحد: ${g.unit}",
+                onBackClick = onBack
+            )
 
             Card(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .offset(y = (-30).dp),
+                    .offset(y = (-40).dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -1486,7 +1500,7 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
             LazyColumn(
                 Modifier
                     .fillMaxSize()
-                    .offset(y = (-15).dp)
+                    .offset(y = (-25).dp)
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1628,7 +1642,7 @@ fun GoodTxEditor(
 }
 
 // ═══════════════════════════════════════════════════════
-// صفحه تنظیمات
+// صفحه تنظیمات — با محل بکاپ خودکار
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1641,16 +1655,40 @@ fun BackupScreen(db: AppDb) {
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch { Backup.restoreOrExport(context, db, uri, true) }
     }
+    // انتخاب پوشه برای بکاپ خودکار
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            // دسترسی دائمی بگیر
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            saveBackupFolderUri(context, uri)
+        }
+    }
 
     var autoBackupExists by remember { mutableStateOf(false) }
     var autoBackupInfo by remember { mutableStateOf("") }
     var confirmRestore by remember { mutableStateOf(false) }
+    var confirmRemoveFolder by remember { mutableStateOf(false) }
+    var customFolderName by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
         val file = java.io.File(context.filesDir, "auto_backup.json")
         autoBackupExists = file.exists()
         if (file.exists()) {
-            val dateFormat = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.US)
-            autoBackupInfo = dateFormat.format(java.util.Date(file.lastModified()))
+            val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.US)
+            autoBackupInfo = dateFormat.format(Date(file.lastModified()))
+        }
+        // نام پوشه انتخاب شده (اگه هست)
+        val customUri = getSavedBackupFolderUri(context)
+        if (customUri != null) {
+            val folder = DocumentFile.fromTreeUri(context, customUri)
+            customFolderName = folder?.name ?: "پوشه انتخاب شده"
         }
     }
 
@@ -1659,34 +1697,10 @@ fun BackupScreen(db: AppDb) {
             .fillMaxSize()
             .background(BgLight)
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(
-                    color = HeaderBlue,
-                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
-                )
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 14.dp)
-        ) {
-            Column(
-                Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    "تنظیمات",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "مدیریت بکاپ و اطلاعات",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            }
-        }
+        PageHeader(
+            title = "تنظیمات",
+            subtitle = "مدیریت بکاپ و اطلاعات"
+        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -1697,6 +1711,7 @@ fun BackupScreen(db: AppDb) {
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // ─── بخش بکاپ دستی ───
             item {
                 Text(
                     "پشتیبان و بازیابی",
@@ -1732,6 +1747,7 @@ fun BackupScreen(db: AppDb) {
                 }
             }
 
+            // ─── بخش بکاپ خودکار ───
             item {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -1811,6 +1827,62 @@ fun BackupScreen(db: AppDb) {
                 }
             }
 
+            // ─── محل ذخیره بکاپ خودکار ───
+            item {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "محل ذخیره بکاپ خودکار",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (customFolderName != null)
+                                "پوشه فعلی: $customFolderName"
+                            else
+                                "پیش‌فرض: حافظه داخلی برنامه",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (customFolderName != null) CreditGreen else Color.Gray
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = { pickFolder.launch(null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(if (customFolderName != null) "تغییر پوشه" else "انتخاب پوشه")
+                        }
+                        if (customFolderName != null) {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = { confirmRemoveFolder = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = DebitRed
+                                )
+                            ) {
+                                Text("حذف پوشه و برگشت به پیش‌فرض")
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "می‌توانید پوشه‌ای در حافظه داخلی یا Google Drive انتخاب کنید. " +
+                            "از این پس، بکاپ‌های خودکار در همان پوشه ذخیره می‌شوند.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                    }
+                }
+            }
+
+            // ─── بخش درباره ───
             item {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -1878,6 +1950,7 @@ fun BackupScreen(db: AppDb) {
         }
     }
 
+    // دیالوگ بازیابی
     if (confirmRestore) {
         ConfirmDeleteDialog(
             title = "بازیابی از بکاپ خودکار",
@@ -1892,6 +1965,30 @@ fun BackupScreen(db: AppDb) {
                 }
             },
             onCancel = { confirmRestore = false }
+        )
+    }
+
+    // دیالوگ حذف پوشه
+    if (confirmRemoveFolder) {
+        AlertDialog(
+            onDismissRequest = { confirmRemoveFolder = false },
+            title = { Text("حذف پوشه بکاپ", fontWeight = FontWeight.Bold) },
+            text = { Text("آیا مطمئن هستید؟ بکاپ‌های خودکار بعدی در حافظه داخلی برنامه ذخیره می‌شوند.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        clearBackupFolderUri(context)
+                        customFolderName = null
+                        confirmRemoveFolder = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DebitRed)
+                ) {
+                    Text("حذف")
+                }
+            },
+            dismissButton = {
+                TextButton({ confirmRemoveFolder = false }) { Text("انصراف") }
+            }
         )
     }
 }
@@ -1962,6 +2059,75 @@ private fun jalaliPayout(y: Int, m: Int, day: Int): Long =
 // ═══════════════════════════════════════════════════════
 
 object Backup {
+
+    /** برای استفاده در بکاپ خودکار: فقط JSON رو برمی‌گردونه */
+    suspend fun exportToJson(db: AppDb): String {
+        val root = JSONObject()
+        fun arr() = JSONArray()
+
+        val aa = arr()
+        for (a in db.accounts().allNow()) {
+            val o = JSONObject()
+            o.put("id", a.id); o.put("name", a.name); o.put("note", a.note)
+            o.put("currency", a.currency)
+            aa.put(o)
+        }
+        root.put("accounts", aa)
+
+        val gg = arr()
+        for (g in db.goods().allNow()) {
+            val o = JSONObject()
+            o.put("id", g.id); o.put("name", g.name); o.put("type", g.type); o.put("unit", g.unit)
+            gg.put(o)
+        }
+        root.put("goods", gg)
+
+        val tt = arr()
+        for (a in db.accounts().allNow()) for (t in db.tx().byAccountNow(a.id)) {
+            val o = JSONObject()
+            o.put("accountId", t.accountId); o.put("dateMillis", t.dateMillis)
+            o.put("type", t.type); o.put("amount", t.amount)
+            o.put("note", t.note); o.put("isAutoProfit", t.isAutoProfit)
+            o.put("profitKey", t.profitKey)
+            tt.put(o)
+        }
+        root.put("transactions", tt)
+
+        val gt = arr()
+        for (g in db.goods().allNow()) for (t in db.goodTx().byGoodNow(g.id)) {
+            val o = JSONObject()
+            o.put("goodId", t.goodId); o.put("dateMillis", t.dateMillis)
+            o.put("type", t.type); o.put("quantity", t.quantity); o.put("note", t.note)
+            gt.put(o)
+        }
+        root.put("goodsTransactions", gt)
+
+        val ps = arr()
+        for (a in db.accounts().allNow()) {
+            val s = db.profit().byAccountNow(a.id)
+            if (s != null) {
+                val o = JSONObject()
+                o.put("accountId", a.id); o.put("enabled", s.enabled)
+                o.put("mode", s.mode); o.put("annualRate", s.annualRate)
+                o.put("payoutDay", s.payoutDay)
+                o.put("destinationAccountId", s.destinationAccountId ?: JSONObject.NULL)
+                ps.put(o)
+            }
+        }
+        root.put("profitSettings", ps)
+
+        val mr = arr()
+        for (a in db.accounts().allNow()) for (r in db.profit().ratesNow(a.id)) {
+            val o = JSONObject()
+            o.put("accountId", r.accountId); o.put("year", r.year)
+            o.put("month", r.month); o.put("ratePercent", r.ratePercent)
+            mr.put(o)
+        }
+        root.put("monthlyRates", mr)
+
+        return root.toString(2)
+    }
+
     suspend fun restoreOrExport(context: Context, db: AppDb, uri: Uri, restore: Boolean) {
         if (restore) {
             val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return
@@ -2030,70 +2196,8 @@ object Backup {
                 )
             }
         } else {
-            val root = JSONObject()
-            fun arr() = JSONArray()
-
-            val aa = arr()
-            for (a in db.accounts().allNow()) {
-                val o = JSONObject()
-                o.put("id", a.id); o.put("name", a.name); o.put("note", a.note)
-                o.put("currency", a.currency)
-                aa.put(o)
-            }
-            root.put("accounts", aa)
-
-            val gg = arr()
-            for (g in db.goods().allNow()) {
-                val o = JSONObject()
-                o.put("id", g.id); o.put("name", g.name); o.put("type", g.type); o.put("unit", g.unit)
-                gg.put(o)
-            }
-            root.put("goods", gg)
-
-            val tt = arr()
-            for (a in db.accounts().allNow()) for (t in db.tx().byAccountNow(a.id)) {
-                val o = JSONObject()
-                o.put("accountId", t.accountId); o.put("dateMillis", t.dateMillis)
-                o.put("type", t.type); o.put("amount", t.amount)
-                o.put("note", t.note); o.put("isAutoProfit", t.isAutoProfit)
-                o.put("profitKey", t.profitKey)
-                tt.put(o)
-            }
-            root.put("transactions", tt)
-
-            val gt = arr()
-            for (g in db.goods().allNow()) for (t in db.goodTx().byGoodNow(g.id)) {
-                val o = JSONObject()
-                o.put("goodId", t.goodId); o.put("dateMillis", t.dateMillis)
-                o.put("type", t.type); o.put("quantity", t.quantity); o.put("note", t.note)
-                gt.put(o)
-            }
-            root.put("goodsTransactions", gt)
-
-            val ps = arr()
-            for (a in db.accounts().allNow()) {
-                val s = db.profit().byAccountNow(a.id)
-                if (s != null) {
-                    val o = JSONObject()
-                    o.put("accountId", a.id); o.put("enabled", s.enabled)
-                    o.put("mode", s.mode); o.put("annualRate", s.annualRate)
-                    o.put("payoutDay", s.payoutDay)
-                    o.put("destinationAccountId", s.destinationAccountId ?: JSONObject.NULL)
-                    ps.put(o)
-                }
-            }
-            root.put("profitSettings", ps)
-
-            val mr = arr()
-            for (a in db.accounts().allNow()) for (r in db.profit().ratesNow(a.id)) {
-                val o = JSONObject()
-                o.put("accountId", r.accountId); o.put("year", r.year)
-                o.put("month", r.month); o.put("ratePercent", r.ratePercent)
-                mr.put(o)
-            }
-            root.put("monthlyRates", mr)
-
-            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(root.toString(2)) }
+            val json = exportToJson(db)
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
         }
     }
 }
