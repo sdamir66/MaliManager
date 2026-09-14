@@ -144,8 +144,8 @@ fun FinanceApp(db: AppDb) {
                     TopAppBar(
                         title = { Text("مدیریت مالی", fontWeight = FontWeight.Bold) },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            containerColor = HeaderBlue,
+                            titleContentColor = Color.White
                         )
                     )
                 },
@@ -187,123 +187,457 @@ fun FinanceApp(db: AppDb) {
     }
 }
 
+// ═══════════════════════════════════════════════════════
+// کامپوزبل‌های کمکی
+// ═══════════════════════════════════════════════════════
+
 @Composable
-fun BackButton(onClick: () -> Unit) {
-    FilledTonalIconButton(
-        onClick = onClick,
-        modifier = Modifier.size(48.dp),
-        colors = IconButtonDefaults.filledTonalIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        )
+fun ConfirmDeleteDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        text = { Text(message) },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = DebitRed)
+            ) {
+                Text("حذف")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("انصراف") }
+        }
+    )
+}
+
+@Composable
+fun SettingRow(
+    title: String,
+    subtitle: String,
+    icon: String,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = Icons.Default.ArrowBack,
-            contentDescription = "بازگشت",
-            modifier = Modifier.size(24.dp)
-        )
+        Box(
+            Modifier
+                .size(40.dp)
+                .background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(icon, fontSize = 18.sp, color = HeaderBlue)
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+        }
+        Text("‹", fontSize = 20.sp, color = Color.Gray)
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwipeableAccountCard(
+    account: Account,
+    balance: Long,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDeleteRequest: () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onEdit()
+                    false
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onDeleteRequest()
+                    false
+                }
+                else -> false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val value = dismissState.targetValue
+            val (color, icon, alignment) = when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> Triple(
+                    CreditGreen,
+                    Icons.Default.Edit,
+                    Alignment.CenterStart
+                )
+                SwipeToDismissBoxValue.EndToStart -> Triple(
+                    DebitRed,
+                    Icons.Default.Delete,
+                    Alignment.CenterEnd
+                )
+                else -> Triple(Color.Transparent, Icons.Default.Edit, Alignment.Center)
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                contentAlignment = alignment
+            ) {
+                if (color != Color.Transparent) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(color, shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        }
+    ) {
+        val isCredit = balance >= 0
+        Card(
+            Modifier
+                .fillMaxWidth()
+                .clickable { onClick() },
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .background(
+                            color = if (isCredit) CreditGreen else DebitRed,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        account.name.take(1),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp
+                    )
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        account.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "ارز: ${account.currency}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            money(kotlin.math.abs(balance)),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (isCredit) CreditGreen else DebitRed
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            account.currency,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (isCredit) "بستانکار" else "بدهکار",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isCredit) CreditGreen else DebitRed,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+                Text("‹", fontSize = 22.sp, color = Color.Gray)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwipeableTransactionCard(
+    transaction: Transaction,
+    currency: String,
+    runningBalance: Long,
+    onEdit: () -> Unit,
+    onDeleteRequest: () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onEdit()
+                    false
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onDeleteRequest()
+                    false
+                }
+                else -> false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val value = dismissState.targetValue
+            val (color, icon, alignment) = when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> Triple(
+                    CreditGreen,
+                    Icons.Default.Edit,
+                    Alignment.CenterStart
+                )
+                SwipeToDismissBoxValue.EndToStart -> Triple(
+                    DebitRed,
+                    Icons.Default.Delete,
+                    Alignment.CenterEnd
+                )
+                else -> Triple(Color.Transparent, Icons.Default.Edit, Alignment.Center)
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                contentAlignment = alignment
+            ) {
+                if (color != Color.Transparent) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(color, shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        }
+    ) {
+        val isTxCredit = transaction.type == "بستانکار"
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(46.dp)
+                        .background(
+                            color = if (isTxCredit) CreditGreen else DebitRed,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (isTxCredit) "↓" else "↑",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            transaction.type,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isTxCredit) CreditGreen else DebitRed
+                        )
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        Jalali.format(transaction.dateMillis),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                    if (transaction.note.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            transaction.note,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF45464F)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${if (isTxCredit) "+" else "−"}${money(transaction.amount)}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isTxCredit) CreditGreen else DebitRed
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "مانده: ${money(kotlin.math.abs(runningBalance))}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// صفحه حساب‌ها
+// ═══════════════════════════════════════════════════════
 
 @Composable
 fun Accounts(db: AppDb, onOpen: (Account) -> Unit) {
     val list by db.accounts().all().collectAsState(emptyList())
     var edit by remember { mutableStateOf<Account?>(null) }
     var add by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<Account?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize().background(BgLight).padding(16.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    Column(Modifier.fillMaxSize().background(BgLight)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .background(
+                    color = HeaderBlue,
+                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+                )
         ) {
-            Text(
-                "حساب‌ها",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Button({ add = true }) { Text("+ حساب") }
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "حساب‌ها",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${list.size} حساب",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            }
         }
-        Spacer(Modifier.height(12.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
+        Spacer(Modifier.height(16.dp))
+
+        Box(Modifier.padding(horizontal = 20.dp)) {
+            Button(
+                onClick = { add = true },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("+ حساب جدید", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             items(list) { a ->
                 val tx by db.tx().byAccount(a.id).collectAsState(emptyList())
                 val bal = tx.sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
-                val isCredit = bal >= 0
-                Card(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpen(a) },
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier
-                                    .size(44.dp)
-                                    .background(
-                                        color = if (isCredit) CreditGreen else DebitRed,
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    a.name.take(1),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp
-                                )
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    a.name,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "ارز: ${a.currency}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            "مانده: ${money(kotlin.math.abs(bal))} ${a.currency}",
-                            fontWeight = FontWeight.Bold,
-                            color = if (isCredit) CreditGreen else DebitRed,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            if (isCredit) "بستانکار" else "بدهکار",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Row {
-                            TextButton({ onOpen(a) }) { Text("گردش") }
-                            TextButton({ edit = a }) { Text("ویرایش") }
-                            TextButton({
-                                scope.launch {
-                                    db.tx().deleteAutoByPrefix(a.id.toString())
-                                    db.accounts().delete(a)
-                                }
-                            }) {
-                                Text("حذف", color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
-                }
+                SwipeableAccountCard(
+                    account = a,
+                    balance = bal,
+                    onClick = { onOpen(a) },
+                    onEdit = { edit = a },
+                    onDeleteRequest = { deleteTarget = a }
+                )
             }
         }
     }
+
     if (add) AccountEditor(null, { scope.launch { db.accounts().insert(it); add = false } }, { add = false })
     edit?.let {
         AccountEditor(it, { scope.launch { db.accounts().update(it); edit = null } }, { edit = null })
+    }
+
+    deleteTarget?.let { target ->
+        ConfirmDeleteDialog(
+            title = "حذف حساب",
+            message = "آیا از حذف حساب «${target.name}» مطمئن هستید؟ تمام تراکنش‌های آن هم حذف می‌شوند.",
+            onConfirm = {
+                scope.launch {
+                    db.tx().deleteAutoByPrefix(target.id.toString())
+                    db.accounts().delete(target)
+                    deleteTarget = null
+                }
+            },
+            onCancel = { deleteTarget = null }
+        )
     }
 }
 
@@ -364,6 +698,10 @@ fun AccountEditor(old: Account?, onSave: (Account) -> Unit, onCancel: () -> Unit
     )
 }
 
+// ═══════════════════════════════════════════════════════
+// صفحه گردش حساب
+// ═══════════════════════════════════════════════════════
+
 @Composable
 fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     val tx by db.tx().byAccount(a.id).collectAsState(emptyList())
@@ -372,6 +710,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     var editor by remember { mutableStateOf<Transaction?>(null) }
     var add by remember { mutableStateOf(false) }
     var profit by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<Transaction?>(null) }
     val scope = rememberCoroutineScope()
     val bal = tx.sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
     val isCredit = bal >= 0
@@ -379,11 +718,11 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
 
-            // ═══════════ هدر آبی با گوشه‌های گرد ═══════════
+            // هدر آبی جمع‌تر
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .height(170.dp)
                     .background(
                         color = HeaderBlue,
                         shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
@@ -392,7 +731,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 Column(
                     Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -409,24 +748,24 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                         Spacer(Modifier.width(4.dp))
                         Text(
                             a.name,
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { profit = true }) {
-                            Text("⚙", color = Color.White, fontSize = 22.sp)
+                            Text("⚙", color = Color.White, fontSize = 24.sp)
                         }
                     }
                 }
             }
 
-            // ═══════════ کارت سفید شناور روی هدر ═══════════
+            // کارت سفید شناور
             Card(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .offset(y = (-80).dp),
+                    .offset(y = (-60).dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -434,7 +773,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -483,13 +822,12 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 }
             }
 
-            // ═══════════ لیست تراکنش‌ها ═══════════
             val runningBalances = remember(tx) { calculateRunningBalances(tx) }
 
             LazyColumn(
                 Modifier
                     .fillMaxSize()
-                    .offset(y = (-60).dp)
+                    .offset(y = (-45).dp)
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -506,50 +844,45 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
 
                 items(tx, key = { it.id }) { t ->
                     val running = runningBalances[t.id] ?: 0L
-                    val isTxCredit = t.type == "بستانکار"
-
-                    Card(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = !t.isAutoProfit) { editor = t },
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    if (!t.isAutoProfit) {
+                        SwipeableTransactionCard(
+                            transaction = t,
+                            currency = a.currency,
+                            runningBalance = running,
+                            onEdit = { editor = t },
+                            onDeleteRequest = { deleteTarget = t }
+                        )
+                    } else {
+                        // تراکنش خودکار
+                        Card(
+                            Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
-                            Box(
+                            Row(
                                 Modifier
-                                    .size(46.dp)
-                                    .background(
-                                        color = if (isTxCredit) CreditGreen else DebitRed,
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    if (isTxCredit) "↓" else "↑",
-                                    color = Color.White,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Spacer(Modifier.width(12.dp))
-
-                            Column(Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        t.type,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isTxCredit) CreditGreen else DebitRed
-                                    )
-                                    if (t.isAutoProfit) {
+                                Box(
+                                    Modifier
+                                        .size(46.dp)
+                                        .background(CreditGreen, shape = CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("↓", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            t.type,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CreditGreen
+                                        )
                                         Spacer(Modifier.width(6.dp))
                                         Surface(
                                             color = MaterialTheme.colorScheme.tertiaryContainer,
@@ -563,38 +896,35 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                                             )
                                         }
                                     }
-                                }
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    Jalali.format(t.dateMillis),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray
-                                )
-                                if (t.note.isNotBlank()) {
                                     Spacer(Modifier.height(2.dp))
                                     Text(
-                                        t.note,
+                                        Jalali.format(t.dateMillis),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF45464F)
+                                        color = Color.Gray
+                                    )
+                                    if (t.note.isNotBlank()) {
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            t.note,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color(0xFF45464F)
+                                        )
+                                    }
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        "+${money(t.amount)}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = CreditGreen
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        "مانده: ${money(kotlin.math.abs(running))}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.Gray
                                     )
                                 }
-                            }
-
-                            Spacer(Modifier.width(8.dp))
-
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    "${if (isTxCredit) "+" else "−"}${money(t.amount)}",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isTxCredit) CreditGreen else DebitRed
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    "مانده: ${money(kotlin.math.abs(running))}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.Gray
-                                )
                             }
                         }
                     }
@@ -612,7 +942,26 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
         }, { editor = null })
     }
     if (profit) ProfitSettingsEditor(db, a, setting, accounts) { profit = false }
+
+    deleteTarget?.let { target ->
+        ConfirmDeleteDialog(
+            title = "حذف تراکنش",
+            message = "آیا از حذف این تراکنش مطمئن هستید؟ این عمل قابل بازگشت نیست.",
+            onConfirm = {
+                scope.launch {
+                    db.tx().delete(target)
+                    ProfitEngine.recalculateAll(db)
+                    deleteTarget = null
+                }
+            },
+            onCancel = { deleteTarget = null }
+        )
+    }
 }
+
+// ═══════════════════════════════════════════════════════
+// ویرایشگر تراکنش
+// ═══════════════════════════════════════════════════════
 
 @Composable
 fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, onCancel: () -> Unit) {
@@ -674,6 +1023,10 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
         dismissButton = { TextButton(onCancel) { Text("انصراف") } }
     )
 }
+
+// ═══════════════════════════════════════════════════════
+// تنظیم سود
+// ═══════════════════════════════════════════════════════
 
 @Composable
 fun ProfitSettingsEditor(
@@ -815,28 +1168,70 @@ fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
     )
 }
 
+// ═══════════════════════════════════════════════════════
+// صفحه کالاها
+// ═══════════════════════════════════════════════════════
+
 @Composable
 fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
     val list by db.goods().all().collectAsState(emptyList())
     var add by remember { mutableStateOf(false) }
     var edit by remember { mutableStateOf<Good?>(null) }
+    var deleteTarget by remember { mutableStateOf<Good?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(Modifier.fillMaxSize().background(BgLight).padding(16.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    Column(Modifier.fillMaxSize().background(BgLight)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .background(
+                    color = HeaderBlue,
+                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+                )
         ) {
-            Text(
-                "کالاها",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Button({ add = true }) { Text("+ کالا") }
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "کالاها",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${list.size} کالا",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            }
         }
-        Spacer(Modifier.height(12.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
+        Spacer(Modifier.height(16.dp))
+
+        Box(Modifier.padding(horizontal = 20.dp)) {
+            Button(
+                onClick = { add = true },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("+ کالای جدید", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             items(list) { g ->
                 val tx by db.goodTx().byGood(g.id).collectAsState(emptyList())
                 val bal = tx.sumOf { if (it.type == "دریافت") it.quantity else -it.quantity }
@@ -848,38 +1243,69 @@ fun Goods(db: AppDb, onOpen: (Good) -> Unit) {
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(
-                            g.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text("نوع: ${g.type}  |  واحد: ${g.unit}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Gray)
-                        Text(
-                            "موجودی: ${qty(bal)} ${g.unit}",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Row {
-                            TextButton({ onOpen(g) }) { Text("گردش") }
-                            TextButton({ edit = g }) { Text("ویرایش") }
-                            TextButton({ scope.launch { db.goods().delete(g) } }) {
-                                Text("حذف", color = MaterialTheme.colorScheme.error)
-                            }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .size(48.dp)
+                                .background(HeaderBlue, shape = CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                g.name.take(1),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp
+                            )
                         }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                g.name,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "نوع: ${g.type}  |  واحد: ${g.unit}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "موجودی: ${qty(bal)} ${g.unit}",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = HeaderBlue
+                            )
+                        }
+                        Text("‹", fontSize = 22.sp, color = Color.Gray)
                     }
                 }
             }
         }
     }
+
     if (add) GoodEditor(null, { scope.launch { db.goods().insert(it); add = false } }, { add = false })
     edit?.let {
         GoodEditor(it, { scope.launch { db.goods().update(it); edit = null } }, { edit = null })
+    }
+    deleteTarget?.let { target ->
+        ConfirmDeleteDialog(
+            title = "حذف کالا",
+            message = "آیا از حذف «${target.name}» مطمئن هستید؟",
+            onConfirm = {
+                scope.launch {
+                    db.goods().delete(target)
+                    deleteTarget = null
+                }
+            },
+            onCancel = { deleteTarget = null }
+        )
     }
 }
 
@@ -910,11 +1336,16 @@ fun GoodEditor(old: Good?, onSave: (Good) -> Unit, onCancel: () -> Unit) {
     )
 }
 
+// ═══════════════════════════════════════════════════════
+// صفحه گردش کالا
+// ═══════════════════════════════════════════════════════
+
 @Composable
 fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
     val tx by db.goodTx().byGood(g.id).collectAsState(emptyList())
     var edit by remember { mutableStateOf<GoodTransaction?>(null) }
     var add by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<GoodTransaction?>(null) }
     val scope = rememberCoroutineScope()
     val bal = tx.sumOf { if (it.type == "دریافت") it.quantity else -it.quantity }
 
@@ -924,7 +1355,7 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(170.dp)
                     .background(
                         color = HeaderBlue,
                         shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
@@ -933,7 +1364,7 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
                 Column(
                     Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -950,7 +1381,7 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
                         Spacer(Modifier.width(4.dp))
                         Text(
                             g.name,
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             modifier = Modifier.weight(1f)
@@ -963,7 +1394,7 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .offset(y = (-70).dp),
+                    .offset(y = (-60).dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -971,7 +1402,7 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -999,7 +1430,7 @@ fun GoodScreen(db: AppDb, g: Good, onBack: () -> Unit) {
             LazyColumn(
                 Modifier
                     .fillMaxSize()
-                    .offset(y = (-50).dp)
+                    .offset(y = (-45).dp)
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1140,6 +1571,10 @@ fun GoodTxEditor(
     )
 }
 
+// ═══════════════════════════════════════════════════════
+// صفحه تنظیمات
+// ═══════════════════════════════════════════════════════
+
 @Composable
 fun BackupScreen(db: AppDb) {
     val scope = rememberCoroutineScope()
@@ -1153,6 +1588,7 @@ fun BackupScreen(db: AppDb) {
 
     var autoBackupExists by remember { mutableStateOf(false) }
     var autoBackupInfo by remember { mutableStateOf("") }
+    var confirmRestore by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val file = java.io.File(context.filesDir, "auto_backup.json")
         autoBackupExists = file.exists()
@@ -1162,139 +1598,251 @@ fun BackupScreen(db: AppDb) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(BgLight).padding(16.dp)) {
-        Text(
-            "تنظیمات",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            "پشتیبان و بازیابی",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.height(8.dp))
-        Card(
-            Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "فایل JSON را می‌توان در حافظه یا Google Drive ذخیره کرد.",
-                    style = MaterialTheme.typography.bodyMedium
+    Column(Modifier.fillMaxSize().background(BgLight)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .background(
+                    color = HeaderBlue,
+                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                 )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            { create.launch("MaliManager-backup.json") },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("گرفتن بکاپ") }
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(
-            { open.launch(arrayOf("application/json", "text/*")) },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("بازیابی بکاپ") }
-
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "بکاپ خودکار",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.height(8.dp))
-        Card(
-            Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(Modifier.padding(16.dp)) {
-                if (autoBackupExists) {
-                    Text(
-                        "✅ بکاپ خودکار موجود است",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "آخرین بکاپ: $autoBackupInfo",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        {
-                            scope.launch {
-                                val file = java.io.File(context.filesDir, "auto_backup.json")
-                                if (file.exists()) {
-                                    Backup.restoreOrExport(context, db, Uri.fromFile(file), true)
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("بازیابی از بکاپ خودکار") }
-                } else {
-                    Text(
-                        "هنوز بکاپ خودکاری ذخیره نشده است.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "بکاپ خودکار هر ۱ دقیقه، هنگام خروج از برنامه و رفتن به پس‌زمینه ذخیره می‌شود.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "درباره",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.height(8.dp))
-        Card(
-            Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(Modifier.padding(16.dp)) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
-                    "مدیریت مالی",
-                    style = MaterialTheme.typography.titleMedium,
+                    "تنظیمات",
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                    color = Color.White
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "نسخه ۱.۰",
+                    "مدیریت بکاپ و اطلاعات",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "سازنده: sdamir66",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                    color = Color.White.copy(alpha = 0.8f)
                 )
             }
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // بخش بکاپ دستی
+            item {
+                Text(
+                    "پشتیبان و بازیابی",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
+            }
+
+            item {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        SettingRow(
+                            title = "گرفتن بکاپ",
+                            subtitle = "ذخیره در حافظه یا Google Drive",
+                            icon = "⬇",
+                            onClick = { create.launch("MaliManager-backup.json") }
+                        )
+                        HorizontalDivider(color = Color(0xFFEEEEEE))
+                        SettingRow(
+                            title = "بازیابی بکاپ",
+                            subtitle = "از فایل JSON",
+                            icon = "⬆",
+                            onClick = { open.launch(arrayOf("application/json", "text/*")) }
+                        )
+                    }
+                }
+            }
+
+            // بخش بکاپ خودکار
+            item {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "بکاپ خودکار",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
+            }
+
+            item {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        if (autoBackupExists) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier
+                                        .size(36.dp)
+                                        .background(CreditGreen.copy(alpha = 0.15f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("✓", color = CreditGreen, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "بکاپ خودکار فعال",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "آخرین: $autoBackupInfo",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { confirmRestore = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("بازیابی از بکاپ خودکار")
+                            }
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier
+                                        .size(36.dp)
+                                        .background(Color(0xFFFFE0B2), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("!", color = Color(0xFFE65100), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    "هنوز بکاپ خودکاری ذخیره نشده است",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "بکاپ خودکار هر ۱ دقیقه، هنگام خروج و رفتن به پس‌زمینه ذخیره می‌شود.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                    }
+                }
+            }
+
+            // بخش درباره
+            item {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "درباره",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
+            }
+
+            item {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier
+                                    .size(48.dp)
+                                    .background(HeaderBlue, shape = RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("💰", fontSize = 24.sp)
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column {
+                                Text(
+                                    "مدیریت مالی",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "نسخه ۱.۰",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        HorizontalDivider(color = Color(0xFFEEEEEE))
+                        Spacer(Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("👤", fontSize = 20.sp)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "سازنده",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
+                                Text(
+                                    "sdamir66",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (confirmRestore) {
+        ConfirmDeleteDialog(
+            title = "بازیابی از بکاپ خودکار",
+            message = "آیا مطمئن هستید؟ تمام داده‌های فعلی با بکاپ خودکار جایگزین می‌شوند.",
+            onConfirm = {
+                scope.launch {
+                    val file = java.io.File(context.filesDir, "auto_backup.json")
+                    if (file.exists()) {
+                        Backup.restoreOrExport(context, db, Uri.fromFile(file), true)
+                    }
+                    confirmRestore = false
+                }
+            },
+            onCancel = { confirmRestore = false }
+        )
     }
 }
+
+// ═══════════════════════════════════════════════════════
+// محاسبه سود
+// ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
     suspend fun recalculateAll(db: AppDb) {
@@ -1352,6 +1900,10 @@ object ProfitEngine {
 
 private fun jalaliPayout(y: Int, m: Int, day: Int): Long =
     Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, day.coerceAtMost(Jalali.daysInMonth(y, m))))!!
+
+// ═══════════════════════════════════════════════════════
+// بکاپ و بازیابی
+// ═══════════════════════════════════════════════════════
 
 object Backup {
     suspend fun restoreOrExport(context: Context, db: AppDb, uri: Uri, restore: Boolean) {
