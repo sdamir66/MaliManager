@@ -253,14 +253,15 @@ fun MainScreen(
     ) {
         // هدر آبی با منوی سه‌خط
         Box(
-            Modifier
-                .fillMaxWidth()
-                .background(
-                    color = HeaderBlue,
-                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
-                )
-                .padding(horizontal = 20.dp, vertical = 20.dp)
-        ) {
+    Modifier
+        .fillMaxWidth()
+        .background(
+            color = HeaderBlue,
+            shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+        )
+        .statusBarsPadding()  // ← این خط جدید
+        .padding(horizontal = 20.dp, vertical = 24.dp)  // ← vertical از 20 به 24
+) {
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -631,7 +632,8 @@ fun PageHeader(
                 color = HeaderBlue,
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             )
-            .padding(horizontal = 20.dp, vertical = 20.dp)
+            .statusBarsPadding()  // ← این خط جدید (فاصله از Status Bar)
+            .padding(horizontal = 20.dp, vertical = 24.dp)  // ← vertical از 20 به 24
     ) {
         Row(
             Modifier.fillMaxWidth(),
