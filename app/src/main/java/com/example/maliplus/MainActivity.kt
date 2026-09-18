@@ -2100,14 +2100,21 @@ object ProfitEngine {
             val accountSettings = db.profit().byAccountNow(a.id)
             if (a.useGlobalProfit) {
                 if (globalSettings != null && globalSettings.enabled) {
-                    recalculateWithSettings(db, a.id, globalSettings.enabled, globalSettings.mode,
-                        globalSettings.annualRate, globalSettings.payoutDay, null)
+                    val gs = globalSettings  // ← متغیر محلی
+                    recalculateWithSettings(
+                        db, a.id,
+                        gs.enabled, gs.mode, gs.annualRate, gs.payoutDay,
+                        null
+                    )
                 }
             } else {
                 if (accountSettings != null && accountSettings.enabled) {
-                    recalculateWithSettings(db, a.id, accountSettings.enabled, accountSettings.mode,
-                        accountSettings.annualRate, accountSettings.payoutDay,
-                        accountSettings.destinationAccountId)
+                    val as_ = accountSettings  // ← متغیر محلی
+                    recalculateWithSettings(
+                        db, a.id,
+                        as_.enabled, as_.mode, as_.annualRate, as_.payoutDay,
+                        as_.destinationAccountId
+                    )
                 }
             }
         }
@@ -2120,14 +2127,21 @@ object ProfitEngine {
 
         if (account.useGlobalProfit) {
             if (globalSettings != null && globalSettings.enabled) {
-                recalculateWithSettings(db, accountId, globalSettings.enabled, globalSettings.mode,
-                    globalSettings.annualRate, globalSettings.payoutDay, null)
+                val gs = globalSettings  // ← متغیر محلی
+                recalculateWithSettings(
+                    db, accountId,
+                    gs.enabled, gs.mode, gs.annualRate, gs.payoutDay,
+                    null
+                )
             }
         } else {
             if (accountSettings != null && accountSettings.enabled) {
-                recalculateWithSettings(db, accountId, accountSettings.enabled, accountSettings.mode,
-                    accountSettings.annualRate, accountSettings.payoutDay,
-                    accountSettings.destinationAccountId)
+                val as_ = accountSettings  // ← متغیر محلی
+                recalculateWithSettings(
+                    db, accountId,
+                    as_.enabled, as_.mode, as_.annualRate, as_.payoutDay,
+                    as_.destinationAccountId
+                )
             }
         }
     }
