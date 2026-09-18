@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)شششش
 
 package com.example.maliplus
 
@@ -156,7 +156,6 @@ class MainActivity : ComponentActivity() {
 
 private fun money(v: Long) = NumberFormat.getNumberInstance(Locale.US).format(v)
 
-/** جداکننده‌ی سه‌رقمی موقع تایپ */
 private fun formatWithSeparator(input: String): String {
     if (input.isBlank()) return ""
     val digits = input.replace(",", "").filter { it.isDigit() }
@@ -166,7 +165,6 @@ private fun formatWithSeparator(input: String): String {
     } catch (e: Exception) { digits }
 }
 
-/** تبدیل رشته‌ی جداکننده‌دار به Long */
 private fun parseSeparatedAmount(input: String): Long? {
     val digits = input.replace(",", "").filter { it.isDigit() }
     return if (digits.isEmpty()) null else digits.toLongOrNull()
@@ -183,7 +181,6 @@ fun calculateRunningBalances(transactions: List<Transaction>): Map<Long, Long> {
     return balances
 }
 
-/** واحد نمایش حساب (customUnit اگه پر باشه، وگرنه currency) */
 fun Account.displayUnit(): String = if (customUnit.isNotBlank()) customUnit else currency
 
 // ═══════════════════════════════════════════════════════
@@ -298,7 +295,6 @@ fun PersonsScreen(
     val scope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize().background(BgLight)) {
-        // هدر با چرخ‌دنده و +
         Box(
             Modifier
                 .fillMaxWidth()
@@ -327,7 +323,6 @@ fun PersonsScreen(
                         color = Color.White.copy(alpha = 0.8f)
                     )
                 }
-                // چرخ‌دنده تنظیمات
                 IconButton(
                     onClick = onOpenSettings,
                     modifier = Modifier.size(48.dp)
@@ -340,7 +335,6 @@ fun PersonsScreen(
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                // دکمه + (افزودن شخص)
                 Box(
                     Modifier
                         .size(52.dp)
@@ -436,7 +430,7 @@ fun PersonsScreen(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonCard — کارت شخص
+// PersonCard
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -449,7 +443,6 @@ fun PersonCard(
     onDelete: () -> Unit,
     db: AppDb
 ) {
-    // محاسبه‌ی مانده‌ی هر ارز
     val accountsWithBalance = accounts.map { acc ->
         val txs = remember(acc.id) { mutableStateOf<List<Transaction>>(emptyList()) }
         LaunchedEffect(acc.id) {
@@ -459,7 +452,6 @@ fun PersonCard(
         acc to bal
     }
 
-    // ارزهای قابل نمایش (اگه تنظیم نشده، همه‌ی ارزهای موجود)
     val displayCurrencies = remember(person, accountsWithBalance) {
         val saved = person.displayedCurrencies.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         if (saved.isNotEmpty()) saved
@@ -510,7 +502,6 @@ fun PersonCard(
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // دایره با تعداد حساب‌ها
                     Box(
                         Modifier
                             .size(52.dp)
@@ -573,7 +564,7 @@ fun PersonCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// صفحه‌ی شخص — لیست حساب‌ها
+// PersonScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -590,7 +581,6 @@ fun PersonScreen(
     var editPerson by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // محاسبه‌ی مانده‌ها
     val accountBalances = accounts.map { acc ->
         val txs = remember(acc.id) { mutableStateOf<List<Transaction>>(emptyList()) }
         LaunchedEffect(acc.id) { txs.value = db.tx().byAccountNow(acc.id) }
@@ -598,7 +588,6 @@ fun PersonScreen(
         acc to bal
     }
 
-    // جمع کل هر ارز
     val currencyTotals = accountBalances
         .groupBy { it.first.displayUnit() }
         .mapValues { entry -> entry.value.sumOf { it.second } }
@@ -610,7 +599,6 @@ fun PersonScreen(
                 subtitle = "${accounts.size} حساب",
                 onBackClick = onBack,
                 extraActions = {
-                    // چرخ‌دنده (ویرایش شخص)
                     IconButton(onClick = { editPerson = true }, modifier = Modifier.size(48.dp)) {
                         Icon(
                             imageVector = Icons.Default.Edit,
@@ -619,7 +607,6 @@ fun PersonScreen(
                             modifier = Modifier.size(24.dp)
                         )
                     }
-                    // + (افزودن حساب)
                     Box(
                         Modifier
                             .size(48.dp)
@@ -632,7 +619,6 @@ fun PersonScreen(
                 }
             )
 
-            // کارت سفید شناور با مانده‌های کل
             Card(
                 Modifier
                     .fillMaxWidth()
@@ -845,7 +831,7 @@ fun SwipeableAccountCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// صفحه‌ی حساب — تراکنش‌ها
+// AccountScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -963,7 +949,8 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                         AutoTransactionCard(
                             transaction = t,
                             currency = a.displayUnit(),
-                            runningBalance = running                        )
+                            runningBalance = running
+                        )
                     }
                 }
             }
@@ -1236,7 +1223,7 @@ fun PersonEditor(old: Person?, onSave: (Person) -> Unit, onCancel: () -> Unit) {
 }
 
 // ═══════════════════════════════════════════════════════
-// AccountEditor — با واحد دلخواه
+// AccountEditor
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1251,6 +1238,7 @@ fun AccountEditor(
     var currency by remember(old) { mutableStateOf(old?.currency ?: "تومان") }
     var customUnit by remember(old) { mutableStateOf(old?.customUnit ?: "") }
     var currencyExpanded by remember { mutableStateOf(false) }
+    var useGlobalProfit by remember(old) { mutableStateOf(old?.useGlobalProfit ?: true) }
 
     val currencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
     val hasCustomUnit = customUnit.isNotBlank()
@@ -1273,7 +1261,6 @@ fun AccountEditor(
                 )
                 Spacer(Modifier.height(12.dp))
 
-                // واحد دلخواه
                 OutlinedTextField(
                     customUnit,
                     { customUnit = it },
@@ -1283,7 +1270,6 @@ fun AccountEditor(
                 )
                 Spacer(Modifier.height(12.dp))
 
-                // ارز (وقتی واحد خالیه فعاله)
                 Text(
                     "ارز",
                     style = MaterialTheme.typography.titleSmall,
@@ -1314,6 +1300,21 @@ fun AccountEditor(
                         }
                     }
                 }
+
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = Color(0xFFEEEEEE))
+                Spacer(Modifier.height(8.dp))
+
+                Text("نوع سود", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(useGlobalProfit, { useGlobalProfit = true })
+                    Text("استفاده از تنظیم کلی برنامه")
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(!useGlobalProfit, { useGlobalProfit = false })
+                    Text("تنظیم سود اختصاصی")
+                }
             }
         },
         confirmButton = {
@@ -1327,7 +1328,7 @@ fun AccountEditor(
                         currency = currency,
                         customUnit = customUnit,
                         displayOrder = old?.displayOrder ?: 0,
-                        useGlobalProfit = old?.useGlobalProfit ?: true
+                        useGlobalProfit = useGlobalProfit
                     ))
             }) { Text("ذخیره") }
         },
@@ -1336,7 +1337,7 @@ fun AccountEditor(
 }
 
 // ═══════════════════════════════════════════════════════
-// TxEditor — با جداکننده‌ی سه‌رقمی
+// TxEditor
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1433,74 +1434,124 @@ fun ProfitSettingsEditor(
     var dest by remember(old) { mutableStateOf(old?.destinationAccountId) }
     var ratesOpen by remember { mutableStateOf(false) }
     val allAccounts by db.accounts().all().collectAsState(emptyList())
+    val globalSettings by db.globalProfit().get().collectAsState(null)
 
     AlertDialog(
         onDismissRequest = close,
         title = { Text("تنظیم سود اختصاصی") },
         text = {
             Column {
+                if (a.useGlobalProfit) {
+                    Card(
+                        Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFFFFF3E0)
+                        )
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(
+                                "⚠️ این حساب از تنظیم سود کلی برنامه استفاده می‌کند.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFE65100),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            if (globalSettings != null && globalSettings.enabled) {
+                                Text(
+                                    "نرخ کلی: ${globalSettings.annualRate}% سالانه",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFE65100)
+                                )
+                            } else {
+                                Text(
+                                    "سود کلی برنامه غیرفعال است.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFE65100)
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "برای تنظیم اختصاصی، از «ویرایش حساب» گزینه‌ی «اختصاصی» را انتخاب کن.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFE65100)
+                            )
+                        }
+                    }
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(enabled, { enabled = !enabled })
-                    Text("فعال باشد")
+                    Checkbox(enabled, { enabled = !enabled }, enabled = !a.useGlobalProfit)
+                    Text(
+                        "فعال باشد",
+                        color = if (a.useGlobalProfit) Color.Gray else Color(0xFF1B1B1F)
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 Text("نوع سود", fontWeight = FontWeight.Medium)
                 Row {
-                    FilterChip(mode == "DAILY_ANNUAL", { mode = "DAILY_ANNUAL" }, label = { Text("روزشمار سالانه") })
+                    FilterChip(mode == "DAILY_ANNUAL", { mode = "DAILY_ANNUAL" },
+                        label = { Text("روزشمار سالانه") }, enabled = !a.useGlobalProfit)
                     Spacer(Modifier.width(6.dp))
-                    FilterChip(mode == "MONTHLY", { mode = "MONTHLY" }, label = { Text("ماهانه") })
+                    FilterChip(mode == "MONTHLY", { mode = "MONTHLY" },
+                        label = { Text("ماهانه") }, enabled = !a.useGlobalProfit)
                 }
                 Spacer(Modifier.height(8.dp))
-               if (mode == "DAILY_ANNUAL")
-    OutlinedTextField(
-        annual,
-        { input ->
-            // فقط رقم و نقطه اعشار
-            val cleaned = input.filter { it.isDigit() || it == '.' }
-            if (cleaned.count { it == '.' } <= 1) annual = cleaned
-        },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        label = { Text("نرخ سالانه ٪") },
-        modifier = Modifier.fillMaxWidth()
-    )
+                if (mode == "DAILY_ANNUAL")
+                    OutlinedTextField(
+                        annual,
+                        { input ->
+                            val cleaned = input.filter { it.isDigit() || it == '.' }
+                            if (cleaned.count { it == '.' } <= 1) annual = cleaned
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        label = { Text("نرخ سالانه ٪") },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !a.useGlobalProfit
+                    )
                 if (mode == "MONTHLY")
-                    OutlinedButton({ ratesOpen = true }) { Text("تنظیم نرخ ماه‌های سال") }
+                    OutlinedButton({ ratesOpen = true }, enabled = !a.useGlobalProfit) {
+                        Text("تنظیم نرخ ماه‌های سال")
+                    }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    day, { day = it },
+                    day, { day = it.filter { c -> c.isDigit() } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     label = { Text("روز واریز ماه") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !a.useGlobalProfit
                 )
                 Spacer(Modifier.height(8.dp))
                 Text("حساب مقصد سود", style = MaterialTheme.typography.titleSmall)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(dest == null, { dest = null })
+                    RadioButton(dest == null, { dest = null }, enabled = !a.useGlobalProfit)
                     Text("همین حساب")
                 }
                 allAccounts.filter { it.id != a.id }.forEach { acc ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(dest == acc.id, { dest = acc.id })
+                        RadioButton(dest == acc.id, { dest = acc.id }, enabled = !a.useGlobalProfit)
                         Text(acc.name)
                     }
                 }
             }
         },
         confirmButton = {
-            Button({
-                scope.launch {
-                    db.profit().upsert(
-                        ProfitSettings(
-                            old?.id ?: 0, a.id, enabled, mode,
-                            annual.toDoubleOrNull() ?: 0.0,
-                            day.toIntOrNull()?.coerceIn(1, 31) ?: 30,
-                            dest
+            Button(
+                {
+                    scope.launch {
+                        db.profit().upsert(
+                            ProfitSettings(
+                                old?.id ?: 0, a.id, enabled, mode,
+                                annual.toDoubleOrNull() ?: 0.0,
+                                day.toIntOrNull()?.coerceIn(1, 31) ?: 30,
+                                dest
+                            )
                         )
-                    )
-                    ProfitEngine.recalculateAll(db)
-                    close()
-                }
-            }) { Text("ذخیره") }
+                        ProfitEngine.recalculateAll(db)
+                        close()
+                    }
+                },
+                enabled = !a.useGlobalProfit
+            ) { Text("ذخیره") }
         },
         dismissButton = { TextButton(close) { Text("انصراف") } }
     )
@@ -1535,16 +1586,16 @@ fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
                 LazyColumn {
                     items((1..12).toList()) { m ->
                         OutlinedTextField(
-    values[m] ?: "",
-    { input ->
-        val cleaned = input.filter { it.isDigit() || it == '.' }
-        if (cleaned.count { it == '.' } <= 1) values[m] = cleaned
-    },
-    singleLine = true,
-    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-    label = { Text(Jalali.monthName(m)) },
-    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-)
+                            values[m] ?: "",
+                            { input ->
+                                val cleaned = input.filter { it.isDigit() || it == '.' }
+                                if (cleaned.count { it == '.' } <= 1) values[m] = cleaned
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            label = { Text(Jalali.monthName(m)) },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        )
                     }
                 }
             }
@@ -1560,6 +1611,92 @@ fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
                     close()
                 }
             }) { Text("ذخیره نرخ‌ها") }
+        },
+        dismissButton = { TextButton(close) { Text("انصراف") } }
+    )
+}
+
+// ═══════════════════════════════════════════════════════
+// GlobalProfitEditor
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun GlobalProfitEditor(
+    db: AppDb,
+    old: GlobalProfitSettings?,
+    close: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var enabled by remember(old) { mutableStateOf(old?.enabled ?: false) }
+    var mode by remember(old) { mutableStateOf(old?.mode ?: "DAILY_ANNUAL") }
+    var annual by remember(old) { mutableStateOf(old?.annualRate?.toString() ?: "20") }
+    var day by remember(old) { mutableStateOf(old?.payoutDay?.toString() ?: "30") }
+
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("تنظیم سود کلی برنامه") },
+        text = {
+            Column {
+                Text(
+                    "این تنظیم روی همه‌ی حساب‌هایی که «سود کلی» را انتخاب کرده‌اند، اعمال می‌شود.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(enabled, { enabled = !enabled })
+                    Text("فعال باشد")
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("نوع سود", fontWeight = FontWeight.Medium)
+                Row {
+                    FilterChip(mode == "DAILY_ANNUAL", { mode = "DAILY_ANNUAL" }, label = { Text("روزشمار سالانه") })
+                    Spacer(Modifier.width(6.dp))
+                    FilterChip(mode == "MONTHLY", { mode = "MONTHLY" }, label = { Text("ماهانه") })
+                }
+                Spacer(Modifier.height(8.dp))
+                if (mode == "DAILY_ANNUAL")
+                    OutlinedTextField(
+                        annual,
+                        { input ->
+                            val cleaned = input.filter { it.isDigit() || it == '.' }
+                            if (cleaned.count { it == '.' } <= 1) annual = cleaned
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        label = { Text("نرخ سالانه ٪") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    day, { day = it.filter { c -> c.isDigit() } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    label = { Text("روز واریز ماه") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "⚠️ برای حالت ماهانه، باید از توی هر حساب نرخ ماهانه تعریف کنی.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFE65100)
+                )
+            }
+        },
+        confirmButton = {
+            Button({
+                scope.launch {
+                    db.globalProfit().upsert(
+                        GlobalProfitSettings(
+                            id = 1,
+                            enabled = enabled,
+                            mode = mode,
+                            annualRate = annual.toDoubleOrNull() ?: 20.0,
+                            payoutDay = day.toIntOrNull()?.coerceIn(1, 31) ?: 30
+                        )
+                    )
+                    ProfitEngine.recalculateAll(db)
+                    close()
+                }
+            }) { Text("ذخیره") }
         },
         dismissButton = { TextButton(close) { Text("انصراف") } }
     )
@@ -1596,6 +1733,8 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     var confirmRestore by remember { mutableStateOf(false) }
     var confirmRemoveFolder by remember { mutableStateOf(false) }
     var customFolderName by remember { mutableStateOf<String?>(null) }
+    var globalProfitEditorOpen by remember { mutableStateOf(false) }
+    var globalSettings by remember { mutableStateOf<GlobalProfitSettings?>(null) }
 
     LaunchedEffect(Unit) {
         val file = java.io.File(context.filesDir, "auto_backup.json")
@@ -1609,6 +1748,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             val folder = DocumentFile.fromTreeUri(context, customUri)
             customFolderName = folder?.name ?: "پوشه انتخاب شده"
         }
+        globalSettings = db.globalProfit().getNow()
     }
 
     Column(Modifier.fillMaxSize().background(BgLight)) {
@@ -1625,7 +1765,56 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // سود کلی
             item {
+                Text(
+                    "سود کلی برنامه",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
+            }
+
+            item {
+                Card(
+                    Modifier.fillMaxWidth().clickable { globalProfitEditorOpen = true },
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("💰", fontSize = 18.sp, color = HeaderBlue)
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "تنظیم سود کلی",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    if (globalSettings?.enabled == true)
+                                        "فعال — ${globalSettings?.annualRate}% سالانه"
+                                    else "غیرفعال",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (globalSettings?.enabled == true) CreditGreen else Color.Gray
+                                )
+                            }
+                            Text("‹", fontSize = 20.sp, color = Color.Gray)
+                        }
+                    }
+                }
+            }
+
+            // بکاپ
+            item {
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "پشتیبان و بازیابی",
                     style = MaterialTheme.typography.titleMedium,
@@ -1803,6 +1992,10 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
+    if (globalProfitEditorOpen) {
+        GlobalProfitEditor(db, globalSettings) { globalProfitEditorOpen = false }
+    }
+
     if (confirmRestore) {
         ConfirmDeleteDialog(
             title = "بازیابی از بکاپ خودکار",
@@ -1902,45 +2095,95 @@ fun SettingRow(
 object ProfitEngine {
     suspend fun recalculateAll(db: AppDb) {
         db.tx().deleteAllAuto()
-        for (a in db.accounts().allNow()) recalculateForAccount(db, a.id)
+        val globalSettings = db.globalProfit().getNow()
+        for (a in db.accounts().allNow()) {
+            val accountSettings = db.profit().byAccountNow(a.id)
+            if (a.useGlobalProfit) {
+                if (globalSettings != null && globalSettings.enabled) {
+                    recalculateWithSettings(db, a.id, globalSettings.enabled, globalSettings.mode,
+                        globalSettings.annualRate, globalSettings.payoutDay, null)
+                }
+            } else {
+                if (accountSettings != null && accountSettings.enabled) {
+                    recalculateWithSettings(db, a.id, accountSettings.enabled, accountSettings.mode,
+                        accountSettings.annualRate, accountSettings.payoutDay,
+                        accountSettings.destinationAccountId)
+                }
+            }
+        }
     }
 
     suspend fun recalculateForAccount(db: AppDb, accountId: Long) {
-        val s = db.profit().byAccountNow(accountId) ?: return
-        if (!s.enabled) return
+        val account = db.accounts().byId(accountId) ?: return
+        val globalSettings = db.globalProfit().getNow()
+        val accountSettings = db.profit().byAccountNow(accountId)
+
+        if (account.useGlobalProfit) {
+            if (globalSettings != null && globalSettings.enabled) {
+                recalculateWithSettings(db, accountId, globalSettings.enabled, globalSettings.mode,
+                    globalSettings.annualRate, globalSettings.payoutDay, null)
+            }
+        } else {
+            if (accountSettings != null && accountSettings.enabled) {
+                recalculateWithSettings(db, accountId, accountSettings.enabled, accountSettings.mode,
+                    accountSettings.annualRate, accountSettings.payoutDay,
+                    accountSettings.destinationAccountId)
+            }
+        }
+    }
+
+    private suspend fun recalculateWithSettings(
+        db: AppDb,
+        accountId: Long,
+        enabled: Boolean,
+        mode: String,
+        annualRate: Double,
+        payoutDay: Int,
+        destinationAccountId: Long?
+    ) {
+        if (!enabled) return
         val base = db.tx().byAccountNow(accountId).filter { !it.isAutoProfit }
         val rates = db.profit().ratesNow(accountId)
         val today = Jalali.nowJalali()
         val out = mutableListOf<Transaction>()
+
         val months = rates.map { it.year * 12 + it.month }.toMutableSet()
-        if (s.mode == "DAILY_ANNUAL") {
+        if (mode == "DAILY_ANNUAL") {
             for (y in (today[0] - 2)..today[0]) for (m in 1..12) months.add(y * 12 + m)
         }
+
         for (key in months.sorted()) {
             val y = key / 12
             val m = key % 12
             if (y > today[0] || (y == today[0] && m > today[1])) continue
             val days = Jalali.daysInMonth(y, m)
-            val rate = if (s.mode == "MONTHLY") rates.find { it.year == y && it.month == m }?.ratePercent ?: continue
-            else s.annualRate
+
+            val rate = if (mode == "MONTHLY") {
+                rates.find { it.year == y && it.month == m }?.ratePercent ?: continue
+            } else annualRate
+
             var total = 0.0
             for (d in 1..days) {
                 val t = Jalali.startOfJalaliMonth(y, m) + ((d - 1) * 86400000L)
                 val bal = base.filter { it.dateMillis <= t }
                     .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
-                total += if (s.mode == "MONTHLY") bal * (rate / 100.0) / days
+                total += if (mode == "MONTHLY") bal * (rate / 100.0) / days
                 else bal * (rate / 100.0) / 365.0
             }
             val amount = kotlin.math.round(total).toLong()
             if (amount <= 0) continue
-            val payout = jalaliPayout(y, m, s.payoutDay)
+
+            val payout = jalaliPayout(y, m, payoutDay)
             if (payout > System.currentTimeMillis()) continue
-            val destCandidate = s.destinationAccountId ?: accountId
+
+            val destCandidate = destinationAccountId ?: accountId
             val dest = if (db.accounts().byId(destCandidate) != null) destCandidate else accountId
-            val text = if (s.mode == "MONTHLY")
+
+            val text = if (mode == "MONTHLY")
                 "سود ماهانه ${Jalali.monthName(m)} $y — نرخ ${rate}%"
             else
-                "سود روزشمار ${Jalali.monthName(m)} $y — نرخ ${s.annualRate}% سالانه"
+                "سود روزشمار ${Jalali.monthName(m)} $y — نرخ ${annualRate}% سالانه"
+
             out.add(Transaction(0, dest, payout, "بستانکار", amount, text, true, "$accountId:$y:$m"))
         }
         db.tx().insertAll(out)
@@ -1960,7 +2203,6 @@ object Backup {
         val root = JSONObject()
         fun arr() = JSONArray()
 
-        // Persons
         val pp = arr()
         for (p in db.persons().allNow()) {
             val o = JSONObject()
@@ -1973,7 +2215,6 @@ object Backup {
         }
         root.put("persons", pp)
 
-        // Accounts
         val aa = arr()
         for (a in db.accounts().allNow()) {
             val o = JSONObject()
@@ -1989,7 +2230,6 @@ object Backup {
         }
         root.put("accounts", aa)
 
-        // Transactions
         val tt = arr()
         for (a in db.accounts().allNow()) for (t in db.tx().byAccountNow(a.id)) {
             val o = JSONObject()
@@ -2004,7 +2244,6 @@ object Backup {
         }
         root.put("transactions", tt)
 
-        // ProfitSettings
         val ps = arr()
         for (a in db.accounts().allNow()) {
             val s = db.profit().byAccountNow(a.id)
@@ -2021,7 +2260,6 @@ object Backup {
         }
         root.put("profitSettings", ps)
 
-        // MonthlyRates
         val mr = arr()
         for (a in db.accounts().allNow()) for (r in db.profit().ratesNow(a.id)) {
             val o = JSONObject()
@@ -2032,6 +2270,16 @@ object Backup {
             mr.put(o)
         }
         root.put("monthlyRates", mr)
+
+        val gs = db.globalProfit().getNow()
+        if (gs != null) {
+            val o = JSONObject()
+            o.put("enabled", gs.enabled)
+            o.put("mode", gs.mode)
+            o.put("annualRate", gs.annualRate)
+            o.put("payoutDay", gs.payoutDay)
+            root.put("globalProfit", o)
+        }
 
         return root.toString(2)
     }
@@ -2046,7 +2294,6 @@ object Backup {
             db.accounts().clear()
             db.persons().clear()
 
-            // Persons
             val persons = root.optJSONArray("persons") ?: JSONArray()
             val personIdMap = mutableMapOf<Long, Long>()
             for (i in 0 until persons.length()) {
@@ -2061,7 +2308,6 @@ object Backup {
                 personIdMap[oldId] = newId
             }
 
-            // Accounts
             val accounts = root.optJSONArray("accounts") ?: JSONArray()
             val accountIdMap = mutableMapOf<Long, Long>()
             for (i in 0 until accounts.length()) {
@@ -2080,7 +2326,6 @@ object Backup {
                 accountIdMap[oldId] = newId
             }
 
-            // Transactions
             val tx = root.optJSONArray("transactions") ?: JSONArray()
             for (i in 0 until tx.length()) {
                 val o = tx.getJSONObject(i)
@@ -2096,7 +2341,6 @@ object Backup {
                 ))
             }
 
-            // ProfitSettings
             val ps = root.optJSONArray("profitSettings") ?: JSONArray()
             for (i in 0 until ps.length()) {
                 val o = ps.getJSONObject(i)
@@ -2113,7 +2357,6 @@ object Backup {
                 ))
             }
 
-            // MonthlyRates
             val mr = root.optJSONArray("monthlyRates") ?: JSONArray()
             for (i in 0 until mr.length()) {
                 val o = mr.getJSONObject(i)
@@ -2123,6 +2366,17 @@ object Backup {
                     year = o.getInt("year"),
                     month = o.getInt("month"),
                     ratePercent = o.getDouble("ratePercent")
+                ))
+            }
+
+            val gs = root.optJSONObject("globalProfit")
+            if (gs != null) {
+                db.globalProfit().upsert(GlobalProfitSettings(
+                    id = 1,
+                    enabled = gs.optBoolean("enabled", false),
+                    mode = gs.optString("mode", "DAILY_ANNUAL"),
+                    annualRate = gs.optDouble("annualRate", 20.0),
+                    payoutDay = gs.optInt("payoutDay", 30)
                 ))
             }
         } else {
