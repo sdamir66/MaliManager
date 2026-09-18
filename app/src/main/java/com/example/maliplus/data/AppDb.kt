@@ -10,9 +10,10 @@ import androidx.room.RoomDatabase
         Transaction::class,
         ProfitSettings::class,
         MonthlyRate::class,
-        GlobalProfitSettings::class
+        GlobalProfitSettings::class,
+        GlobalMonthlyRate::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDb : RoomDatabase() {
@@ -21,4 +22,5 @@ abstract class AppDb : RoomDatabase() {
     abstract fun tx(): TxDao
     abstract fun profit(): ProfitDao
     abstract fun globalProfit(): GlobalProfitDao
+    abstract fun globalMonthlyRate(): GlobalMonthlyRateDao
 }
