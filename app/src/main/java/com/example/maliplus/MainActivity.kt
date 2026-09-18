@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -57,8 +56,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -300,7 +297,7 @@ fun PageHeader(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonsScreen — با Reorderable
+// PersonsScreen — با دکمه‌های ▲▼
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -316,20 +313,6 @@ fun PersonsScreen(
     var deleteTarget by remember { mutableStateOf<Person?>(null) }
     var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
-
-    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
-        scope.launch {
-            val list = persons.toMutableList()
-            if (from.index in list.indices && to.index in list.indices) {
-                val moved = list.removeAt(from.index)
-                list.add(to.index, moved)
-                list.forEachIndexed { index, person ->
-                    db.persons().updateOrder(person.id, index)
-                }
-            }
-        }
-    }
 
     Column(Modifier.fillMaxSize().background(BgLight)) {
         Box(
@@ -355,7 +338,7 @@ fun PersonsScreen(
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        if (editMode) "آیکون ☰ رو نگه دار و بکش"
+                        if (editMode) "با دکمه‌های ▲▼ جابه‌جا کن"
                         else "${persons.size} شخص  •  ${allAccounts.size} حساب",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.8f)
@@ -402,7 +385,6 @@ fun PersonsScreen(
         Spacer(Modifier.height(16.dp))
 
         LazyColumn(
-            state = listState,
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -426,50 +408,74 @@ fun PersonsScreen(
                 }
             }
 
-            items(persons, key = { it.id }) { p ->
-                ReorderableItem(reorderableState, key = p.id) { isDragging ->
-                    val personAccounts = allAccounts.filter { it.personId == p.id }
+            items(persons.size) { index ->
+                val p = persons[index]
+                val personAccounts = allAccounts.filter { it.personId == p.id }
 
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .background(
-                                if (isDragging) Color(0xFFF0F0F0) else Color.Transparent,
-                                shape = RoundedCornerShape(18.dp)
-                            ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                       if (editMode) {
-    Icon(
-        imageVector = Icons.Default.Menu,
-        contentDescription = "جابجایی",
-        tint = HeaderBlue,
-        modifier = Modifier
-            .padding(horizontal = 8.dp)
-            .size(28.dp)
-    )
-}
-
-                        Box(Modifier.weight(1f)) {
-                            if (editMode) {
-                                PersonCard(
-                                    person = p,
-                                    accounts = personAccounts,
-                                    onClick = { },
-                                    onEdit = { },
-                                    onDelete = { },
-                                    db = db
-                                )
-                            } else {
-                                PersonCard(
-                                    person = p,
-                                    accounts = personAccounts,
-                                    onClick = { onOpenPerson(p) },
-                                    onEdit = { editTarget = p },
-                                    onDelete = { deleteTarget = p },
-                                    db = db
-                                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (editMode) {
+                        // ✅ دکمه‌های ▲▼
+                        Column(
+                            Modifier.padding(end = 6.dp),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    if (index > 0) {
+                                        scope.launch {
+                                            val p1 = persons[index]
+                                            val p2 = persons[index - 1]
+                                            db.persons().updateOrder(p1.id, p2.displayOrder)
+                                            db.persons().updateOrder(p2.id, p1.displayOrder)
+                                        }
+                                    }
+                                },
+                                enabled = index > 0,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Text("▲", fontSize = 16.sp, color = if (index > 0) HeaderBlue else Color.LightGray)
                             }
+                            IconButton(
+                                onClick = {
+                                    if (index < persons.size - 1) {
+                                        scope.launch {
+                                            val p1 = persons[index]
+                                            val p2 = persons[index + 1]
+                                            db.persons().updateOrder(p1.id, p2.displayOrder)
+                                            db.persons().updateOrder(p2.id, p1.displayOrder)
+                                        }
+                                    }
+                                },
+                                enabled = index < persons.size - 1,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Text("▼", fontSize = 16.sp, color = if (index < persons.size - 1) HeaderBlue else Color.LightGray)
+                            }
+                        }
+                    }
+
+                    Box(Modifier.weight(1f)) {
+                        if (editMode) {
+                            PersonCard(
+                                person = p,
+                                accounts = personAccounts,
+                                onClick = { },
+                                onEdit = { },
+                                onDelete = { },
+                                db = db
+                            )
+                        } else {
+                            PersonCard(
+                                person = p,
+                                accounts = personAccounts,
+                                onClick = { onOpenPerson(p) },
+                                onEdit = { editTarget = p },
+                                onDelete = { deleteTarget = p },
+                                db = db
+                            )
                         }
                     }
                 }
@@ -514,7 +520,7 @@ fun PersonsScreen(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonCard — بدون خط جداکننده
+// PersonCard
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -656,7 +662,7 @@ fun PersonCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonScreen — با Reorderable
+// PersonScreen — با دکمه‌های ▲▼
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -673,20 +679,6 @@ fun PersonScreen(
     var editPerson by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
-
-    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
-        scope.launch {
-            val list = accounts.toMutableList()
-            if (from.index in list.indices && to.index in list.indices) {
-                val moved = list.removeAt(from.index)
-                list.add(to.index, moved)
-                list.forEachIndexed { index, account ->
-                    db.accounts().updateOrder(account.id, index)
-                }
-            }
-        }
-    }
 
     val accountBalances = accounts.map { acc ->
         val txs = remember(acc.id) { mutableStateOf<List<Transaction>>(emptyList()) }
@@ -699,7 +691,7 @@ fun PersonScreen(
         Column(Modifier.fillMaxSize()) {
             PageHeader(
                 title = if (editMode) "مرتب‌سازی" else person.name,
-                subtitle = if (editMode) "آیکون ☰ رو نگه دار و بکش"
+                subtitle = if (editMode) "با دکمه‌های ▲▼ جابه‌جا کن"
                 else "${accounts.size} حساب",
                 onBackClick = onBack,
                 extraActions = {
@@ -739,7 +731,6 @@ fun PersonScreen(
             Spacer(Modifier.height(16.dp))
 
             LazyColumn(
-                state = listState,
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -754,48 +745,72 @@ fun PersonScreen(
                     )
                 }
 
-                items(accounts, key = { it.id }) { acc ->
-                    ReorderableItem(reorderableState, key = acc.id) { isDragging ->
-                        val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
+                items(accounts.size) { index ->
+                    val acc = accounts[index]
+                    val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
 
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    if (isDragging) Color(0xFFF0F0F0) else Color.Transparent,
-                                    shape = RoundedCornerShape(18.dp)
-                                ),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (editMode) {
-    Icon(
-        imageVector = Icons.Default.Menu,
-        contentDescription = "جابجایی",
-        tint = HeaderBlue,
-        modifier = Modifier
-            .padding(horizontal = 8.dp)
-            .size(28.dp)
-    )
-}
-
-                            Box(Modifier.weight(1f)) {
-                                if (editMode) {
-                                    SwipeableAccountCard(
-                                        account = acc,
-                                        balance = bal,
-                                        onClick = { },
-                                        onEdit = { },
-                                        onDelete = { }
-                                    )
-                                } else {
-                                    SwipeableAccountCard(
-                                        account = acc,
-                                        balance = bal,
-                                        onClick = { onOpenAccount(acc) },
-                                        onEdit = { editTarget = acc },
-                                        onDelete = { deleteTarget = acc }
-                                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (editMode) {
+                            // ✅ دکمه‌های ▲▼ برای حساب‌ها
+                            Column(
+                                Modifier.padding(end = 6.dp),
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        if (index > 0) {
+                                            scope.launch {
+                                                val a1 = accounts[index]
+                                                val a2 = accounts[index - 1]
+                                                db.accounts().updateOrder(a1.id, a2.displayOrder)
+                                                db.accounts().updateOrder(a2.id, a1.displayOrder)
+                                            }
+                                        }
+                                    },
+                                    enabled = index > 0,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Text("▲", fontSize = 16.sp, color = if (index > 0) HeaderBlue else Color.LightGray)
                                 }
+                                IconButton(
+                                    onClick = {
+                                        if (index < accounts.size - 1) {
+                                            scope.launch {
+                                                val a1 = accounts[index]
+                                                val a2 = accounts[index + 1]
+                                                db.accounts().updateOrder(a1.id, a2.displayOrder)
+                                                db.accounts().updateOrder(a2.id, a1.displayOrder)
+                                            }
+                                        }
+                                    },
+                                    enabled = index < accounts.size - 1,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Text("▼", fontSize = 16.sp, color = if (index < accounts.size - 1) HeaderBlue else Color.LightGray)
+                                }
+                            }
+                        }
+
+                        Box(Modifier.weight(1f)) {
+                            if (editMode) {
+                                SwipeableAccountCard(
+                                    account = acc,
+                                    balance = bal,
+                                    onClick = { },
+                                    onEdit = { },
+                                    onDelete = { }
+                                )
+                            } else {
+                                SwipeableAccountCard(
+                                    account = acc,
+                                    balance = bal,
+                                    onClick = { onOpenAccount(acc) },
+                                    onEdit = { editTarget = acc },
+                                    onDelete = { deleteTarget = acc }
+                                )
                             }
                         }
                     }
