@@ -2095,25 +2095,31 @@ fun SettingRow(
 object ProfitEngine {
     suspend fun recalculateAll(db: AppDb) {
         db.tx().deleteAllAuto()
-        val globalSettings = db.globalProfit().getNow()
+        val globalSettings: GlobalProfitSettings? = db.globalProfit().getNow()
         for (a in db.accounts().allNow()) {
-            val accountSettings = db.profit().byAccountNow(a.id)
+            val accountSettings: ProfitSettings? = db.profit().byAccountNow(a.id)
             if (a.useGlobalProfit) {
-                if (globalSettings != null && globalSettings.enabled) {
-                    val gs = globalSettings  // ← متغیر محلی
+                if (globalSettings != null) {
                     recalculateWithSettings(
-                        db, a.id,
-                        gs.enabled, gs.mode, gs.annualRate, gs.payoutDay,
-                        null
+                        db = db,
+                        accountId = a.id,
+                        enabled = globalSettings.enabled,
+                        mode = globalSettings.mode,
+                        annualRate = globalSettings.annualRate,
+                        payoutDay = globalSettings.payoutDay,
+                        destinationAccountId = null
                     )
                 }
             } else {
-                if (accountSettings != null && accountSettings.enabled) {
-                    val as_ = accountSettings  // ← متغیر محلی
+                if (accountSettings != null) {
                     recalculateWithSettings(
-                        db, a.id,
-                        as_.enabled, as_.mode, as_.annualRate, as_.payoutDay,
-                        as_.destinationAccountId
+                        db = db,
+                        accountId = a.id,
+                        enabled = accountSettings.enabled,
+                        mode = accountSettings.mode,
+                        annualRate = accountSettings.annualRate,
+                        payoutDay = accountSettings.payoutDay,
+                        destinationAccountId = accountSettings.destinationAccountId
                     )
                 }
             }
@@ -2122,25 +2128,31 @@ object ProfitEngine {
 
     suspend fun recalculateForAccount(db: AppDb, accountId: Long) {
         val account = db.accounts().byId(accountId) ?: return
-        val globalSettings = db.globalProfit().getNow()
-        val accountSettings = db.profit().byAccountNow(accountId)
+        val globalSettings: GlobalProfitSettings? = db.globalProfit().getNow()
+        val accountSettings: ProfitSettings? = db.profit().byAccountNow(accountId)
 
         if (account.useGlobalProfit) {
-            if (globalSettings != null && globalSettings.enabled) {
-                val gs = globalSettings  // ← متغیر محلی
+            if (globalSettings != null) {
                 recalculateWithSettings(
-                    db, accountId,
-                    gs.enabled, gs.mode, gs.annualRate, gs.payoutDay,
-                    null
+                    db = db,
+                    accountId = accountId,
+                    enabled = globalSettings.enabled,
+                    mode = globalSettings.mode,
+                    annualRate = globalSettings.annualRate,
+                    payoutDay = globalSettings.payoutDay,
+                    destinationAccountId = null
                 )
             }
         } else {
-            if (accountSettings != null && accountSettings.enabled) {
-                val as_ = accountSettings  // ← متغیر محلی
+            if (accountSettings != null) {
                 recalculateWithSettings(
-                    db, accountId,
-                    as_.enabled, as_.mode, as_.annualRate, as_.payoutDay,
-                    as_.destinationAccountId
+                    db = db,
+                    accountId = accountId,
+                    enabled = accountSettings.enabled,
+                    mode = accountSettings.mode,
+                    annualRate = accountSettings.annualRate,
+                    payoutDay = accountSettings.payoutDay,
+                    destinationAccountId = accountSettings.destinationAccountId
                 )
             }
         }
@@ -2203,10 +2215,6 @@ object ProfitEngine {
         db.tx().insertAll(out)
     }
 }
-
-private fun jalaliPayout(y: Int, m: Int, day: Int): Long =
-    Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, day.coerceAtMost(Jalali.daysInMonth(y, m))))!!
-
 // ═══════════════════════════════════════════════════════
 // Backup
 // ═══════════════════════════════════════════════════════
