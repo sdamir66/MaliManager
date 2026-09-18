@@ -9,8 +9,6 @@ data class Person(
     val name: String,
     val note: String = "",
     val displayOrder: Int = 0,
-    // ارزهایی که توی کارت شخص نمایش داده می‌شن (حداکثر ۳ تا)
-    // به صورت comma-separated، مثلاً "ریال,دلار,یورو"
     val displayedCurrencies: String = ""
 )
 
@@ -21,9 +19,8 @@ data class Account(
     val name: String,
     val note: String = "",
     val currency: String = "تومان",
-    val customUnit: String = "",     // اگه پر باشه، جایگزین ارز می‌شه
-    val displayOrder: Int = 0,
-    val useGlobalProfit: Boolean = true  // از تنظیم سود کلی استفاده کنه یا اختصاصی
+    val customUnit: String = "",
+    val displayOrder: Int = 0
 )
 
 @Entity(tableName = "transactions")
@@ -38,38 +35,24 @@ data class Transaction(
     val profitKey: String? = null
 )
 
-@Entity(tableName = "profit_settings")
-data class ProfitSettings(
+/**
+ * بازه‌ی سود
+ * - accountId = 0 → سود کلی برنامه
+ * - accountId > 0 → سود اختصاصی برای اون حساب
+ * - endYear = null → پایانی نداره (تا بی‌نهایت)
+ */
+@Entity(tableName = "profit_periods")
+data class ProfitPeriod(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val accountId: Long,
-    val enabled: Boolean = false,
-    val mode: String = "DAILY_ANNUAL",
-    val annualRate: Double = 0.0,
-    val payoutDay: Int = 30,
-    val destinationAccountId: Long? = null
-)
-
-@Entity(tableName = "monthly_rates", primaryKeys = ["accountId", "year", "month"])
-data class MonthlyRate(
-    val accountId: Long,
-    val year: Int,
-    val month: Int,
-    val ratePercent: Double
-)
-
-// تنظیم سود کلی برنامه (برای مرحله ۳)
-@Entity(tableName = "global_profit_settings")
-data class GlobalProfitSettings(
-    @PrimaryKey val id: Long = 1,
-    val enabled: Boolean = false,
-    val mode: String = "DAILY_ANNUAL",
-    val annualRate: Double = 20.0,
-    val payoutDay: Int = 30
-)
-
-@Entity(tableName = "global_monthly_rates", primaryKeys = ["year", "month"])
-data class GlobalMonthlyRate(
-    val year: Int,
-    val month: Int,
-    val ratePercent: Double
+    val accountId: Long = 0,
+    val type: String = "ANNUAL",        // "ANNUAL" یا "MONTHLY"
+    val rate: Double = 0.0,             // نرخ سود
+    val startYear: Int,
+    val startMonth: Int,
+    val startDay: Int,
+    val endYear: Int? = null,
+    val endMonth: Int? = null,
+    val endDay: Int? = null,
+    val payoutDay: Int = 30,            // روز واریز ماه
+    val destinationAccountId: Long? = null  // حساب مقصد (برای سود اختصاصی)
 )
