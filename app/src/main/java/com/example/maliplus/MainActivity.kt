@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,15 +33,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import com.example.maliplus.data.*
@@ -159,13 +164,23 @@ class MainActivity : ComponentActivity() {
 
 private fun money(v: Long) = NumberFormat.getNumberInstance(Locale.US).format(v)
 
-private fun formatWithSeparator(input: String): String {
-    if (input.isBlank()) return ""
-    val digits = input.replace(",", "").filter { it.isDigit() }
-    if (digits.isEmpty()) return ""
+private fun formatTextFieldValue(input: TextFieldValue): TextFieldValue {
+    val digits = input.text.filter { it.isDigit() }
+    if (digits.isEmpty()) {
+        return input.copy(text = "")
+    }
     return try {
-        NumberFormat.getNumberInstance(Locale.US).format(digits.toLong())
-    } catch (e: Exception) { digits }
+        val formatted = NumberFormat.getNumberInstance(Locale.US).format(digits.toLong())
+        input.copy(
+            text = formatted,
+            selection = androidx.compose.ui.text.TextRange(formatted.length)
+        )
+    } catch (e: Exception) {
+        input.copy(
+            text = digits,
+            selection = androidx.compose.ui.text.TextRange(digits.length)
+        )
+    }
 }
 
 private fun parseSeparatedAmount(input: String): Long? {
@@ -227,7 +242,7 @@ fun FinanceApp(db: AppDb) {
 }
 
 // ═══════════════════════════════════════════════════════
-// PageHeader — بدون سایه
+// PageHeader
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -288,7 +303,7 @@ fun PageHeader(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonsScreen — با Drag & Drop
+// PersonsScreen — با Drag & Drop واقعی
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -304,11 +319,6 @@ fun PersonsScreen(
     var deleteTarget by remember { mutableStateOf<Person?>(null) }
     var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
-
-    // ✅ Drag & Drop ساده
-    var draggingIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffset by remember { mutableStateOf(0f) }
 
     Column(Modifier.fillMaxSize().background(BgLight)) {
         Box(
@@ -334,14 +344,13 @@ fun PersonsScreen(
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        if (editMode) "با کشیدن ☰ جابه‌جا کن"
+                        if (editMode) "کارت رو بکش و جابه‌جا کن"
                         else "${persons.size} شخص  •  ${allAccounts.size} حساب",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.8f)
                     )
                 }
 
-                // دکمه مرتب‌سازی
                 IconButton(
                     onClick = { editMode = !editMode },
                     modifier = Modifier.size(48.dp)
@@ -381,87 +390,48 @@ fun PersonsScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            if (persons.isEmpty()) {
-                item {
-                    Box(
-                        Modifier.fillMaxWidth().padding(top = 60.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("👥", fontSize = 64.sp)
-                            Spacer(Modifier.height(16.dp))
-                            Text(
-                                "هنوز شخصی ثبت نکردی",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = Color.Gray
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "روی + بزن و شروع کن",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.Gray
-                            )
+        // ✅ Drag & Drop واقعی
+        if (editMode) {
+            DraggableList(
+                persons = persons,
+                allAccounts = allAccounts,
+                db = db
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (persons.isEmpty()) {
+                    item {
+                        Box(
+                            Modifier.fillMaxWidth().padding(top = 60.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("👥", fontSize = 64.sp)
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    "هنوز شخصی ثبت نکردی",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = Color.Gray
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            items(persons.size) { index ->
-                val p = persons[index]
-                val personAccounts = allAccounts.filter { it.personId == p.id }
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (editMode) {
-                        // ✅ Drag handle با دکمه‌های بالا/پایین به‌جای pointer (ساده‌تر)
-                        Column(Modifier.padding(end = 4.dp)) {
-                            IconButton(
-                                onClick = {
-                                    if (index > 0) {
-                                        scope.launch {
-                                            db.persons().updateOrder(persons[index].id, index - 1)
-                                            db.persons().updateOrder(persons[index - 1].id, index)
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Text("▲", fontSize = 14.sp, color = Color.Gray)
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (index < persons.size - 1) {
-                                        scope.launch {
-                                            db.persons().updateOrder(persons[index].id, index + 1)
-                                            db.persons().updateOrder(persons[index + 1].id, index)
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Text("▼", fontSize = 14.sp, color = Color.Gray)
-                            }
-                        }
-                    }
-
-                    Box(Modifier.weight(1f)) {
-                        PersonCard(
-                            person = p,
-                            accounts = personAccounts,
-                            onClick = { if (!editMode) onOpenPerson(p) },
-                            onEdit = { if (!editMode) editTarget = p },
-                            onDelete = { if (!editMode) deleteTarget = p },
-                            db = db
-                        )
-                    }
+                items(persons, key = { it.id }) { p ->
+                    val personAccounts = allAccounts.filter { it.personId == p.id }
+                    PersonCard(
+                        person = p,
+                        accounts = personAccounts,
+                        onClick = { onOpenPerson(p) },
+                        onEdit = { editTarget = p },
+                        onDelete = { deleteTarget = p },
+                        db = db
+                    )
                 }
             }
         }
@@ -504,7 +474,124 @@ fun PersonsScreen(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonCard — چیدمان جدید (بدون دایره)
+// DraggableList — Drag & Drop واقعی
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun DraggableList(
+    persons: List<Person>,
+    allAccounts: List<Account>,
+    db: AppDb
+) {
+    val scope = rememberCoroutineScope()
+    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
+    var accumulatedOffset by remember { mutableStateOf(0f) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        persons.forEachIndexed { index, p ->
+            val isDragging = draggedIndex == index
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .zIndex(if (isDragging) 1f else 0f)
+                    .graphicsLayer {
+                        translationY = if (isDragging) dragOffset else 0f
+                    }
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // ✅ آیکون Drag
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .pointerInput(p.id) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggedIndex = index
+                                        dragOffset = 0f
+                                        accumulatedOffset = 0f
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffset += dragAmount.y
+                                        accumulatedOffset += dragAmount.y
+
+                                        // اگه بیش از ۸۰dp جابه‌جا شد، جای عوض کن
+                                        if (accumulatedOffset > 80f && draggedIndex != null) {
+                                            val from = draggedIndex!!
+                                            if (from < persons.size - 1) {
+                                                scope.launch {
+                                                    val p1 = persons[from]
+                                                    val p2 = persons[from + 1]
+                                                    db.persons().updateOrder(p1.id, p2.displayOrder)
+                                                    db.persons().updateOrder(p2.id, p1.displayOrder)
+                                                }
+                                            }
+                                            draggedIndex = null
+                                            dragOffset = 0f
+                                            accumulatedOffset = 0f
+                                        } else if (accumulatedOffset < -80f && draggedIndex != null) {
+                                            val from = draggedIndex!!
+                                            if (from > 0) {
+                                                scope.launch {
+                                                    val p1 = persons[from]
+                                                    val p2 = persons[from - 1]
+                                                    db.persons().updateOrder(p1.id, p2.displayOrder)
+                                                    db.persons().updateOrder(p2.id, p1.displayOrder)
+                                                }
+                                            }
+                                            draggedIndex = null
+                                            dragOffset = 0f
+                                            accumulatedOffset = 0f
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        draggedIndex = null
+                                        dragOffset = 0f
+                                        accumulatedOffset = 0f
+                                    },
+                                    onDragCancel = {
+                                        draggedIndex = null
+                                        dragOffset = 0f
+                                        accumulatedOffset = 0f
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("☰", fontSize = 24.sp, color = HeaderBlue)
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Box(Modifier.weight(1f)) {
+                        val personAccounts = allAccounts.filter { it.personId == p.id }
+                        PersonCard(
+                            person = p,
+                            accounts = personAccounts,
+                            onClick = { },
+                            onEdit = { },
+                            onDelete = { },
+                            db = db
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// PersonCard — چیدمان جدید
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -517,7 +604,6 @@ fun PersonCard(
     onDelete: () -> Unit,
     db: AppDb
 ) {
-    // ✅ مانده‌های همه حساب‌ها
     val accountsWithBalance = accounts.map { acc ->
         val txs = remember(acc.id) { mutableStateOf<List<Transaction>>(emptyList()) }
         LaunchedEffect(acc.id) { txs.value = db.tx().byAccountNow(acc.id) }
@@ -525,15 +611,19 @@ fun PersonCard(
         acc to bal
     }
 
-    // ✅ ارزهای قابل نمایش — از person.displayedCurrencies
-    val displayCurrencies = remember(person, accountsWithBalance) {
-        val saved = person.displayedCurrencies
+    val displayCurrencies = remember(person) {
+        person.displayedCurrencies
             .split(",")
             .map { it.trim() }
             .filter { it.isNotEmpty() }
-        if (saved.isNotEmpty()) saved
-        else accountsWithBalance.map { it.first.displayUnit() }.distinct().take(3)
     }
+
+    val filteredAccounts = if (displayCurrencies.isEmpty())
+        accountsWithBalance
+    else
+        accountsWithBalance.filter { (acc, _) ->
+            acc.displayUnit() in displayCurrencies
+        }
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -577,8 +667,7 @@ fun PersonCard(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
-            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-
+            Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 // ✅ ردیف اول: نام (راست) + تعداد حساب (چپ)
                 Row(
                     Modifier.fillMaxWidth(),
@@ -597,56 +686,52 @@ fun PersonCard(
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
+                HorizontalDivider(color = Color(0xFFEEEEEE))
+                Spacer(Modifier.height(10.dp))
 
-                // ✅ لیست حساب‌ها — هر حساب: عنوان + مبلغ + ارز + بدهکار/بستانکار
-                // فقط حساب‌هایی که ارزشون توی displayCurrencies هست
-                val filteredAccounts = if (displayCurrencies.isEmpty())
-                    accountsWithBalance
-                else
-                    accountsWithBalance.filter { (acc, _) ->
-                        acc.displayUnit() in displayCurrencies
-                    }
-
+                // ✅ لیست حساب‌ها: عنوان | مانده | ارز | بدهکار/بستانکار
                 if (filteredAccounts.isEmpty()) {
                     Text(
-                        "حسابی وجود ندارد",
+                        "حسابی برای نمایش نیست",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
                 } else {
-                    filteredAccounts.take(5).forEach { (acc, bal) ->
+                    filteredAccounts.forEach { (acc, bal) ->
                         Row(
-                            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            Modifier.fillMaxWidth().padding(vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // عنوان + ارز
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    acc.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    acc.displayUnit(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.Gray
-                                )
-                            }
-                            // مانده + بدهکار/بستانکار
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    money(kotlin.math.abs(bal)),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (bal >= 0) CreditGreen else DebitRed
-                                )
-                                Text(
-                                    if (bal >= 0) "بستانکار" else "بدهکار",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (bal >= 0) CreditGreen else DebitRed
-                                )
-                            }
+                            // عنوان حساب
+                            Text(
+                                acc.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            // مانده
+                            Text(
+                                money(kotlin.math.abs(bal)),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (bal >= 0) CreditGreen else DebitRed
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            // ارز
+                            Text(
+                                acc.displayUnit(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            // بدهکار/بستانکار
+                            Text(
+                                if (bal >= 0) "بستانکار" else "بدهکار",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (bal >= 0) CreditGreen else DebitRed,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
                     }
                 }
@@ -656,7 +741,7 @@ fun PersonCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonScreen
+// PersonScreen — با Drag & Drop
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -685,7 +770,7 @@ fun PersonScreen(
         Column(Modifier.fillMaxSize()) {
             PageHeader(
                 title = if (editMode) "مرتب‌سازی" else person.name,
-                subtitle = if (editMode) "با دکمه‌های ▲▼ جابه‌جا کن"
+                subtitle = if (editMode) "حساب رو بکش و جابه‌جا کن"
                 else "${accounts.size} حساب",
                 onBackClick = onBack,
                 extraActions = {
@@ -722,75 +807,123 @@ fun PersonScreen(
                 }
             )
 
-            // ✅ حذف کارت «مانده‌های کل»
-            // به‌جاش، Spacer ساده
             Spacer(Modifier.height(16.dp))
 
-            LazyColumn(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                item {
-                    Text(
-                        "حساب‌ها",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1B1B1F),
-                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                    )
-                }
+            if (editMode) {
+                // Drag & Drop
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    accounts.forEachIndexed { index, acc ->
+                        val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
+                        var dragOffset by remember { mutableStateOf(0f) }
+                        var accumulatedOffset by remember { mutableStateOf(0f) }
 
-                items(accounts.size) { index ->
-                    val acc = accounts[index]
-                    val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer { translationY = dragOffset }
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(48.dp)
+                                        .pointerInput(acc.id) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    dragOffset = 0f
+                                                    accumulatedOffset = 0f
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragOffset += dragAmount.y
+                                                    accumulatedOffset += dragAmount.y
 
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (editMode) {
-                            Column(Modifier.padding(end = 4.dp)) {
-                                IconButton(
-                                    onClick = {
-                                        if (index > 0) {
-                                            scope.launch {
-                                                db.accounts().updateOrder(accounts[index].id, index - 1)
-                                                db.accounts().updateOrder(accounts[index - 1].id, index)
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.size(32.dp)
+                                                    if (accumulatedOffset > 80f) {
+                                                        if (index < accounts.size - 1) {
+                                                            scope.launch {
+                                                                val a1 = accounts[index]
+                                                                val a2 = accounts[index + 1]
+                                                                db.accounts().updateOrder(a1.id, a2.displayOrder)
+                                                                db.accounts().updateOrder(a2.id, a1.displayOrder)
+                                                            }
+                                                        }
+                                                        dragOffset = 0f
+                                                        accumulatedOffset = 0f
+                                                    } else if (accumulatedOffset < -80f) {
+                                                        if (index > 0) {
+                                                            scope.launch {
+                                                                val a1 = accounts[index]
+                                                                val a2 = accounts[index - 1]
+                                                                db.accounts().updateOrder(a1.id, a2.displayOrder)
+                                                                db.accounts().updateOrder(a2.id, a1.displayOrder)
+                                                            }
+                                                        }
+                                                        dragOffset = 0f
+                                                        accumulatedOffset = 0f
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    dragOffset = 0f
+                                                    accumulatedOffset = 0f
+                                                },
+                                                onDragCancel = {
+                                                    dragOffset = 0f
+                                                    accumulatedOffset = 0f
+                                                }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text("▲", fontSize = 14.sp, color = Color.Gray)
+                                    Text("☰", fontSize = 24.sp, color = HeaderBlue)
                                 }
-                                IconButton(
-                                    onClick = {
-                                        if (index < accounts.size - 1) {
-                                            scope.launch {
-                                                db.accounts().updateOrder(accounts[index].id, index + 1)
-                                                db.accounts().updateOrder(accounts[index + 1].id, index)
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Text("▼", fontSize = 14.sp, color = Color.Gray)
+
+                                Spacer(Modifier.width(8.dp))
+
+                                Box(Modifier.weight(1f)) {
+                                    SwipeableAccountCard(
+                                        account = acc,
+                                        balance = bal,
+                                        onClick = { },
+                                        onEdit = { },
+                                        onDelete = { }
+                                    )
                                 }
                             }
                         }
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        Text(
+                            "حساب‌ها",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1B1B1F),
+                            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                        )
+                    }
 
-                        Box(Modifier.weight(1f)) {
-                            SwipeableAccountCard(
-                                account = acc,
-                                balance = bal,
-                                onClick = { if (!editMode) onOpenAccount(acc) },
-                                onEdit = { if (!editMode) editTarget = acc },
-                                onDelete = { if (!editMode) deleteTarget = acc }
-                            )
-                        }
+                    items(accounts, key = { it.id }) { acc ->
+                        val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
+                        SwipeableAccountCard(
+                            account = acc,
+                            balance = bal,
+                            onClick = { onOpenAccount(acc) },
+                            onEdit = { editTarget = acc },
+                            onDelete = { deleteTarget = acc }
+                        )
                     }
                 }
             }
@@ -836,7 +969,7 @@ fun PersonScreen(
 }
 
 // ═══════════════════════════════════════════════════════
-// SwipeableAccountCard — هم‌اندازه با کارت تراکنش
+// SwipeableAccountCard
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -895,7 +1028,6 @@ fun SwipeableAccountCard(
                 Modifier.fillMaxWidth().padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // ✅ دایره کوچیک‌تر — هم‌اندازه تراکنش
                 Box(
                     Modifier
                         .size(46.dp)
@@ -981,7 +1113,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 }
             )
 
-            // ✅ کارت هدر — بدون «مانده کل»، فقط مبلغ + ارز + بدهکار/بستانکار
             Card(
                 Modifier
                     .fillMaxWidth()
@@ -1033,7 +1164,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             val runningBalances = remember(tx) { calculateRunningBalances(tx) }
 
             LazyColumn(
-                Modifier
+                modifier = Modifier
                     .fillMaxSize()
                     .offset(y = (-25).dp)
                     .padding(horizontal = 16.dp),
@@ -1099,7 +1230,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
 }
 
 // ═══════════════════════════════════════════════════════
-// SwipeableTransactionCard — بدون تغییر
+// SwipeableTransactionCard
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1295,15 +1426,25 @@ fun AutoTransactionCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonEditor — با انتخاب مانده‌های نمایشی
+// PersonEditor — با انتخاب انتخابی مانده‌ها
 // ═══════════════════════════════════════════════════════
 
 @Composable
 fun PersonEditor(old: Person?, onSave: (Person) -> Unit, onCancel: () -> Unit) {
     var name by remember(old) { mutableStateOf(old?.name ?: "") }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
-    var currenciesText by remember(old) {
-        mutableStateOf(old?.displayedCurrencies ?: "")
+
+    // ارزهای انتخاب‌شده
+    val allCurrencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
+    var selectedCurrencies by remember(old) {
+        mutableStateOf(
+            old?.displayedCurrencies
+                ?.split(",")
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.toSet()
+                ?: emptySet()
+        )
     }
 
     AlertDialog(
@@ -1324,14 +1465,42 @@ fun PersonEditor(old: Person?, onSave: (Person) -> Unit, onCancel: () -> Unit) {
                     label = { Text("توضیحات (اختیاری)") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = currenciesText,
-                    onValueChange = { currenciesText = it },
-                    label = { Text("ارزهای نمایشی (با کاما جدا کن)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Text("مثلاً: ریال,دلار,یورو — حداکثر ۳ تا") }
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "ارزهای نمایشی (حداکثر ۳ تا)",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
                 )
+                Spacer(Modifier.height(8.dp))
+                allCurrencies.forEach { currency ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                selectedCurrencies = if (currency in selectedCurrencies) {
+                                    selectedCurrencies - currency
+                                } else {
+                                    if (selectedCurrencies.size < 3) selectedCurrencies + currency
+                                    else selectedCurrencies
+                                }
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = currency in selectedCurrencies,
+                            onCheckedChange = {
+                                selectedCurrencies = if (currency in selectedCurrencies) {
+                                    selectedCurrencies - currency
+                                } else {
+                                    if (selectedCurrencies.size < 3) selectedCurrencies + currency
+                                    else selectedCurrencies
+                                }
+                            }
+                        )
+                        Text(currency, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
         },
         confirmButton = {
@@ -1342,7 +1511,7 @@ fun PersonEditor(old: Person?, onSave: (Person) -> Unit, onCancel: () -> Unit) {
                         name = name,
                         note = note,
                         displayOrder = old?.displayOrder ?: 0,
-                        displayedCurrencies = currenciesText
+                        displayedCurrencies = selectedCurrencies.joinToString(",")
                     ))
             }) { Text("ذخیره") }
         },
@@ -1467,7 +1636,7 @@ fun AccountEditor(
 }
 
 // ═══════════════════════════════════════════════════════
-// TxEditor — فیلد مبلغ اصلاح‌شده
+// TxEditor — با TextFieldValue
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1478,8 +1647,12 @@ fun TxEditor(
     onCancel: () -> Unit
 ) {
     var type by remember(old) { mutableStateOf(old?.type ?: "بدهکار") }
-    var amount by remember(old) {
-        mutableStateOf(old?.amount?.let { money(it) } ?: "")
+    var amountValue by remember(old) {
+        mutableStateOf(
+            TextFieldValue(
+                text = old?.amount?.let { money(it) } ?: ""
+            )
+        )
     }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
     var date by remember(old) {
@@ -1509,15 +1682,9 @@ fun TxEditor(
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = amount,
-                    onValueChange = { input ->
-                        // ✅ فقط رقم‌ها رو نگه دار، بعد فرمت کن
-                        val digits = input.filter { it.isDigit() }
-                        amount = if (digits.isEmpty()) "" else {
-                            try {
-                                NumberFormat.getNumberInstance(Locale.US).format(digits.toLong())
-                            } catch (e: Exception) { digits }
-                        }
+                    value = amountValue,
+                    onValueChange = { newValue ->
+                        amountValue = formatTextFieldValue(newValue)
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     label = { Text("مبلغ") },
@@ -1541,7 +1708,7 @@ fun TxEditor(
         },
         confirmButton = {
             Button(onClick = {
-                val n = parseSeparatedAmount(amount)
+                val n = parseSeparatedAmount(amountValue.text)
                 val d = if (old != null) {
                     val newDate = Jalali.parse(date)
                     if (newDate != null) {
@@ -1785,7 +1952,7 @@ fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
 }
 
 // ═══════════════════════════════════════════════════════
-// GlobalProfitEditor — با سود ماهانه کلی
+// GlobalProfitEditor
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1851,11 +2018,13 @@ fun GlobalProfitEditor(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "⚠️ برای حالت ماهانه، باید از توی هر حساب نرخ ماهانه تعریف کنی.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFE65100)
-                )
+                if (mode == "MONTHLY") {
+                    Text(
+                        "⚠️ برای حالت ماهانه‌ی کلی، نرخ ماهانه‌ها باید از توی هر حساب تعریف بشن. (در نسخه‌ی بعدی کلی می‌شه)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFE65100)
+                    )
+                }
             }
         },
         confirmButton = {
@@ -2265,7 +2434,7 @@ fun SettingRow(
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine — با سود ماهانه کلی
+// ProfitEngine
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
