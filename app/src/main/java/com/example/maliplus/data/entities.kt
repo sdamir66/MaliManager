@@ -3,12 +3,27 @@ package com.example.maliplus.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "accounts")
-data class Account(
+@Entity(tableName = "persons")
+data class Person(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val note: String = "",
-    val currency: String = "تومان"
+    val displayOrder: Int = 0,
+    // ارزهایی که توی کارت شخص نمایش داده می‌شن (حداکثر ۳ تا)
+    // به صورت comma-separated، مثلاً "ریال,دلار,یورو"
+    val displayedCurrencies: String = ""
+)
+
+@Entity(tableName = "accounts")
+data class Account(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val personId: Long,
+    val name: String,
+    val note: String = "",
+    val currency: String = "تومان",
+    val customUnit: String = "",     // اگه پر باشه، جایگزین ارز می‌شه
+    val displayOrder: Int = 0,
+    val useGlobalProfit: Boolean = true  // از تنظیم سود کلی استفاده کنه یا اختصاصی
 )
 
 @Entity(tableName = "transactions")
@@ -21,24 +36,6 @@ data class Transaction(
     val note: String = "",
     val isAutoProfit: Boolean = false,
     val profitKey: String? = null
-)
-
-@Entity(tableName = "goods")
-data class Good(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val name: String,
-    val type: String = "",
-    val unit: String
-)
-
-@Entity(tableName = "goods_transactions")
-data class GoodTransaction(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val goodId: Long,
-    val dateMillis: Long,
-    val type: String,
-    val quantity: Double,
-    val note: String = ""
 )
 
 @Entity(tableName = "profit_settings")
@@ -58,4 +55,14 @@ data class MonthlyRate(
     val year: Int,
     val month: Int,
     val ratePercent: Double
+)
+
+// تنظیم سود کلی برنامه (برای مرحله ۳)
+@Entity(tableName = "global_profit_settings")
+data class GlobalProfitSettings(
+    @PrimaryKey val id: Long = 1,
+    val enabled: Boolean = false,
+    val mode: String = "DAILY_ANNUAL",
+    val annualRate: Double = 20.0,
+    val payoutDay: Int = 30
 )
