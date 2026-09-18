@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -53,11 +55,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import org.json.JSONArray
 import org.json.JSONObject
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.draggableHandle
-import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -191,7 +192,7 @@ private fun jalaliPayout(y: Int, m: Int, day: Int): Long =
     Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, day.coerceAtMost(Jalali.daysInMonth(y, m))))!!
 
 // ═══════════════════════════════════════════════════════
-// FinanceApp — ناوبری اصلی
+// FinanceApp
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -285,7 +286,7 @@ fun PageHeader(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonsScreen — با Drag & Drop
+// PersonsScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -346,7 +347,6 @@ fun PersonsScreen(
                     )
                 }
 
-                // دکمه مرتب‌سازی
                 IconButton(
                     onClick = { editMode = !editMode },
                     modifier = Modifier.size(48.dp)
@@ -429,7 +429,11 @@ fun PersonsScreen(
                             Box(
                                 Modifier
                                     .size(48.dp)
-                                    .draggableHandle(),
+                                    .pointerInput(Unit) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDrag = { change, _ -> change.consume() }
+                                        )
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text("☰", fontSize = 22.sp, color = Color.Gray)
@@ -634,7 +638,7 @@ fun PersonCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonScreen — با Drag & Drop
+// PersonScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -788,7 +792,11 @@ fun PersonScreen(
                                 Box(
                                     Modifier
                                         .size(48.dp)
-                                        .draggableHandle(),
+                                        .pointerInput(Unit) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDrag = { change, _ -> change.consume() }
+                                            )
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text("☰", fontSize = 22.sp, color = Color.Gray)
@@ -1326,13 +1334,15 @@ fun PersonEditor(old: Person?, onSave: (Person) -> Unit, onCancel: () -> Unit) {
         text = {
             Column {
                 OutlinedTextField(
-                    name, { name = it },
+                    value = name,
+                    onValueChange = { name = it },
                     label = { Text("نام شخص") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    note, { note = it },
+                    value = note,
+                    onValueChange = { note = it },
                     label = { Text("توضیحات (اختیاری)") },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1381,21 +1391,23 @@ fun AccountEditor(
         text = {
             Column {
                 OutlinedTextField(
-                    name, { name = it },
+                    value = name,
+                    onValueChange = { name = it },
                     label = { Text("عنوان حساب") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    note, { note = it },
+                    value = note,
+                    onValueChange = { note = it },
                     label = { Text("توضیحات (اختیاری)") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(12.dp))
 
                 OutlinedTextField(
-                    customUnit,
-                    { customUnit = it },
+                    value = customUnit,
+                    onValueChange = { customUnit = it },
                     label = { Text("واحد دلخواه (اختیاری)") },
                     modifier = Modifier.fillMaxWidth(),
                     supportingText = { Text("اگه پر بشه، جایگزین ارز می‌شه") }
@@ -1440,11 +1452,11 @@ fun AccountEditor(
                 Text("نوع سود", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(useGlobalProfit, { useGlobalProfit = true })
+                    RadioButton(selected = useGlobalProfit, onClick = { useGlobalProfit = true })
                     Text("استفاده از تنظیم کلی برنامه")
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(!useGlobalProfit, { useGlobalProfit = false })
+                    RadioButton(selected = !useGlobalProfit, onClick = { useGlobalProfit = false })
                     Text("تنظیم سود اختصاصی")
                 }
             }
@@ -1497,27 +1509,37 @@ fun TxEditor(
         text = {
             Column {
                 Row {
-                    FilterChip(type == "بدهکار", { type = "بدهکار" }, label = { Text("بدهکار") })
+                    FilterChip(
+                        selected = type == "بدهکار",
+                        onClick = { type = "بدهکار" },
+                        label = { Text("بدهکار") }
+                    )
                     Spacer(Modifier.width(8.dp))
-                    FilterChip(type == "بستانکار", { type = "بستانکار" }, label = { Text("بستانکار") })
+                    FilterChip(
+                        selected = type == "بستانکار",
+                        onClick = { type = "بستانکار" },
+                        label = { Text("بستانکار") }
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    amount,
-                    { input -> amount = formatWithSeparator(input) },
+                    value = amount,
+                    onValueChange = { input -> amount = formatWithSeparator(input) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     label = { Text("مبلغ") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    date, { date = it },
+                    value = date,
+                    onValueChange = { date = it },
                     label = { Text("تاریخ شمسی 1405/02/31") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    note, { note = it },
+                    value = note,
+                    onValueChange = { note = it },
                     label = { Text("شرح") },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1614,7 +1636,11 @@ fun ProfitSettingsEditor(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(enabled, { enabled = !enabled }, enabled = !a.useGlobalProfit)
+                    Checkbox(
+                        checked = enabled,
+                        onCheckedChange = { enabled = !enabled },
+                        enabled = !a.useGlobalProfit
+                    )
                     Text(
                         "فعال باشد",
                         color = if (a.useGlobalProfit) Color.Gray else Color(0xFF1B1B1F)
@@ -1623,17 +1649,25 @@ fun ProfitSettingsEditor(
                 Spacer(Modifier.height(8.dp))
                 Text("نوع سود", fontWeight = FontWeight.Medium)
                 Row {
-                    FilterChip(mode == "DAILY_ANNUAL", { mode = "DAILY_ANNUAL" },
-                        label = { Text("روزشمار سالانه") }, enabled = !a.useGlobalProfit)
+                    FilterChip(
+                        selected = mode == "DAILY_ANNUAL",
+                        onClick = { mode = "DAILY_ANNUAL" },
+                        label = { Text("روزشمار سالانه") },
+                        enabled = !a.useGlobalProfit
+                    )
                     Spacer(Modifier.width(6.dp))
-                    FilterChip(mode == "MONTHLY", { mode = "MONTHLY" },
-                        label = { Text("ماهانه") }, enabled = !a.useGlobalProfit)
+                    FilterChip(
+                        selected = mode == "MONTHLY",
+                        onClick = { mode = "MONTHLY" },
+                        label = { Text("ماهانه") },
+                        enabled = !a.useGlobalProfit
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 if (mode == "DAILY_ANNUAL")
                     OutlinedTextField(
-                        annual,
-                        { input ->
+                        value = annual,
+                        onValueChange = { input ->
                             val cleaned = input.filter { it.isDigit() || it == '.' }
                             if (cleaned.count { it == '.' } <= 1) annual = cleaned
                         },
@@ -1643,12 +1677,16 @@ fun ProfitSettingsEditor(
                         enabled = !a.useGlobalProfit
                     )
                 if (mode == "MONTHLY")
-                    OutlinedButton({ ratesOpen = true }, enabled = !a.useGlobalProfit) {
+                    OutlinedButton(
+                        onClick = { ratesOpen = true },
+                        enabled = !a.useGlobalProfit
+                    ) {
                         Text("تنظیم نرخ ماه‌های سال")
                     }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    day, { day = it.filter { c -> c.isDigit() } },
+                    value = day,
+                    onValueChange = { day = it.filter { c -> c.isDigit() } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     label = { Text("روز واریز ماه") },
                     modifier = Modifier.fillMaxWidth(),
@@ -1657,12 +1695,20 @@ fun ProfitSettingsEditor(
                 Spacer(Modifier.height(8.dp))
                 Text("حساب مقصد سود", style = MaterialTheme.typography.titleSmall)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(dest == null, { dest = null }, enabled = !a.useGlobalProfit)
+                    RadioButton(
+                        selected = dest == null,
+                        onClick = { dest = null },
+                        enabled = !a.useGlobalProfit
+                    )
                     Text("همین حساب")
                 }
                 allAccounts.filter { it.id != a.id }.forEach { acc ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(dest == acc.id, { dest = acc.id }, enabled = !a.useGlobalProfit)
+                        RadioButton(
+                            selected = dest == acc.id,
+                            onClick = { dest = acc.id },
+                            enabled = !a.useGlobalProfit
+                        )
                         Text(acc.name)
                     }
                 }
@@ -1670,7 +1716,7 @@ fun ProfitSettingsEditor(
         },
         confirmButton = {
             Button(
-                {
+                onClick = {
                     scope.launch {
                         db.profit().upsert(
                             ProfitSettings(
@@ -1720,8 +1766,8 @@ fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
                 LazyColumn {
                     items((1..12).toList()) { m ->
                         OutlinedTextField(
-                            values[m] ?: "",
-                            { input ->
+                            value = values[m] ?: "",
+                            onValueChange = { input ->
                                 val cleaned = input.filter { it.isDigit() || it == '.' }
                                 if (cleaned.count { it == '.' } <= 1) values[m] = cleaned
                             },
@@ -1778,21 +1824,29 @@ fun GlobalProfitEditor(
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(enabled, { enabled = !enabled })
+                    Checkbox(checked = enabled, onCheckedChange = { enabled = !enabled })
                     Text("فعال باشد")
                 }
                 Spacer(Modifier.height(8.dp))
                 Text("نوع سود", fontWeight = FontWeight.Medium)
                 Row {
-                    FilterChip(mode == "DAILY_ANNUAL", { mode = "DAILY_ANNUAL" }, label = { Text("روزشمار سالانه") })
+                    FilterChip(
+                        selected = mode == "DAILY_ANNUAL",
+                        onClick = { mode = "DAILY_ANNUAL" },
+                        label = { Text("روزشمار سالانه") }
+                    )
                     Spacer(Modifier.width(6.dp))
-                    FilterChip(mode == "MONTHLY", { mode = "MONTHLY" }, label = { Text("ماهانه") })
+                    FilterChip(
+                        selected = mode == "MONTHLY",
+                        onClick = { mode = "MONTHLY" },
+                        label = { Text("ماهانه") }
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 if (mode == "DAILY_ANNUAL")
                     OutlinedTextField(
-                        annual,
-                        { input ->
+                        value = annual,
+                        onValueChange = { input ->
                             val cleaned = input.filter { it.isDigit() || it == '.' }
                             if (cleaned.count { it == '.' } <= 1) annual = cleaned
                         },
@@ -1802,7 +1856,8 @@ fun GlobalProfitEditor(
                     )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    day, { day = it.filter { c -> c.isDigit() } },
+                    value = day,
+                    onValueChange = { day = it.filter { c -> c.isDigit() } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     label = { Text("روز واریز ماه") },
                     modifier = Modifier.fillMaxWidth()
