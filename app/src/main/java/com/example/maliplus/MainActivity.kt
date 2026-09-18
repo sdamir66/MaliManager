@@ -610,6 +610,7 @@ fun PersonScreen(
                 subtitle = "${accounts.size} حساب",
                 onBackClick = onBack,
                 extraActions = {
+                    // چرخ‌دنده (ویرایش شخص)
                     IconButton(onClick = { editPerson = true }, modifier = Modifier.size(48.dp)) {
                         Icon(
                             imageVector = Icons.Default.Edit,
@@ -617,6 +618,16 @@ fun PersonScreen(
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
+                    }
+                    // + (افزودن حساب)
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .background(Color.White, shape = CircleShape)
+                            .clickable { add = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("+", color = HeaderBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             )
@@ -669,27 +680,13 @@ fun PersonScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "حساب‌ها",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1B1B1F)
-                        )
-                        Box(
-                            Modifier
-                                .size(44.dp)
-                                .background(HeaderBlue, shape = CircleShape)
-                                .clickable { add = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("+", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Light)
-                        }
-                    }
+                    Text(
+                        "حساب‌ها",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1B1B1F),
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    )
                 }
 
                 items(accounts, key = { it.id }) { acc ->
@@ -1454,13 +1451,18 @@ fun ProfitSettingsEditor(
                     FilterChip(mode == "MONTHLY", { mode = "MONTHLY" }, label = { Text("ماهانه") })
                 }
                 Spacer(Modifier.height(8.dp))
-                if (mode == "DAILY_ANNUAL")
-                    OutlinedTextField(
-                        annual, { annual = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        label = { Text("نرخ سالانه ٪") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+               if (mode == "DAILY_ANNUAL")
+    OutlinedTextField(
+        annual,
+        { input ->
+            // فقط رقم و نقطه اعشار
+            val cleaned = input.filter { it.isDigit() || it == '.' }
+            if (cleaned.count { it == '.' } <= 1) annual = cleaned
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        label = { Text("نرخ سالانه ٪") },
+        modifier = Modifier.fillMaxWidth()
+    )
                 if (mode == "MONTHLY")
                     OutlinedButton({ ratesOpen = true }) { Text("تنظیم نرخ ماه‌های سال") }
                 Spacer(Modifier.height(8.dp))
@@ -1533,12 +1535,16 @@ fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
                 LazyColumn {
                     items((1..12).toList()) { m ->
                         OutlinedTextField(
-                            values[m] ?: "", { values[m] = it },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            label = { Text(Jalali.monthName(m)) },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                        )
+    values[m] ?: "",
+    { input ->
+        val cleaned = input.filter { it.isDigit() || it == '.' }
+        if (cleaned.count { it == '.' } <= 1) values[m] = cleaned
+    },
+    singleLine = true,
+    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+    label = { Text(Jalali.monthName(m)) },
+    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+)
                     }
                 }
             }
