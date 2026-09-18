@@ -183,6 +183,9 @@ fun calculateRunningBalances(transactions: List<Transaction>): Map<Long, Long> {
 
 fun Account.displayUnit(): String = if (customUnit.isNotBlank()) customUnit else currency
 
+private fun jalaliPayout(y: Int, m: Int, day: Int): Long =
+    Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, day.coerceAtMost(Jalali.daysInMonth(y, m))))!!
+
 // ═══════════════════════════════════════════════════════
 // FinanceApp — ناوبری اصلی
 // ═══════════════════════════════════════════════════════
@@ -239,7 +242,7 @@ fun PageHeader(
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             )
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 24.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp)
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -278,7 +281,7 @@ fun PageHeader(
 }
 
 // ═══════════════════════════════════════════════════════
-// صفحه اصلی — لیست اشخاص
+// PersonsScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -303,7 +306,7 @@ fun PersonsScreen(
                     shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                 )
                 .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 24.dp)
+                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp)
         ) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -1416,7 +1419,7 @@ fun TxEditor(
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitSettingsEditor
+// ProfitSettingsEditor — اصلاح‌شده
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1434,7 +1437,10 @@ fun ProfitSettingsEditor(
     var dest by remember(old) { mutableStateOf(old?.destinationAccountId) }
     var ratesOpen by remember { mutableStateOf(false) }
     val allAccounts by db.accounts().all().collectAsState(emptyList())
-    val globalSettings by db.globalProfit().get().collectAsState(null)
+    val globalSettingsFlow by db.globalProfit().get().collectAsState(null)
+
+    // ✅ متغیر محلی برای رفع smart cast
+    val gs: GlobalProfitSettings? = globalSettingsFlow
 
     AlertDialog(
         onDismissRequest = close,
@@ -1456,9 +1462,9 @@ fun ProfitSettingsEditor(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(Modifier.height(4.dp))
-                            if (globalSettings != null && globalSettings.enabled) {
+                            if (gs != null && gs.enabled) {
                                 Text(
-                                    "نرخ کلی: ${globalSettings.annualRate}% سالانه",
+                                    "نرخ کلی: ${gs.annualRate}% سالانه",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFFE65100)
                                 )
@@ -1765,7 +1771,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // سود کلی
             item {
                 Text(
                     "سود کلی برنامه",
@@ -1798,12 +1803,13 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Medium
                                 )
+                                val gs = globalSettings
                                 Text(
-                                    if (globalSettings?.enabled == true)
-                                        "فعال — ${globalSettings?.annualRate}% سالانه"
+                                    if (gs?.enabled == true)
+                                        "فعال — ${gs.annualRate}% سالانه"
                                     else "غیرفعال",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (globalSettings?.enabled == true) CreditGreen else Color.Gray
+                                    color = if (gs?.enabled == true) CreditGreen else Color.Gray
                                 )
                             }
                             Text("‹", fontSize = 20.sp, color = Color.Gray)
@@ -1812,7 +1818,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                 }
             }
 
-            // بکاپ
             item {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -2089,7 +2094,7 @@ fun SettingRow(
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine
+// ProfitEngine — اصلاح‌شده
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
@@ -2215,6 +2220,7 @@ object ProfitEngine {
         db.tx().insertAll(out)
     }
 }
+
 // ═══════════════════════════════════════════════════════
 // Backup
 // ═══════════════════════════════════════════════════════
