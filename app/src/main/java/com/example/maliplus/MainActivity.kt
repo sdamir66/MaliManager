@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -54,6 +55,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.draggableHandle
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -281,7 +285,7 @@ fun PageHeader(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonsScreen
+// PersonsScreen — با Drag & Drop
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -295,7 +299,21 @@ fun PersonsScreen(
     var add by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<Person?>(null) }
     var deleteTarget by remember { mutableStateOf<Person?>(null) }
+    var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+        scope.launch {
+            val list = persons.toMutableList()
+            if (from.index in list.indices && to.index in list.indices) {
+                list.add(to.index, list.removeAt(from.index))
+                list.forEachIndexed { index, person ->
+                    db.persons().updateOrder(person.id, index)
+                }
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(BgLight)) {
         Box(
@@ -314,38 +332,54 @@ fun PersonsScreen(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "مدیریت مالی",
+                        if (editMode) "مرتب‌سازی" else "مدیریت مالی",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "${persons.size} شخص  •  ${allAccounts.size} حساب",
+                        if (editMode) "برای جابه‌جایی، ☰ رو بکش"
+                        else "${persons.size} شخص  •  ${allAccounts.size} حساب",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.8f)
                     )
                 }
+
+                // دکمه مرتب‌سازی
                 IconButton(
-                    onClick = onOpenSettings,
+                    onClick = { editMode = !editMode },
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "تنظیمات",
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
+                    Text(
+                        if (editMode) "✓" else "⇅",
+                        color = Color.White,
+                        fontSize = 24.sp
                     )
                 }
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier
-                        .size(52.dp)
-                        .background(Color.White, shape = CircleShape)
-                        .clickable { add = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("+", color = HeaderBlue, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+
+                if (!editMode) {
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "تنظیمات",
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        Modifier
+                            .size(52.dp)
+                            .background(Color.White, shape = CircleShape)
+                            .clickable { add = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("+", color = HeaderBlue, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -353,6 +387,7 @@ fun PersonsScreen(
         Spacer(Modifier.height(16.dp))
 
         LazyColumn(
+            state = listState,
             Modifier.fillMaxSize().padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -383,15 +418,47 @@ fun PersonsScreen(
             }
 
             items(persons, key = { it.id }) { p ->
-                val personAccounts = allAccounts.filter { it.personId == p.id }
-                PersonCard(
-                    person = p,
-                    accounts = personAccounts,
-                    onClick = { onOpenPerson(p) },
-                    onEdit = { editTarget = p },
-                    onDelete = { deleteTarget = p },
-                    db = db
-                )
+                ReorderableItem(reorderableState, key = p.id) { _ ->
+                    val personAccounts = allAccounts.filter { it.personId == p.id }
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (editMode) {
+                            Box(
+                                Modifier
+                                    .size(48.dp)
+                                    .draggableHandle(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("☰", fontSize = 22.sp, color = Color.Gray)
+                            }
+                        }
+
+                        Box(Modifier.weight(1f)) {
+                            if (editMode) {
+                                PersonCard(
+                                    person = p,
+                                    accounts = personAccounts,
+                                    onClick = { },
+                                    onEdit = { },
+                                    onDelete = { },
+                                    db = db
+                                )
+                            } else {
+                                PersonCard(
+                                    person = p,
+                                    accounts = personAccounts,
+                                    onClick = { onOpenPerson(p) },
+                                    onEdit = { editTarget = p },
+                                    onDelete = { deleteTarget = p },
+                                    db = db
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -567,7 +634,7 @@ fun PersonCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonScreen
+// PersonScreen — با Drag & Drop
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -582,7 +649,21 @@ fun PersonScreen(
     var editTarget by remember { mutableStateOf<Account?>(null) }
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var editPerson by remember { mutableStateOf(false) }
+    var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+        scope.launch {
+            val list = accounts.toMutableList()
+            if (from.index in list.indices && to.index in list.indices) {
+                list.add(to.index, list.removeAt(from.index))
+                list.forEachIndexed { index, account ->
+                    db.accounts().updateOrder(account.id, index)
+                }
+            }
+        }
+    }
 
     val accountBalances = accounts.map { acc ->
         val txs = remember(acc.id) { mutableStateOf<List<Transaction>>(emptyList()) }
@@ -598,62 +679,78 @@ fun PersonScreen(
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
             PageHeader(
-                title = person.name,
-                subtitle = "${accounts.size} حساب",
+                title = if (editMode) "مرتب‌سازی" else person.name,
+                subtitle = if (editMode) "برای جابه‌جایی، ☰ رو بکش"
+                else "${accounts.size} حساب",
                 onBackClick = onBack,
                 extraActions = {
-                    IconButton(onClick = { editPerson = true }, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "ویرایش شخص",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                    IconButton(
+                        onClick = { editMode = !editMode },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Text(
+                            if (editMode) "✓" else "⇅",
+                            color = Color.White,
+                            fontSize = 24.sp
                         )
                     }
-                    Box(
-                        Modifier
-                            .size(48.dp)
-                            .background(Color.White, shape = CircleShape)
-                            .clickable { add = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("+", color = HeaderBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+
+                    if (!editMode) {
+                        IconButton(onClick = { editPerson = true }, modifier = Modifier.size(48.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "ویرایش شخص",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .size(48.dp)
+                                .background(Color.White, shape = CircleShape)
+                                .clickable { add = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("+", color = HeaderBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             )
 
-            Card(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .offset(y = (-40).dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-            ) {
-                Column(Modifier.fillMaxWidth().padding(18.dp)) {
-                    Text("مانده‌های کل", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                    Spacer(Modifier.height(8.dp))
-                    if (currencyTotals.isEmpty()) {
-                        Text("—", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                    } else {
-                        currencyTotals.forEach { (cur, total) ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    cur,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.Gray
-                                )
-                                Text(
-                                    money(kotlin.math.abs(total)),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (total >= 0) CreditGreen else DebitRed
-                                )
+            if (!editMode) {
+                Card(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .offset(y = (-40).dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                        Text("مانده‌های کل", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        Spacer(Modifier.height(8.dp))
+                        if (currencyTotals.isEmpty()) {
+                            Text("—", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        } else {
+                            currencyTotals.forEach { (cur, total) ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        cur,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = Color.Gray
+                                    )
+                                    Text(
+                                        money(kotlin.math.abs(total)),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (total >= 0) CreditGreen else DebitRed
+                                    )
+                                }
                             }
                         }
                     }
@@ -661,9 +758,10 @@ fun PersonScreen(
             }
 
             LazyColumn(
+                state = listState,
                 Modifier
                     .fillMaxSize()
-                    .offset(y = (-25).dp)
+                    .offset(y = if (editMode) 0.dp else (-25).dp)
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -679,14 +777,45 @@ fun PersonScreen(
                 }
 
                 items(accounts, key = { it.id }) { acc ->
-                    val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
-                    SwipeableAccountCard(
-                        account = acc,
-                        balance = bal,
-                        onClick = { onOpenAccount(acc) },
-                        onEdit = { editTarget = acc },
-                        onDelete = { deleteTarget = acc }
-                    )
+                    ReorderableItem(reorderableState, key = acc.id) { _ ->
+                        val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
+
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (editMode) {
+                                Box(
+                                    Modifier
+                                        .size(48.dp)
+                                        .draggableHandle(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("☰", fontSize = 22.sp, color = Color.Gray)
+                                }
+                            }
+
+                            Box(Modifier.weight(1f)) {
+                                if (editMode) {
+                                    SwipeableAccountCard(
+                                        account = acc,
+                                        balance = bal,
+                                        onClick = { },
+                                        onEdit = { },
+                                        onDelete = { }
+                                    )
+                                } else {
+                                    SwipeableAccountCard(
+                                        account = acc,
+                                        balance = bal,
+                                        onClick = { onOpenAccount(acc) },
+                                        onEdit = { editTarget = acc },
+                                        onDelete = { deleteTarget = acc }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1419,7 +1548,7 @@ fun TxEditor(
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitSettingsEditor — اصلاح‌شده
+// ProfitSettingsEditor
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1439,7 +1568,6 @@ fun ProfitSettingsEditor(
     val allAccounts by db.accounts().all().collectAsState(emptyList())
     val globalSettingsFlow by db.globalProfit().get().collectAsState(null)
 
-    // ✅ متغیر محلی برای رفع smart cast
     val gs: GlobalProfitSettings? = globalSettingsFlow
 
     AlertDialog(
@@ -2094,7 +2222,7 @@ fun SettingRow(
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine — اصلاح‌شده
+// ProfitEngine
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
