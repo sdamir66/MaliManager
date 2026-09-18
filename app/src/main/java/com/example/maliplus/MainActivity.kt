@@ -11,13 +11,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,8 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +41,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import com.example.maliplus.data.*
@@ -60,6 +57,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.draggableHandle
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -301,7 +301,7 @@ fun PageHeader(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonsScreen — Drag & Drop نرم
+// PersonsScreen — با Reorderable
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -317,6 +317,20 @@ fun PersonsScreen(
     var deleteTarget by remember { mutableStateOf<Person?>(null) }
     var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+        scope.launch {
+            val list = persons.toMutableList()
+            if (from.index in list.indices && to.index in list.indices) {
+                val moved = list.removeAt(from.index)
+                list.add(to.index, moved)
+                list.forEachIndexed { index, person ->
+                    db.persons().updateOrder(person.id, index)
+                }
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(BgLight)) {
         Box(
@@ -342,7 +356,7 @@ fun PersonsScreen(
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        if (editMode) "کارت رو نگه دار و جابه‌جا کن"
+                        if (editMode) "آیکون ☰ رو نگه دار و بکش"
                         else "${persons.size} شخص  •  ${allAccounts.size} حساب",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.8f)
@@ -388,47 +402,78 @@ fun PersonsScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        if (editMode) {
-            SmoothDraggablePersonsList(
-                persons = persons,
-                allAccounts = allAccounts,
-                db = db
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (persons.isEmpty()) {
-                    item {
-                        Box(
-                            Modifier.fillMaxWidth().padding(top = 60.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("👥", fontSize = 64.sp)
-                                Spacer(Modifier.height(16.dp))
-                                Text(
-                                    "هنوز شخصی ثبت نکردی",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color.Gray
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (persons.isEmpty()) {
+                item {
+                    Box(
+                        Modifier.fillMaxWidth().padding(top = 60.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("👥", fontSize = 64.sp)
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "هنوز شخصی ثبت نکردی",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                }
+            }
+
+            items(persons, key = { it.id }) { p ->
+                ReorderableItem(reorderableState, key = p.id) { isDragging ->
+                    val personAccounts = allAccounts.filter { it.personId == p.id }
+
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (isDragging) Color(0xFFF0F0F0) else Color.Transparent,
+                                shape = RoundedCornerShape(18.dp)
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (editMode) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "جابجایی",
+                                tint = HeaderBlue,
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp)
+                                    .size(28.dp)
+                                    .draggableHandle()
+                            )
+                        }
+
+                        Box(Modifier.weight(1f)) {
+                            if (editMode) {
+                                PersonCard(
+                                    person = p,
+                                    accounts = personAccounts,
+                                    onClick = { },
+                                    onEdit = { },
+                                    onDelete = { },
+                                    db = db
+                                )
+                            } else {
+                                PersonCard(
+                                    person = p,
+                                    accounts = personAccounts,
+                                    onClick = { onOpenPerson(p) },
+                                    onEdit = { editTarget = p },
+                                    onDelete = { deleteTarget = p },
+                                    db = db
                                 )
                             }
                         }
                     }
-                }
-
-                items(persons, key = { it.id }) { p ->
-                    val personAccounts = allAccounts.filter { it.personId == p.id }
-                    PersonCard(
-                        person = p,
-                        accounts = personAccounts,
-                        onClick = { onOpenPerson(p) },
-                        onEdit = { editTarget = p },
-                        onDelete = { deleteTarget = p },
-                        db = db
-                    )
                 }
             }
         }
@@ -471,128 +516,7 @@ fun PersonsScreen(
 }
 
 // ═══════════════════════════════════════════════════════
-// SmoothDraggablePersonsList — Drag & Drop نرم
-// ═══════════════════════════════════════════════════════
-
-@Composable
-fun SmoothDraggablePersonsList(
-    persons: List<Person>,
-    allAccounts: List<Account>,
-    db: AppDb
-) {
-    val scope = rememberCoroutineScope()
-    var draggedIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffsetY by remember { mutableStateOf(0f) }
-
-    val itemHeight = 140f // ارتفاع تقریبی کارت
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-    ) {
-        persons.forEachIndexed { index, p ->
-            val isDragging = draggedIndex == index
-
-            // محاسبه‌ی offset انیمیت
-            val targetOffset = if (isDragging) dragOffsetY else 0f
-            val animatedOffset by animateFloatAsState(
-                targetValue = targetOffset,
-                label = "drag"
-            )
-
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .zIndex(if (isDragging) 1f else 0f)
-                    .graphicsLayer {
-                        translationY = animatedOffset
-                        scaleX = if (isDragging) 1.02f else 1f
-                        scaleY = if (isDragging) 1.02f else 1f
-                    }
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // ✅ آیکون Drag
-                    Box(
-                        Modifier
-                            .size(48.dp)
-                            .pointerInput(p.id) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                        draggedIndex = index
-                                        dragOffsetY = 0f
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        dragOffsetY += dragAmount.y
-
-                                        // وقتی از نصف ارتفاع رد شد، جابه‌جا کن
-                                        if (dragOffsetY > itemHeight / 2) {
-                                            val from = draggedIndex
-                                            if (from != null && from < persons.size - 1) {
-                                                scope.launch {
-                                                    val p1 = persons[from]
-                                                    val p2 = persons[from + 1]
-                                                    db.persons().updateOrder(p1.id, p2.displayOrder)
-                                                    db.persons().updateOrder(p2.id, p1.displayOrder)
-                                                }
-                                                draggedIndex = from + 1
-                                                dragOffsetY -= itemHeight
-                                            }
-                                        } else if (dragOffsetY < -itemHeight / 2) {
-                                            val from = draggedIndex
-                                            if (from != null && from > 0) {
-                                                scope.launch {
-                                                    val p1 = persons[from]
-                                                    val p2 = persons[from - 1]
-                                                    db.persons().updateOrder(p1.id, p2.displayOrder)
-                                                    db.persons().updateOrder(p2.id, p1.displayOrder)
-                                                }
-                                                draggedIndex = from - 1
-                                                dragOffsetY += itemHeight
-                                            }
-                                        }
-                                    },
-                                    onDragEnd = {
-                                        draggedIndex = null
-                                        dragOffsetY = 0f
-                                    },
-                                    onDragCancel = {
-                                        draggedIndex = null
-                                        dragOffsetY = 0f
-                                    }
-                                )
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("☰", fontSize = 24.sp, color = HeaderBlue)
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-
-                    Box(Modifier.weight(1f)) {
-                        val personAccounts = allAccounts.filter { it.personId == p.id }
-                        PersonCard(
-                            person = p,
-                            accounts = personAccounts,
-                            onClick = { },
-                            onEdit = { },
-                            onDelete = { },
-                            db = db
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-        }
-    }
-}
-
-// ═══════════════════════════════════════════════════════
-// PersonCard — بدون خط جداکننده، فشرده‌تر
+// PersonCard — بدون خط جداکننده
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -612,7 +536,6 @@ fun PersonCard(
         acc to bal
     }
 
-    // ✅ چک‌باکس‌ها بر اساس **نام حساب‌ها** (نه ارز)
     val selectedAccounts = remember(person) {
         person.displayedCurrencies
             .split(",")
@@ -670,7 +593,6 @@ fun PersonCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                // ✅ ردیف اول: نام (راست) + تعداد حساب (چپ)
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -688,7 +610,6 @@ fun PersonCard(
                     )
                 }
 
-                // ✅ بدون خط جداکننده — مستقیم لیست حساب‌ها
                 Spacer(Modifier.height(6.dp))
 
                 if (filteredAccounts.isEmpty()) {
@@ -703,14 +624,12 @@ fun PersonCard(
                             Modifier.fillMaxWidth().padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // عنوان حساب
                             Text(
                                 acc.name,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.weight(1f)
                             )
-                            // مانده
                             Text(
                                 money(kotlin.math.abs(bal)),
                                 style = MaterialTheme.typography.bodyMedium,
@@ -718,14 +637,12 @@ fun PersonCard(
                                 color = if (bal >= 0) CreditGreen else DebitRed
                             )
                             Spacer(Modifier.width(6.dp))
-                            // ارز
                             Text(
                                 acc.displayUnit(),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.Gray
                             )
                             Spacer(Modifier.width(6.dp))
-                            // بدهکار/بستانکار
                             Text(
                                 if (bal >= 0) "بستانکار" else "بدهکار",
                                 style = MaterialTheme.typography.labelSmall,
@@ -741,7 +658,7 @@ fun PersonCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonScreen — با Drag & Drop نرم
+// PersonScreen — با Reorderable
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -758,6 +675,20 @@ fun PersonScreen(
     var editPerson by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+        scope.launch {
+            val list = accounts.toMutableList()
+            if (from.index in list.indices && to.index in list.indices) {
+                val moved = list.removeAt(from.index)
+                list.add(to.index, moved)
+                list.forEachIndexed { index, account ->
+                    db.accounts().updateOrder(account.id, index)
+                }
+            }
+        }
+    }
 
     val accountBalances = accounts.map { acc ->
         val txs = remember(acc.id) { mutableStateOf<List<Transaction>>(emptyList()) }
@@ -770,7 +701,7 @@ fun PersonScreen(
         Column(Modifier.fillMaxSize()) {
             PageHeader(
                 title = if (editMode) "مرتب‌سازی" else person.name,
-                subtitle = if (editMode) "حساب رو نگه دار و جابه‌جا کن"
+                subtitle = if (editMode) "آیکون ☰ رو نگه دار و بکش"
                 else "${accounts.size} حساب",
                 onBackClick = onBack,
                 extraActions = {
@@ -809,37 +740,67 @@ fun PersonScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            if (editMode) {
-                SmoothDraggableAccountsList(
-                    accounts = accounts,
-                    accountBalances = accountBalances,
-                    db = db
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    item {
-                        Text(
-                            "حساب‌ها",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1B1B1F),
-                            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                        )
-                    }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text(
+                        "حساب‌ها",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1B1B1F),
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    )
+                }
 
-                    items(accounts, key = { it.id }) { acc ->
+                items(accounts, key = { it.id }) { acc ->
+                    ReorderableItem(reorderableState, key = acc.id) { isDragging ->
                         val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
-                        SwipeableAccountCard(
-                            account = acc,
-                            balance = bal,
-                            onClick = { onOpenAccount(acc) },
-                            onEdit = { editTarget = acc },
-                            onDelete = { deleteTarget = acc }
-                        )
+
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (isDragging) Color(0xFFF0F0F0) else Color.Transparent,
+                                    shape = RoundedCornerShape(18.dp)
+                                ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (editMode) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "جابجایی",
+                                    tint = HeaderBlue,
+                                    modifier = Modifier
+                                        .padding(horizontal = 8.dp)
+                                        .size(28.dp)
+                                        .draggableHandle()
+                                )
+                            }
+
+                            Box(Modifier.weight(1f)) {
+                                if (editMode) {
+                                    SwipeableAccountCard(
+                                        account = acc,
+                                        balance = bal,
+                                        onClick = { },
+                                        onEdit = { },
+                                        onDelete = { }
+                                    )
+                                } else {
+                                    SwipeableAccountCard(
+                                        account = acc,
+                                        balance = bal,
+                                        onClick = { onOpenAccount(acc) },
+                                        onEdit = { editTarget = acc },
+                                        onDelete = { deleteTarget = acc }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -881,122 +842,6 @@ fun PersonScreen(
         PersonEditor(person, db, {
             scope.launch { db.persons().update(it); editPerson = false }
         }, { editPerson = false })
-    }
-}
-
-// ═══════════════════════════════════════════════════════
-// SmoothDraggableAccountsList — Drag & Drop نرم حساب‌ها
-// ═══════════════════════════════════════════════════════
-
-@Composable
-fun SmoothDraggableAccountsList(
-    accounts: List<Account>,
-    accountBalances: List<Pair<Account, Long>>,
-    db: AppDb
-) {
-    val scope = rememberCoroutineScope()
-    var draggedIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffsetY by remember { mutableStateOf(0f) }
-
-    val itemHeight = 100f
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-    ) {
-        accounts.forEachIndexed { index, acc ->
-            val isDragging = draggedIndex == index
-            val targetOffset = if (isDragging) dragOffsetY else 0f
-            val animatedOffset by animateFloatAsState(
-                targetValue = targetOffset,
-                label = "dragAccount"
-            )
-
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .zIndex(if (isDragging) 1f else 0f)
-                    .graphicsLayer {
-                        translationY = animatedOffset
-                        scaleX = if (isDragging) 1.02f else 1f
-                        scaleY = if (isDragging) 1.02f else 1f
-                    }
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        Modifier
-                            .size(48.dp)
-                            .pointerInput(acc.id) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                        draggedIndex = index
-                                        dragOffsetY = 0f
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        dragOffsetY += dragAmount.y
-
-                                        if (dragOffsetY > itemHeight / 2) {
-                                            val from = draggedIndex
-                                            if (from != null && from < accounts.size - 1) {
-                                                scope.launch {
-                                                    val a1 = accounts[from]
-                                                    val a2 = accounts[from + 1]
-                                                    db.accounts().updateOrder(a1.id, a2.displayOrder)
-                                                    db.accounts().updateOrder(a2.id, a1.displayOrder)
-                                                }
-                                                draggedIndex = from + 1
-                                                dragOffsetY -= itemHeight
-                                            }
-                                        } else if (dragOffsetY < -itemHeight / 2) {
-                                            val from = draggedIndex
-                                            if (from != null && from > 0) {
-                                                scope.launch {
-                                                    val a1 = accounts[from]
-                                                    val a2 = accounts[from - 1]
-                                                    db.accounts().updateOrder(a1.id, a2.displayOrder)
-                                                    db.accounts().updateOrder(a2.id, a1.displayOrder)
-                                                }
-                                                draggedIndex = from - 1
-                                                dragOffsetY += itemHeight
-                                            }
-                                        }
-                                    },
-                                    onDragEnd = {
-                                        draggedIndex = null
-                                        dragOffsetY = 0f
-                                    },
-                                    onDragCancel = {
-                                        draggedIndex = null
-                                        dragOffsetY = 0f
-                                    }
-                                )
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("☰", fontSize = 24.sp, color = HeaderBlue)
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-
-                    Box(Modifier.weight(1f)) {
-                        val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
-                        SwipeableAccountCard(
-                            account = acc,
-                            balance = bal,
-                            onClick = { },
-                            onEdit = { },
-                            onDelete = { }
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-        }
     }
 }
 
@@ -1458,7 +1303,7 @@ fun AutoTransactionCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonEditor — چک‌باکس بر اساس حساب‌ها
+// PersonEditor
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1471,14 +1316,12 @@ fun PersonEditor(
     var name by remember(old) { mutableStateOf(old?.name ?: "") }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
 
-    // ✅ حساب‌های واقعی این شخص
     val personAccounts by if (old != null) {
         db.accounts().byPerson(old.id).collectAsState(emptyList())
     } else {
         remember { mutableStateOf(emptyList<Account>()) }
     }
 
-    // ارزهای انتخاب‌شده (نام حساب‌ها)
     var selectedAccounts by remember(old) {
         mutableStateOf(
             old?.displayedCurrencies
@@ -1552,13 +1395,6 @@ fun PersonEditor(
                             )
                         }
                     }
-                } else if (old == null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "بعد از ذخیره، می‌تونی حساب‌ها رو انتخاب کنی.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
                 }
             }
         },
