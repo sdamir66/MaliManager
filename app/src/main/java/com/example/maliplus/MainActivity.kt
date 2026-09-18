@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)شششش
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.example.maliplus
 
