@@ -14,9 +14,6 @@ interface PersonDao {
     @Query("SELECT * FROM persons WHERE id = :id LIMIT 1")
     suspend fun byId(id: Long): Person?
 
-    @Query("SELECT * FROM persons WHERE name = :name LIMIT 1")
-    suspend fun byName(name: String): Person?
-
     @Insert
     suspend fun insert(p: Person): Long
 
@@ -74,9 +71,6 @@ interface TxDao {
     @Query("SELECT * FROM transactions WHERE accountId = :id ORDER BY dateMillis DESC, id DESC")
     suspend fun byAccountNow(id: Long): List<Transaction>
 
-    @Query("SELECT * FROM transactions WHERE accountId IN (:accountIds) ORDER BY dateMillis DESC, id DESC")
-    suspend fun byAccountsNow(accountIds: List<Long>): List<Transaction>
-
     @Insert
     suspend fun insert(t: Transaction): Long
 
@@ -100,56 +94,31 @@ interface TxDao {
 }
 
 @Dao
-interface ProfitDao {
-    @Query("SELECT * FROM profit_settings WHERE accountId = :id LIMIT 1")
-    fun byAccount(id: Long): Flow<ProfitSettings?>
+interface ProfitPeriodDao {
+    @Query("SELECT * FROM profit_periods ORDER BY startYear ASC, startMonth ASC, startDay ASC")
+    fun all(): Flow<List<ProfitPeriod>>
 
-    @Query("SELECT * FROM profit_settings WHERE accountId = :id LIMIT 1")
-    suspend fun byAccountNow(id: Long): ProfitSettings?
+    @Query("SELECT * FROM profit_periods WHERE accountId = :accountId ORDER BY startYear ASC, startMonth ASC, startDay ASC")
+    fun byAccount(accountId: Long): Flow<List<ProfitPeriod>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(s: ProfitSettings): Long
+    @Query("SELECT * FROM profit_periods WHERE accountId = :accountId ORDER BY startYear ASC, startMonth ASC, startDay ASC")
+    suspend fun byAccountNow(accountId: Long): List<ProfitPeriod>
 
-    @Query("DELETE FROM profit_settings")
-    suspend fun clearSettings()
+    @Query("SELECT * FROM profit_periods ORDER BY startYear ASC, startMonth ASC, startDay ASC")
+    suspend fun allNow(): List<ProfitPeriod>
 
-    @Query("SELECT * FROM monthly_rates WHERE accountId = :id")
-    fun rates(id: Long): Flow<List<MonthlyRate>>
+    @Insert
+    suspend fun insert(p: ProfitPeriod): Long
 
-    @Query("SELECT * FROM monthly_rates WHERE accountId = :id")
-    suspend fun ratesNow(id: Long): List<MonthlyRate>
+    @Update
+    suspend fun update(p: ProfitPeriod)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertRate(r: MonthlyRate)
+    @Delete
+    suspend fun delete(p: ProfitPeriod)
 
-    @Query("DELETE FROM monthly_rates")
-    suspend fun clearRates()
-}
+    @Query("DELETE FROM profit_periods WHERE accountId = :accountId")
+    suspend fun deleteByAccount(accountId: Long)
 
-// برای مرحله ۳ — فعلاً استفاده نمی‌شه ولی آماده‌ست
-@Dao
-interface GlobalProfitDao {
-    @Query("SELECT * FROM global_profit_settings WHERE id = 1 LIMIT 1")
-    fun get(): Flow<GlobalProfitSettings?>
-
-    @Query("SELECT * FROM global_profit_settings WHERE id = 1 LIMIT 1")
-    suspend fun getNow(): GlobalProfitSettings?
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(s: GlobalProfitSettings)
-}
-
-@Dao
-interface GlobalMonthlyRateDao {
-    @Query("SELECT * FROM global_monthly_rates")
-    fun all(): Flow<List<GlobalMonthlyRate>>
-
-    @Query("SELECT * FROM global_monthly_rates")
-    suspend fun allNow(): List<GlobalMonthlyRate>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(r: GlobalMonthlyRate)
-
-    @Query("DELETE FROM global_monthly_rates")
+    @Query("DELETE FROM profit_periods")
     suspend fun clear()
 }
