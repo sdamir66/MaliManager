@@ -16,7 +16,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -297,7 +296,7 @@ fun PageHeader(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonsScreen — با دکمه‌های ▲▼
+// PersonsScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -417,7 +416,6 @@ fun PersonsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (editMode) {
-                        // ✅ دکمه‌های ▲▼
                         Column(
                             Modifier.padding(end = 6.dp),
                             verticalArrangement = Arrangement.Center
@@ -662,7 +660,7 @@ fun PersonCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonScreen — با دکمه‌های ▲▼
+// PersonScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -754,7 +752,6 @@ fun PersonScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (editMode) {
-                            // ✅ دکمه‌های ▲▼ برای حساب‌ها
                             Column(
                                 Modifier.padding(end = 6.dp),
                                 verticalArrangement = Arrangement.Center
@@ -1853,7 +1850,7 @@ fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
 }
 
 // ═══════════════════════════════════════════════════════
-// GlobalProfitEditor
+// GlobalProfitEditor — با سود ماهانه‌ی کلی
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1867,6 +1864,7 @@ fun GlobalProfitEditor(
     var mode by remember(old) { mutableStateOf(old?.mode ?: "DAILY_ANNUAL") }
     var annual by remember(old) { mutableStateOf(old?.annualRate?.toString() ?: "20") }
     var day by remember(old) { mutableStateOf(old?.payoutDay?.toString() ?: "30") }
+    var ratesOpen by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = close,
@@ -1910,6 +1908,13 @@ fun GlobalProfitEditor(
                         label = { Text("نرخ سالانه ٪") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                if (mode == "MONTHLY")
+                    OutlinedButton(
+                        onClick = { ratesOpen = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("تنظیم نرخ ماه‌های سال")
+                    }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = day,
@@ -1936,6 +1941,75 @@ fun GlobalProfitEditor(
                     close()
                 }
             }) { Text("ذخیره") }
+        },
+        dismissButton = { TextButton(onClick = close) { Text("انصراف") } }
+    )
+    if (ratesOpen) GlobalMonthlyRatesEditor(db) { ratesOpen = false }
+}
+
+// ═══════════════════════════════════════════════════════
+// GlobalMonthlyRatesEditor — نرخ‌های ماهانه‌ی کلی
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun GlobalMonthlyRatesEditor(db: AppDb, close: () -> Unit) {
+    val rates by db.globalMonthlyRate().all().collectAsState(emptyList())
+    var year by rememberSaveable { mutableIntStateOf(Jalali.nowJalali()[0]) }
+    val values = remember(rates, year) {
+        mutableStateMapOf<Int, String>().apply {
+            for (m in 1..12) {
+                put(m, rates.find { it.year == year && it.month == m }?.ratePercent?.toString() ?: "")
+            }
+        }
+    }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("نرخ سود ماهانه‌ی کلی $year") },
+        text = {
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(onClick = { year-- }) { Text("سال قبل") }
+                    Text(year.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = { year++ }) { Text("سال بعد") }
+                }
+                LazyColumn {
+                    items((1..12).toList()) { m ->
+                        OutlinedTextField(
+                            value = values[m] ?: "",
+                            onValueChange = { input ->
+                                val cleaned = input.filter { it.isDigit() || it == '.' }
+                                if (cleaned.count { it == '.' } <= 1) values[m] = cleaned
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            label = { Text(Jalali.monthName(m)) },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                scope.launch {
+                    for (m in 1..12) {
+                        val v = values[m]?.replace(",", "")?.toDoubleOrNull()
+                        if (v != null) {
+                            db.globalMonthlyRate().upsert(
+                                GlobalMonthlyRate(year = year, month = m, ratePercent = v)
+                            )
+                        }
+                    }
+                    ProfitEngine.recalculateAll(db)
+                    close()
+                }
+            }) { Text("ذخیره نرخ‌ها") }
         },
         dismissButton = { TextButton(onClick = close) { Text("انصراف") } }
     )
@@ -2039,7 +2113,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                                 val gs = globalSettings
                                 Text(
                                     if (gs?.enabled == true)
-                                        "فعال — ${gs.annualRate}% سالانه"
+                                        "فعال — ${if (gs.mode == "MONTHLY") "ماهانه" else "${gs.annualRate}% سالانه"}"
                                     else "غیرفعال",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (gs?.enabled == true) CreditGreen else Color.Gray
@@ -2327,26 +2401,37 @@ fun SettingRow(
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine
+// ProfitEngine — با سود ماهانه‌ی کلی
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
     suspend fun recalculateAll(db: AppDb) {
         db.tx().deleteAllAuto()
         val globalSettings: GlobalProfitSettings? = db.globalProfit().getNow()
+        val globalRates = db.globalMonthlyRate().allNow()
+
         for (a in db.accounts().allNow()) {
             val accountSettings: ProfitSettings? = db.profit().byAccountNow(a.id)
             if (a.useGlobalProfit) {
                 if (globalSettings != null) {
-                    recalculateWithSettings(
-                        db = db,
-                        accountId = a.id,
-                        enabled = globalSettings.enabled,
-                        mode = globalSettings.mode,
-                        annualRate = globalSettings.annualRate,
-                        payoutDay = globalSettings.payoutDay,
-                        destinationAccountId = null
-                    )
+                    if (globalSettings.mode == "MONTHLY") {
+                        recalculateWithGlobalMonthly(
+                            db = db,
+                            accountId = a.id,
+                            payoutDay = globalSettings.payoutDay,
+                            globalRates = globalRates
+                        )
+                    } else {
+                        recalculateWithSettings(
+                            db = db,
+                            accountId = a.id,
+                            enabled = globalSettings.enabled,
+                            mode = globalSettings.mode,
+                            annualRate = globalSettings.annualRate,
+                            payoutDay = globalSettings.payoutDay,
+                            destinationAccountId = null
+                        )
+                    }
                 }
             } else {
                 if (accountSettings != null) {
@@ -2368,18 +2453,28 @@ object ProfitEngine {
         val account = db.accounts().byId(accountId) ?: return
         val globalSettings: GlobalProfitSettings? = db.globalProfit().getNow()
         val accountSettings: ProfitSettings? = db.profit().byAccountNow(accountId)
+        val globalRates = db.globalMonthlyRate().allNow()
 
         if (account.useGlobalProfit) {
             if (globalSettings != null) {
-                recalculateWithSettings(
-                    db = db,
-                    accountId = accountId,
-                    enabled = globalSettings.enabled,
-                    mode = globalSettings.mode,
-                    annualRate = globalSettings.annualRate,
-                    payoutDay = globalSettings.payoutDay,
-                    destinationAccountId = null
-                )
+                if (globalSettings.mode == "MONTHLY") {
+                    recalculateWithGlobalMonthly(
+                        db = db,
+                        accountId = accountId,
+                        payoutDay = globalSettings.payoutDay,
+                        globalRates = globalRates
+                    )
+                } else {
+                    recalculateWithSettings(
+                        db = db,
+                        accountId = accountId,
+                        enabled = globalSettings.enabled,
+                        mode = globalSettings.mode,
+                        annualRate = globalSettings.annualRate,
+                        payoutDay = globalSettings.payoutDay,
+                        destinationAccountId = null
+                    )
+                }
             }
         } else {
             if (accountSettings != null) {
@@ -2394,6 +2489,45 @@ object ProfitEngine {
                 )
             }
         }
+    }
+
+    private suspend fun recalculateWithGlobalMonthly(
+        db: AppDb,
+        accountId: Long,
+        payoutDay: Int,
+        globalRates: List<GlobalMonthlyRate>
+    ) {
+        val base = db.tx().byAccountNow(accountId).filter { !it.isAutoProfit }
+        val today = Jalali.nowJalali()
+        val out = mutableListOf<Transaction>()
+
+        for (y in (today[0] - 2)..today[0]) {
+            for (m in 1..12) {
+                if (y > today[0] || (y == today[0] && m > today[1])) continue
+
+                val rate = globalRates.find { it.year == y && it.month == m }?.ratePercent
+                    ?: continue
+                val days = Jalali.daysInMonth(y, m)
+
+                var total = 0.0
+                for (d in 1..days) {
+                    val t = Jalali.startOfJalaliMonth(y, m) + ((d - 1) * 86400000L)
+                    val bal = base.filter { it.dateMillis <= t }
+                        .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+                    total += bal * (rate / 100.0) / days
+                }
+
+                val amount = kotlin.math.round(total).toLong()
+                if (amount <= 0) continue
+
+                val payout = jalaliPayout(y, m, payoutDay)
+                if (payout > System.currentTimeMillis()) continue
+
+                val text = "سود ماهانه‌ی کلی ${Jalali.monthName(m)} $y — نرخ ${rate}%"
+                out.add(Transaction(0, accountId, payout, "بستانکار", amount, text, true, "$accountId:$y:$m"))
+            }
+        }
+        db.tx().insertAll(out)
     }
 
     private suspend fun recalculateWithSettings(
@@ -2455,7 +2589,7 @@ object ProfitEngine {
 }
 
 // ═══════════════════════════════════════════════════════
-// Backup
+// Backup — با نرخ‌های ماهانه‌ی کلی
 // ═══════════════════════════════════════════════════════
 
 object Backup {
@@ -2542,6 +2676,16 @@ object Backup {
             root.put("globalProfit", o)
         }
 
+        val gmr = arr()
+        for (r in db.globalMonthlyRate().allNow()) {
+            val o = JSONObject()
+            o.put("year", r.year)
+            o.put("month", r.month)
+            o.put("ratePercent", r.ratePercent)
+            gmr.put(o)
+        }
+        root.put("globalMonthlyRates", gmr)
+
         return root.toString(2)
     }
 
@@ -2554,6 +2698,7 @@ object Backup {
             db.profit().clearSettings()
             db.accounts().clear()
             db.persons().clear()
+            db.globalMonthlyRate().clear()
 
             val persons = root.optJSONArray("persons") ?: JSONArray()
             val personIdMap = mutableMapOf<Long, Long>()
@@ -2638,6 +2783,16 @@ object Backup {
                     mode = gs.optString("mode", "DAILY_ANNUAL"),
                     annualRate = gs.optDouble("annualRate", 20.0),
                     payoutDay = gs.optInt("payoutDay", 30)
+                ))
+            }
+
+            val gmr = root.optJSONArray("globalMonthlyRates") ?: JSONArray()
+            for (i in 0 until gmr.length()) {
+                val o = gmr.getJSONObject(i)
+                db.globalMonthlyRate().upsert(GlobalMonthlyRate(
+                    year = o.getInt("year"),
+                    month = o.getInt("month"),
+                    ratePercent = o.getDouble("ratePercent")
                 ))
             }
         } else {
