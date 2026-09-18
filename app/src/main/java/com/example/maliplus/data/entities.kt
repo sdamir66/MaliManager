@@ -36,23 +36,22 @@ data class Transaction(
 )
 
 /**
- * بازه‌ی سود
- * - accountId = 0 → سود کلی برنامه
- * - accountId > 0 → سود اختصاصی برای اون حساب
- * - endYear = null → پایانی نداره (تا بی‌نهایت)
+ * بازه‌ی سود اختصاصی هر حساب
+ * - endYear = null → تا بی‌نهایت (پایان نداره)
+ * - payoutDay = 0 → آخر ماه (خودکار بر اساس ماه)
  */
 @Entity(tableName = "profit_periods")
 data class ProfitPeriod(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val accountId: Long = 0,
+    val accountId: Long,
     val type: String = "ANNUAL",        // "ANNUAL" یا "MONTHLY"
-    val rate: Double = 0.0,             // نرخ سود
+    val rate: Double = 0.0,
     val startYear: Int,
     val startMonth: Int,
     val startDay: Int,
     val endYear: Int? = null,
     val endMonth: Int? = null,
     val endDay: Int? = null,
-    val payoutDay: Int = 30,            // روز واریز ماه
-    val destinationAccountId: Long? = null  // حساب مقصد (برای سود اختصاصی)
+    val payoutDay: Int = 0,             // 0 = آخر ماه
+    val destinationAccountId: Long? = null
 )
