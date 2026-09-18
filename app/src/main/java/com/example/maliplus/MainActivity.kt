@@ -58,7 +58,6 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.draggableHandle
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -440,17 +439,16 @@ fun PersonsScreen(
                             ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (editMode) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "جابجایی",
-                                tint = HeaderBlue,
-                                modifier = Modifier
-                                    .padding(horizontal = 8.dp)
-                                    .size(28.dp)
-                                    .draggableHandle()
-                            )
-                        }
+                       if (editMode) {
+    Icon(
+        imageVector = Icons.Default.Menu,
+        contentDescription = "جابجایی",
+        tint = HeaderBlue,
+        modifier = Modifier
+            .padding(horizontal = 8.dp)
+            .size(28.dp)
+    )
+}
 
                         Box(Modifier.weight(1f)) {
                             if (editMode) {
@@ -770,16 +768,15 @@ fun PersonScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (editMode) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "جابجایی",
-                                    tint = HeaderBlue,
-                                    modifier = Modifier
-                                        .padding(horizontal = 8.dp)
-                                        .size(28.dp)
-                                        .draggableHandle()
-                                )
-                            }
+    Icon(
+        imageVector = Icons.Default.Menu,
+        contentDescription = "جابجایی",
+        tint = HeaderBlue,
+        modifier = Modifier
+            .padding(horizontal = 8.dp)
+            .size(28.dp)
+    )
+}
 
                             Box(Modifier.weight(1f)) {
                                 if (editMode) {
