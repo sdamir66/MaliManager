@@ -159,9 +159,7 @@ private fun money(v: Long) = NumberFormat.getNumberInstance(Locale.US).format(v)
 
 private fun formatTextFieldValue(input: TextFieldValue): TextFieldValue {
     val digits = input.text.filter { it.isDigit() }
-    if (digits.isEmpty()) {
-        return input.copy(text = "")
-    }
+    if (digits.isEmpty()) return input.copy(text = "")
     return try {
         val formatted = NumberFormat.getNumberInstance(Locale.US).format(digits.toLong())
         input.copy(
@@ -169,10 +167,7 @@ private fun formatTextFieldValue(input: TextFieldValue): TextFieldValue {
             selection = androidx.compose.ui.text.TextRange(formatted.length)
         )
     } catch (e: Exception) {
-        input.copy(
-            text = digits,
-            selection = androidx.compose.ui.text.TextRange(digits.length)
-        )
+        input.copy(text = digits, selection = androidx.compose.ui.text.TextRange(digits.length))
     }
 }
 
@@ -194,8 +189,16 @@ fun calculateRunningBalances(transactions: List<Transaction>): Map<Long, Long> {
 
 fun Account.displayUnit(): String = if (customUnit.isNotBlank()) customUnit else currency
 
-private fun jalaliPayout(y: Int, m: Int, day: Int): Long =
-    Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, day.coerceAtMost(Jalali.daysInMonth(y, m))))!!
+/** تبدیل تاریخ شمسی به millis (روز اول) */
+private fun toMillis(y: Int, m: Int, d: Int): Long =
+    Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, d)) ?: 0L
+
+/** مقایسه‌ی دو تاریخ شمسی */
+private fun compareJalali(y1: Int, m1: Int, d1: Int, y2: Int, m2: Int, d2: Int): Int {
+    if (y1 != y2) return y1.compareTo(y2)
+    if (m1 != m2) return m1.compareTo(m2)
+    return d1.compareTo(d2)
+}
 
 // ═══════════════════════════════════════════════════════
 // FinanceApp
@@ -348,24 +351,12 @@ fun PersonsScreen(
                     onClick = { editMode = !editMode },
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Text(
-                        if (editMode) "✓" else "⇅",
-                        color = Color.White,
-                        fontSize = 24.sp
-                    )
+                    Text(if (editMode) "✓" else "⇅", color = Color.White, fontSize = 24.sp)
                 }
 
                 if (!editMode) {
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "تنظیمات",
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
+                    IconButton(onClick = onOpenSettings, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.Settings, "تنظیمات", tint = Color.White, modifier = Modifier.size(26.dp))
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
@@ -397,29 +388,19 @@ fun PersonsScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("👥", fontSize = 64.sp)
                             Spacer(Modifier.height(16.dp))
-                            Text(
-                                "هنوز شخصی ثبت نکردی",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = Color.Gray
-                            )
+                            Text("هنوز شخصی ثبت نکردی", style = MaterialTheme.typography.titleLarge, color = Color.Gray)
                         }
                     }
                 }
             }
 
-            items(persons.size) { index ->
+            items(persons.size, key = { persons[it].id }) { index ->
                 val p = persons[index]
                 val personAccounts = allAccounts.filter { it.personId == p.id }
 
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     if (editMode) {
-                        Column(
-                            Modifier.padding(end = 6.dp),
-                            verticalArrangement = Arrangement.Center
-                        ) {
+                        Column(Modifier.padding(end = 6.dp), verticalArrangement = Arrangement.Center) {
                             IconButton(
                                 onClick = {
                                     if (index > 0) {
@@ -457,23 +438,9 @@ fun PersonsScreen(
 
                     Box(Modifier.weight(1f)) {
                         if (editMode) {
-                            PersonCard(
-                                person = p,
-                                accounts = personAccounts,
-                                onClick = { },
-                                onEdit = { },
-                                onDelete = { },
-                                db = db
-                            )
+                            PersonCard(p, personAccounts, { }, { }, { }, db)
                         } else {
-                            PersonCard(
-                                person = p,
-                                accounts = personAccounts,
-                                onClick = { onOpenPerson(p) },
-                                onEdit = { editTarget = p },
-                                onDelete = { deleteTarget = p },
-                                db = db
-                            )
+                            PersonCard(p, personAccounts, { onOpenPerson(p) }, { editTarget = p }, { deleteTarget = p }, db)
                         }
                     }
                 }
@@ -505,7 +472,8 @@ fun PersonsScreen(
                 scope.launch {
                     val accs = db.accounts().byPersonNow(target.id)
                     accs.forEach { acc ->
-                        db.tx().byAccountNow(acc.id).forEach { tx -> db.tx().delete(tx) }
+                        db.tx().byAccountNow(acc.id).forEach { db.tx().delete(it) }
+                        db.profitPeriod().deleteByAccount(acc.id)
                         db.accounts().delete(acc)
                     }
                     db.persons().delete(target)
@@ -539,18 +507,11 @@ fun PersonCard(
     }
 
     val selectedAccounts = remember(person) {
-        person.displayedCurrencies
-            .split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
+        person.displayedCurrencies.split(",").map { it.trim() }.filter { it.isNotEmpty() }
     }
 
-    val filteredAccounts = if (selectedAccounts.isEmpty())
-        accountsWithBalance
-    else
-        accountsWithBalance.filter { (acc, _) ->
-            acc.name in selectedAccounts
-        }
+    val filteredAccounts = if (selectedAccounts.isEmpty()) accountsWithBalance
+    else accountsWithBalance.filter { (acc, _) -> acc.name in selectedAccounts }
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -573,10 +534,7 @@ fun PersonCard(
                 SwipeToDismissBoxValue.EndToStart -> Triple(DebitRed, Icons.Default.Delete, Alignment.CenterEnd)
                 else -> Triple(Color.Transparent, Icons.Default.Edit, Alignment.Center)
             }
-            Box(
-                Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                contentAlignment = alignment
-            ) {
+            Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = alignment) {
                 if (color != Color.Transparent) {
                     Box(
                         modifier = Modifier.size(44.dp).background(color, shape = CircleShape),
@@ -600,57 +558,26 @@ fun PersonCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        person.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "${accounts.size} حساب",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
-                    )
+                    Text(person.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("${accounts.size} حساب", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                 }
 
                 Spacer(Modifier.height(6.dp))
 
                 if (filteredAccounts.isEmpty()) {
-                    Text(
-                        "حسابی برای نمایش نیست",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
+                    Text("حسابی برای نمایش نیست", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 } else {
                     filteredAccounts.forEach { (acc, bal) ->
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                acc.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                money(kotlin.math.abs(bal)),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (bal >= 0) CreditGreen else DebitRed
-                            )
+                            Text(acc.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                            Text(money(kotlin.math.abs(bal)), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (bal >= 0) CreditGreen else DebitRed)
                             Spacer(Modifier.width(6.dp))
-                            Text(
-                                acc.displayUnit(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.Gray
-                            )
+                            Text(acc.displayUnit(), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                             Spacer(Modifier.width(6.dp))
-                            Text(
-                                if (bal >= 0) "بستانکار" else "بدهکار",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (bal >= 0) CreditGreen else DebitRed,
-                                fontWeight = FontWeight.Medium
-                            )
+                            Text(if (bal >= 0) "بستانکار" else "بدهکار", style = MaterialTheme.typography.labelSmall, color = if (bal >= 0) CreditGreen else DebitRed, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -689,29 +616,15 @@ fun PersonScreen(
         Column(Modifier.fillMaxSize()) {
             PageHeader(
                 title = if (editMode) "مرتب‌سازی" else person.name,
-                subtitle = if (editMode) "با دکمه‌های ▲▼ جابه‌جا کن"
-                else "${accounts.size} حساب",
+                subtitle = if (editMode) "با دکمه‌های ▲▼ جابه‌جا کن" else "${accounts.size} حساب",
                 onBackClick = onBack,
                 extraActions = {
-                    IconButton(
-                        onClick = { editMode = !editMode },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Text(
-                            if (editMode) "✓" else "⇅",
-                            color = Color.White,
-                            fontSize = 24.sp
-                        )
+                    IconButton(onClick = { editMode = !editMode }, modifier = Modifier.size(48.dp)) {
+                        Text(if (editMode) "✓" else "⇅", color = Color.White, fontSize = 24.sp)
                     }
-
                     if (!editMode) {
                         IconButton(onClick = { editPerson = true }, modifier = Modifier.size(48.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "ویرایش شخص",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            Icon(Icons.Default.Edit, "ویرایش شخص", tint = Color.White, modifier = Modifier.size(24.dp))
                         }
                         Box(
                             Modifier
@@ -743,19 +656,13 @@ fun PersonScreen(
                     )
                 }
 
-                items(accounts.size) { index ->
+                items(accounts.size, key = { accounts[it].id }) { index ->
                     val acc = accounts[index]
                     val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
 
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         if (editMode) {
-                            Column(
-                                Modifier.padding(end = 6.dp),
-                                verticalArrangement = Arrangement.Center
-                            ) {
+                            Column(Modifier.padding(end = 6.dp), verticalArrangement = Arrangement.Center) {
                                 IconButton(
                                     onClick = {
                                         if (index > 0) {
@@ -793,21 +700,9 @@ fun PersonScreen(
 
                         Box(Modifier.weight(1f)) {
                             if (editMode) {
-                                SwipeableAccountCard(
-                                    account = acc,
-                                    balance = bal,
-                                    onClick = { },
-                                    onEdit = { },
-                                    onDelete = { }
-                                )
+                                SwipeableAccountCard(acc, bal, { }, { }, { })
                             } else {
-                                SwipeableAccountCard(
-                                    account = acc,
-                                    balance = bal,
-                                    onClick = { onOpenAccount(acc) },
-                                    onEdit = { editTarget = acc },
-                                    onDelete = { deleteTarget = acc }
-                                )
+                                SwipeableAccountCard(acc, bal, { onOpenAccount(acc) }, { editTarget = acc }, { deleteTarget = acc })
                             }
                         }
                     }
@@ -839,6 +734,7 @@ fun PersonScreen(
             onConfirm = {
                 scope.launch {
                     db.tx().byAccountNow(target.id).forEach { db.tx().delete(it) }
+                    db.profitPeriod().deleteByAccount(target.id)
                     db.accounts().delete(target)
                     deleteTarget = null
                 }
@@ -888,10 +784,7 @@ fun SwipeableAccountCard(
                 SwipeToDismissBoxValue.EndToStart -> Triple(DebitRed, Icons.Default.Delete, Alignment.CenterEnd)
                 else -> Triple(Color.Transparent, Icons.Default.Edit, Alignment.Center)
             }
-            Box(
-                Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                contentAlignment = alignment
-            ) {
+            Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = alignment) {
                 if (color != Color.Transparent) {
                     Box(
                         modifier = Modifier.size(44.dp).background(color, shape = CircleShape),
@@ -924,40 +817,21 @@ fun SwipeableAccountCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        if (isCredit) "↓" else "↑",
+                        account.displayUnit(),
                         color = Color.White,
-                        fontSize = 22.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        account.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        account.displayUnit(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
+                    Text(account.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        money(kotlin.math.abs(balance)),
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (isCredit) CreditGreen else DebitRed
-                    )
+                    Text(money(kotlin.math.abs(balance)), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge, color = if (isCredit) CreditGreen else DebitRed)
                     Spacer(Modifier.height(2.dp))
-                    Text(
-                        if (isCredit) "بستانکار" else "بدهکار",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isCredit) CreditGreen else DebitRed
-                    )
+                    Text(if (isCredit) "بستانکار" else "بدهکار", style = MaterialTheme.typography.labelSmall, color = if (isCredit) CreditGreen else DebitRed)
                 }
             }
         }
@@ -971,7 +845,6 @@ fun SwipeableAccountCard(
 @Composable
 fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     val tx by db.tx().byAccount(a.id).collectAsState(emptyList())
-    val setting by db.profit().byAccount(a.id).collectAsState(null)
     var editor by remember { mutableStateOf<Transaction?>(null) }
     var add by remember { mutableStateOf(false) }
     var profit by remember { mutableStateOf(false) }
@@ -982,19 +855,13 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
 
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
-
             PageHeader(
                 title = a.name,
                 subtitle = a.displayUnit(),
                 onBackClick = onBack,
                 extraActions = {
                     IconButton(onClick = { profit = true }, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "تنظیم سود",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(Icons.Default.Settings, "تنظیم سود", tint = Color.White, modifier = Modifier.size(24.dp))
                     }
                 }
             )
@@ -1008,38 +875,18 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
             ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            money(kotlin.math.abs(bal)),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1B1B1F)
-                        )
+                        Text(money(kotlin.math.abs(bal)), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
                         Spacer(Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                if (isCredit) "بستانکار" else "بدهکار",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (isCredit) CreditGreen else DebitRed,
-                                fontWeight = FontWeight.Medium
-                            )
+                            Text(if (isCredit) "بستانکار" else "بدهکار", style = MaterialTheme.typography.bodyMedium, color = if (isCredit) CreditGreen else DebitRed, fontWeight = FontWeight.Medium)
                             Spacer(Modifier.width(4.dp))
-                            Text(
-                                a.displayUnit(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.Gray
-                            )
+                            Text(a.displayUnit(), style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                         }
                     }
                     Box(
-                        Modifier
-                            .size(56.dp)
-                            .background(HeaderBlue, shape = CircleShape)
-                            .clickable { add = true },
+                        Modifier.size(56.dp).background(HeaderBlue, shape = CircleShape).clickable { add = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Text("+", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Light)
@@ -1050,39 +897,19 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             val runningBalances = remember(tx) { calculateRunningBalances(tx) }
 
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .offset(y = (-25).dp)
-                    .padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxSize().offset(y = (-25).dp).padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    Text(
-                        "تراکنش‌ها",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1B1B1F),
-                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                    )
+                    Text("تراکنش‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
                 }
-
                 items(tx, key = { it.id }) { t ->
                     val running = runningBalances[t.id] ?: 0L
                     if (!t.isAutoProfit) {
-                        SwipeableTransactionCard(
-                            transaction = t,
-                            currency = a.displayUnit(),
-                            runningBalance = running,
-                            onEdit = { editor = t },
-                            onDelete = { deleteTarget = t }
-                        )
+                        SwipeableTransactionCard(t, a.displayUnit(), running, { editor = t }, { deleteTarget = t })
                     } else {
-                        AutoTransactionCard(
-                            transaction = t,
-                            currency = a.displayUnit(),
-                            runningBalance = running
-                        )
+                        AutoTransactionCard(t, a.displayUnit(), running)
                     }
                 }
             }
@@ -1097,7 +924,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             scope.launch { db.tx().update(it); ProfitEngine.recalculateAll(db); editor = null }
         }, { editor = null })
     }
-    if (profit) ProfitSettingsEditor(db, a, setting) { profit = false }
+    if (profit) ProfitPeriodsScreen(db, a.id, a.name) { profit = false }
 
     deleteTarget?.let { target ->
         ConfirmDeleteDialog(
@@ -1137,7 +964,6 @@ fun SwipeableTransactionCard(
             }
         }
     )
-
     SwipeToDismissBox(
         state = dismissState,
         enableDismissFromStartToEnd = true,
@@ -1149,15 +975,9 @@ fun SwipeableTransactionCard(
                 SwipeToDismissBoxValue.EndToStart -> Triple(DebitRed, Icons.Default.Delete, Alignment.CenterEnd)
                 else -> Triple(Color.Transparent, Icons.Default.Edit, Alignment.Center)
             }
-            Box(
-                Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                contentAlignment = alignment
-            ) {
+            Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = alignment) {
                 if (color != Color.Transparent) {
-                    Box(
-                        modifier = Modifier.size(44.dp).background(color, shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.size(44.dp).background(color, shape = CircleShape), contentAlignment = Alignment.Center) {
                         Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
                     }
                 }
@@ -1171,63 +991,28 @@ fun SwipeableTransactionCard(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier
-                        .size(46.dp)
-                        .background(
-                            color = if (isTxCredit) CreditGreen else DebitRed,
-                            shape = CircleShape
-                        ),
+                    Modifier.size(46.dp).background(color = if (isTxCredit) CreditGreen else DebitRed, shape = CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        if (isTxCredit) "↓" else "↑",
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(if (isTxCredit) "↓" else "↑", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        transaction.type,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isTxCredit) CreditGreen else DebitRed
-                    )
+                    Text(transaction.type, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (isTxCredit) CreditGreen else DebitRed)
                     Spacer(Modifier.height(2.dp))
-                    Text(
-                        Jalali.format(transaction.dateMillis),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
+                    Text(Jalali.format(transaction.dateMillis), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     if (transaction.note.isNotBlank()) {
                         Spacer(Modifier.height(2.dp))
-                        Text(
-                            transaction.note,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF45464F)
-                        )
+                        Text(transaction.note, style = MaterialTheme.typography.bodySmall, color = Color(0xFF45464F))
                     }
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${if (isTxCredit) "+" else "−"}${money(transaction.amount)}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isTxCredit) CreditGreen else DebitRed
-                    )
+                    Text("${if (isTxCredit) "+" else "−"}${money(transaction.amount)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = if (isTxCredit) CreditGreen else DebitRed)
                     Spacer(Modifier.height(2.dp))
-                    Text(
-                        "مانده: ${money(kotlin.math.abs(runningBalance))}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
-                    )
+                    Text("مانده: ${money(kotlin.math.abs(runningBalance))}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 }
             }
         }
@@ -1235,77 +1020,37 @@ fun SwipeableTransactionCard(
 }
 
 @Composable
-fun AutoTransactionCard(
-    transaction: Transaction,
-    currency: String,
-    runningBalance: Long
-) {
+fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalance: Long) {
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                Modifier.size(46.dp).background(CreditGreen, shape = CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(46.dp).background(CreditGreen, shape = CircleShape), contentAlignment = Alignment.Center) {
                 Text("↓", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        transaction.type,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = CreditGreen
-                    )
+                    Text(transaction.type, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = CreditGreen)
                     Spacer(Modifier.width(6.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Text(
-                            "خودکار",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                    Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = RoundedCornerShape(6.dp)) {
+                        Text("خودکار", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                     }
                 }
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    Jalali.format(transaction.dateMillis),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
-                )
+                Text(Jalali.format(transaction.dateMillis), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 if (transaction.note.isNotBlank()) {
                     Spacer(Modifier.height(2.dp))
-                    Text(
-                        transaction.note,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF45464F)
-                    )
+                    Text(transaction.note, style = MaterialTheme.typography.bodySmall, color = Color(0xFF45464F))
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    "+${money(transaction.amount)}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = CreditGreen
-                )
+                Text("+${money(transaction.amount)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = CreditGreen)
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    "مانده: ${money(kotlin.math.abs(runningBalance))}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray
-                )
+                Text("مانده: ${money(kotlin.math.abs(runningBalance))}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
             }
         }
     }
@@ -1316,12 +1061,7 @@ fun AutoTransactionCard(
 // ═══════════════════════════════════════════════════════
 
 @Composable
-fun PersonEditor(
-    old: Person?,
-    db: AppDb,
-    onSave: (Person) -> Unit,
-    onCancel: () -> Unit
-) {
+fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: () -> Unit) {
     var name by remember(old) { mutableStateOf(old?.name ?: "") }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
 
@@ -1333,12 +1073,7 @@ fun PersonEditor(
 
     var selectedAccounts by remember(old) {
         mutableStateOf(
-            old?.displayedCurrencies
-                ?.split(",")
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                ?.toSet()
-                ?: emptySet()
+            old?.displayedCurrencies?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
         )
     }
 
@@ -1347,61 +1082,34 @@ fun PersonEditor(
         title = { Text(if (old == null) "شخص جدید" else "ویرایش شخص") },
         text = {
             Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("نام شخص") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                OutlinedTextField(name, { name = it }, label = { Text("نام شخص") }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text("توضیحات (اختیاری)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
 
                 if (old != null && personAccounts.isNotEmpty()) {
                     Spacer(Modifier.height(16.dp))
-                    Text(
-                        "حساب‌های نمایشی (حداکثر ۳ تا)",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("حساب‌های نمایشی (حداکثر ۳ تا)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     personAccounts.forEach { acc ->
                         Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedAccounts = if (acc.name in selectedAccounts) {
-                                        selectedAccounts - acc.name
-                                    } else {
-                                        if (selectedAccounts.size < 3) selectedAccounts + acc.name
-                                        else selectedAccounts
-                                    }
-                                }
-                                .padding(vertical = 4.dp),
+                            Modifier.fillMaxWidth().clickable {
+                                selectedAccounts = if (acc.name in selectedAccounts) selectedAccounts - acc.name
+                                else if (selectedAccounts.size < 3) selectedAccounts + acc.name
+                                else selectedAccounts
+                            }.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Checkbox(
                                 checked = acc.name in selectedAccounts,
                                 onCheckedChange = {
-                                    selectedAccounts = if (acc.name in selectedAccounts) {
-                                        selectedAccounts - acc.name
-                                    } else {
-                                        if (selectedAccounts.size < 3) selectedAccounts + acc.name
-                                        else selectedAccounts
-                                    }
+                                    selectedAccounts = if (acc.name in selectedAccounts) selectedAccounts - acc.name
+                                    else if (selectedAccounts.size < 3) selectedAccounts + acc.name
+                                    else selectedAccounts
                                 }
                             )
                             Text(acc.name, style = MaterialTheme.typography.bodyMedium)
                             Spacer(Modifier.weight(1f))
-                            Text(
-                                acc.displayUnit(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.Gray
-                            )
+                            Text(acc.displayUnit(), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                         }
                     }
                 }
@@ -1410,13 +1118,7 @@ fun PersonEditor(
         confirmButton = {
             Button(onClick = {
                 if (name.isNotBlank())
-                    onSave(Person(
-                        id = old?.id ?: 0,
-                        name = name,
-                        note = note,
-                        displayOrder = old?.displayOrder ?: 0,
-                        displayedCurrencies = selectedAccounts.joinToString(",")
-                    ))
+                    onSave(Person(old?.id ?: 0, name, note, old?.displayOrder ?: 0, selectedAccounts.joinToString(",")))
             }) { Text("ذخیره") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("انصراف") } }
@@ -1428,19 +1130,12 @@ fun PersonEditor(
 // ═══════════════════════════════════════════════════════
 
 @Composable
-fun AccountEditor(
-    old: Account?,
-    personId: Long,
-    onSave: (Account) -> Unit,
-    onCancel: () -> Unit
-) {
+fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCancel: () -> Unit) {
     var name by remember(old) { mutableStateOf(old?.name ?: "") }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
     var currency by remember(old) { mutableStateOf(old?.currency ?: "تومان") }
     var customUnit by remember(old) { mutableStateOf(old?.customUnit ?: "") }
     var currencyExpanded by remember { mutableStateOf(false) }
-    var useGlobalProfit by remember(old) { mutableStateOf(old?.useGlobalProfit ?: true) }
-
     val currencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
     val hasCustomUnit = customUnit.isNotBlank()
 
@@ -1449,35 +1144,18 @@ fun AccountEditor(
         title = { Text(if (old == null) "حساب جدید" else "ویرایش حساب") },
         text = {
             Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("عنوان حساب") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                OutlinedTextField(name, { name = it }, label = { Text("عنوان حساب") }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text("توضیحات (اختیاری)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(12.dp))
-
                 OutlinedTextField(
-                    value = customUnit,
-                    onValueChange = { customUnit = it },
+                    customUnit, { customUnit = it },
                     label = { Text("واحد دلخواه (اختیاری)") },
                     modifier = Modifier.fillMaxWidth(),
                     supportingText = { Text("اگه پر بشه، جایگزین ارز می‌شه") }
                 )
                 Spacer(Modifier.height(12.dp))
-
-                Text(
-                    "ارز",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (hasCustomUnit) Color.Gray else Color(0xFF1B1B1F)
-                )
+                Text("ارز", style = MaterialTheme.typography.titleSmall, color = if (hasCustomUnit) Color.Gray else Color(0xFF1B1B1F))
                 Spacer(Modifier.height(4.dp))
                 Box(Modifier.fillMaxWidth()) {
                     OutlinedButton(
@@ -1488,51 +1166,18 @@ fun AccountEditor(
                         Text(currency, modifier = Modifier.weight(1f))
                         Text("▼")
                     }
-                    DropdownMenu(
-                        expanded = currencyExpanded,
-                        onDismissRequest = { currencyExpanded = false }
-                    ) {
+                    DropdownMenu(expanded = currencyExpanded, onDismissRequest = { currencyExpanded = false }) {
                         currencies.forEach { c ->
-                            DropdownMenuItem(
-                                text = { Text(c) },
-                                onClick = {
-                                    currency = c
-                                    currencyExpanded = false
-                                }
-                            )
+                            DropdownMenuItem(text = { Text(c) }, onClick = { currency = c; currencyExpanded = false })
                         }
                     }
-                }
-
-                Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = Color(0xFFEEEEEE))
-                Spacer(Modifier.height(8.dp))
-
-                Text("نوع سود", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = useGlobalProfit, onClick = { useGlobalProfit = true })
-                    Text("استفاده از تنظیم کلی برنامه")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = !useGlobalProfit, onClick = { useGlobalProfit = false })
-                    Text("تنظیم سود اختصاصی")
                 }
             }
         },
         confirmButton = {
             Button(onClick = {
                 if (name.isNotBlank())
-                    onSave(Account(
-                        id = old?.id ?: 0,
-                        personId = personId,
-                        name = name,
-                        note = note,
-                        currency = currency,
-                        customUnit = customUnit,
-                        displayOrder = old?.displayOrder ?: 0,
-                        useGlobalProfit = useGlobalProfit
-                    ))
+                    onSave(Account(old?.id ?: 0, personId, name, note, currency, customUnit, old?.displayOrder ?: 0))
             }) { Text("ذخیره") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("انصراف") } }
@@ -1544,20 +1189,9 @@ fun AccountEditor(
 // ═══════════════════════════════════════════════════════
 
 @Composable
-fun TxEditor(
-    old: Transaction?,
-    accountId: Long,
-    onSave: (Transaction) -> Unit,
-    onCancel: () -> Unit
-) {
+fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, onCancel: () -> Unit) {
     var type by remember(old) { mutableStateOf(old?.type ?: "بدهکار") }
-    var amountValue by remember(old) {
-        mutableStateOf(
-            TextFieldValue(
-                text = old?.amount?.let { money(it) } ?: ""
-            )
-        )
-    }
+    var amountValue by remember(old) { mutableStateOf(TextFieldValue(text = old?.amount?.let { money(it) } ?: "")) }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
     var date by remember(old) {
         mutableStateOf(
@@ -1572,42 +1206,21 @@ fun TxEditor(
         text = {
             Column {
                 Row {
-                    FilterChip(
-                        selected = type == "بدهکار",
-                        onClick = { type = "بدهکار" },
-                        label = { Text("بدهکار") }
-                    )
+                    FilterChip(type == "بدهکار", { type = "بدهکار" }, label = { Text("بدهکار") })
                     Spacer(Modifier.width(8.dp))
-                    FilterChip(
-                        selected = type == "بستانکار",
-                        onClick = { type = "بستانکار" },
-                        label = { Text("بستانکار") }
-                    )
+                    FilterChip(type == "بستانکار", { type = "بستانکار" }, label = { Text("بستانکار") })
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = amountValue,
-                    onValueChange = { newValue ->
-                        amountValue = formatTextFieldValue(newValue)
-                    },
+                    amountValue, { amountValue = formatTextFieldValue(it) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     label = { Text("مبلغ") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = date,
-                    onValueChange = { date = it },
-                    label = { Text("تاریخ شمسی 1405/02/31") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                OutlinedTextField(date, { date = it }, label = { Text("تاریخ شمسی 1405/02/31") }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text("شرح") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                OutlinedTextField(note, { note = it }, label = { Text("شرح") }, modifier = Modifier.fillMaxWidth())
             }
         },
         confirmButton = {
@@ -1623,9 +1236,7 @@ fun TxEditor(
                         newCal.set(java.util.Calendar.SECOND, origCal.get(java.util.Calendar.SECOND))
                         newCal.timeInMillis
                     } else null
-                } else {
-                    Jalali.parseWithCurrentTime(date)
-                }
+                } else Jalali.parseWithCurrentTime(date)
                 if (n != null && n > 0 && d != null)
                     onSave(Transaction(old?.id ?: 0, accountId, d, type, n, note, false, null))
             }) { Text("ذخیره") }
@@ -1635,383 +1246,309 @@ fun TxEditor(
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitSettingsEditor
+// ProfitPeriodsScreen — لیست بازه‌های سود
 // ═══════════════════════════════════════════════════════
 
 @Composable
-fun ProfitSettingsEditor(
+fun ProfitPeriodsScreen(
     db: AppDb,
-    a: Account,
-    old: ProfitSettings?,
+    accountId: Long,  // 0 = کلی
+    accountName: String,  // برای عنوان
     close: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-    var enabled by remember(old) { mutableStateOf(old?.enabled ?: false) }
-    var mode by remember(old) { mutableStateOf(old?.mode ?: "DAILY_ANNUAL") }
-    var annual by remember(old) { mutableStateOf(old?.annualRate?.toString() ?: "20") }
-    var day by remember(old) { mutableStateOf(old?.payoutDay?.toString() ?: "30") }
-    var dest by remember(old) { mutableStateOf(old?.destinationAccountId) }
-    var ratesOpen by remember { mutableStateOf(false) }
-    val allAccounts by db.accounts().all().collectAsState(emptyList())
-    val globalSettingsFlow by db.globalProfit().get().collectAsState(null)
-
-    val gs: GlobalProfitSettings? = globalSettingsFlow
-
-    AlertDialog(
-        onDismissRequest = close,
-        title = { Text("تنظیم سود اختصاصی") },
-        text = {
-            Column {
-                if (a.useGlobalProfit) {
-                    Card(
-                        Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFFFFF3E0)
-                        )
-                    ) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text(
-                                "⚠️ این حساب از تنظیم سود کلی برنامه استفاده می‌کند.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFE65100),
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            if (gs != null && gs.enabled) {
-                                Text(
-                                    "نرخ کلی: ${gs.annualRate}% سالانه",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFFE65100)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = enabled,
-                        onCheckedChange = { enabled = !enabled },
-                        enabled = !a.useGlobalProfit
-                    )
-                    Text(
-                        "فعال باشد",
-                        color = if (a.useGlobalProfit) Color.Gray else Color(0xFF1B1B1F)
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Text("نوع سود", fontWeight = FontWeight.Medium)
-                Row {
-                    FilterChip(
-                        selected = mode == "DAILY_ANNUAL",
-                        onClick = { mode = "DAILY_ANNUAL" },
-                        label = { Text("روزشمار سالانه") },
-                        enabled = !a.useGlobalProfit
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    FilterChip(
-                        selected = mode == "MONTHLY",
-                        onClick = { mode = "MONTHLY" },
-                        label = { Text("ماهانه") },
-                        enabled = !a.useGlobalProfit
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                if (mode == "DAILY_ANNUAL")
-                    OutlinedTextField(
-                        value = annual,
-                        onValueChange = { input ->
-                            val cleaned = input.filter { it.isDigit() || it == '.' }
-                            if (cleaned.count { it == '.' } <= 1) annual = cleaned
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        label = { Text("نرخ سالانه ٪") },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !a.useGlobalProfit
-                    )
-                if (mode == "MONTHLY")
-                    OutlinedButton(
-                        onClick = { ratesOpen = true },
-                        enabled = !a.useGlobalProfit
-                    ) {
-                        Text("تنظیم نرخ ماه‌های سال")
-                    }
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = day,
-                    onValueChange = { day = it.filter { c -> c.isDigit() } },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    label = { Text("روز واریز ماه") },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !a.useGlobalProfit
-                )
-                Spacer(Modifier.height(8.dp))
-                Text("حساب مقصد سود", style = MaterialTheme.typography.titleSmall)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = dest == null,
-                        onClick = { dest = null },
-                        enabled = !a.useGlobalProfit
-                    )
-                    Text("همین حساب")
-                }
-                allAccounts.filter { it.id != a.id }.forEach { acc ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(
-                            selected = dest == acc.id,
-                            onClick = { dest = acc.id },
-                            enabled = !a.useGlobalProfit
-                        )
-                        Text(acc.name)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    scope.launch {
-                        db.profit().upsert(
-                            ProfitSettings(
-                                old?.id ?: 0, a.id, enabled, mode,
-                                annual.toDoubleOrNull() ?: 0.0,
-                                day.toIntOrNull()?.coerceIn(1, 31) ?: 30,
-                                dest
-                            )
-                        )
-                        ProfitEngine.recalculateAll(db)
-                        close()
-                    }
-                },
-                enabled = !a.useGlobalProfit
-            ) { Text("ذخیره") }
-        },
-        dismissButton = { TextButton(onClick = close) { Text("انصراف") } }
-    )
-    if (ratesOpen) MonthlyRatesEditor(db, a.id) { ratesOpen = false }
-}
-
-@Composable
-fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
-    val rates by db.profit().rates(accountId).collectAsState(emptyList())
-    var year by rememberSaveable { mutableIntStateOf(Jalali.nowJalali()[0]) }
-    val values = remember(rates, year) {
-        mutableStateMapOf<Int, String>().apply {
-            for (m in 1..12) put(m, rates.find { it.year == year && it.month == m }?.ratePercent?.toString() ?: "")
-        }
-    }
+    val periods by db.profitPeriod().byAccount(accountId).collectAsState(emptyList())
+    var addPeriod by remember { mutableStateOf(false) }
+    var editTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
+    var deleteTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
     val scope = rememberCoroutineScope()
 
     AlertDialog(
         onDismissRequest = close,
-        title = { Text("نرخ سود ماهانه $year") },
-        text = {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    TextButton(onClick = { year-- }) { Text("سال قبل") }
-                    Text(year.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = { year++ }) { Text("سال بعد") }
-                }
-                LazyColumn {
-                    items((1..12).toList()) { m ->
-                        OutlinedTextField(
-                            value = values[m] ?: "",
-                            onValueChange = { input ->
-                                val cleaned = input.filter { it.isDigit() || it == '.' }
-                                if (cleaned.count { it == '.' } <= 1) values[m] = cleaned
-                            },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            label = { Text(Jalali.monthName(m)) },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                        )
-                    }
-                }
-            }
+        title = {
+            Text(
+                if (accountId == 0L) "بازه‌های سود کلی" else "بازه‌های سود اختصاصی",
+                fontWeight = FontWeight.Bold
+            )
         },
-        confirmButton = {
-            Button(onClick = {
-                scope.launch {
-                    for (m in 1..12) {
-                        val v = values[m]?.replace(",", "")?.toDoubleOrNull()
-                        if (v != null) db.profit().upsertRate(MonthlyRate(accountId, year, m, v))
-                    }
-                    ProfitEngine.recalculateAll(db)
-                    close()
-                }
-            }) { Text("ذخیره نرخ‌ها") }
-        },
-        dismissButton = { TextButton(onClick = close) { Text("انصراف") } }
-    )
-}
-
-// ═══════════════════════════════════════════════════════
-// GlobalProfitEditor — با سود ماهانه‌ی کلی
-// ═══════════════════════════════════════════════════════
-
-@Composable
-fun GlobalProfitEditor(
-    db: AppDb,
-    old: GlobalProfitSettings?,
-    close: () -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    var enabled by remember(old) { mutableStateOf(old?.enabled ?: false) }
-    var mode by remember(old) { mutableStateOf(old?.mode ?: "DAILY_ANNUAL") }
-    var annual by remember(old) { mutableStateOf(old?.annualRate?.toString() ?: "20") }
-    var day by remember(old) { mutableStateOf(old?.payoutDay?.toString() ?: "30") }
-    var ratesOpen by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = close,
-        title = { Text("تنظیم سود کلی برنامه") },
         text = {
             Column {
                 Text(
-                    "این تنظیم روی همه‌ی حساب‌هایی که «سود کلی» را انتخاب کرده‌اند، اعمال می‌شود.",
+                    if (accountId == 0L) "برای همه‌ی حساب‌هایی که سود کلی دارن اعمال می‌شه"
+                    else "فقط برای حساب «$accountName» اعمال می‌شه",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
                 Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = enabled, onCheckedChange = { enabled = !enabled })
-                    Text("فعال باشد")
+
+                Button(
+                    onClick = { addPeriod = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("+ تعریف بازه‌ی سود جدید")
                 }
-                Spacer(Modifier.height(8.dp))
-                Text("نوع سود", fontWeight = FontWeight.Medium)
-                Row {
-                    FilterChip(
-                        selected = mode == "DAILY_ANNUAL",
-                        onClick = { mode = "DAILY_ANNUAL" },
-                        label = { Text("روزشمار سالانه") }
+
+                Spacer(Modifier.height(12.dp))
+
+                if (periods.isEmpty()) {
+                    Text(
+                        "هنوز بازه‌ای تعریف نشده",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(vertical = 20.dp)
                     )
-                    Spacer(Modifier.width(6.dp))
-                    FilterChip(
-                        selected = mode == "MONTHLY",
-                        onClick = { mode = "MONTHLY" },
-                        label = { Text("ماهانه") }
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                if (mode == "DAILY_ANNUAL")
-                    OutlinedTextField(
-                        value = annual,
-                        onValueChange = { input ->
-                            val cleaned = input.filter { it.isDigit() || it == '.' }
-                            if (cleaned.count { it == '.' } <= 1) annual = cleaned
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        label = { Text("نرخ سالانه ٪") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                if (mode == "MONTHLY")
-                    OutlinedButton(
-                        onClick = { ratesOpen = true },
-                        modifier = Modifier.fillMaxWidth()
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 400.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("تنظیم نرخ ماه‌های سال")
+                        items(periods, key = { it.id }) { period ->
+                            Card(
+                                Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            "از ${period.startYear}/${period.startMonth.toString().padStart(2, '0')}/${period.startDay.toString().padStart(2, '0')}" +
+                                            if (period.endYear != null)
+                                                " تا ${period.endYear}/${period.endMonth.toString().padStart(2, '0')}/${period.endDay.toString().padStart(2, '0')}"
+                                            else " تا بی‌نهایت",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            "نوع: ${if (period.type == "ANNUAL") "سالانه" else "ماهانه"} | " +
+                                            "نرخ: ${period.rate}% | " +
+                                            "روز واریز: ${period.payoutDay}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { editTarget = period },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Edit, "ویرایش", modifier = Modifier.size(18.dp), tint = HeaderBlue)
+                                    }
+                                    IconButton(
+                                        onClick = { deleteTarget = period },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, "حذف", modifier = Modifier.size(18.dp), tint = DebitRed)
+                                    }
+                                }
+                            }
+                        }
                     }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = close) { Text("بستن") }
+        }
+    )
+
+    if (addPeriod) {
+        ProfitPeriodEditor(null, accountId, db, {
+            scope.launch {
+                db.profitPeriod().insert(it)
+                ProfitEngine.recalculateAll(db)
+                addPeriod = false
+            }
+        }, { addPeriod = false })
+    }
+
+    editTarget?.let { target ->
+        ProfitPeriodEditor(target, accountId, db, {
+            scope.launch {
+                db.profitPeriod().update(it)
+                ProfitEngine.recalculateAll(db)
+                editTarget = null
+            }
+        }, { editTarget = null })
+    }
+
+    deleteTarget?.let { target ->
+        ConfirmDeleteDialog(
+            title = "حذف بازه",
+            message = "آیا این بازه حذف شود؟",
+            onConfirm = {
+                scope.launch {
+                    db.profitPeriod().delete(target)
+                    ProfitEngine.recalculateAll(db)
+                    deleteTarget = null
+                }
+            },
+            onCancel = { deleteTarget = null }
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// ProfitPeriodEditor — ویرایشگر یک بازه
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun ProfitPeriodEditor(
+    old: ProfitPeriod?,
+    accountId: Long,
+    db: AppDb,
+    onSave: (ProfitPeriod) -> Unit,
+    onCancel: () -> Unit
+) {
+    var type by remember(old) { mutableStateOf(old?.type ?: "ANNUAL") }
+    var rate by remember(old) { mutableStateOf(old?.rate?.toString() ?: "20") }
+    var startYear by remember(old) { mutableStateOf((old?.startYear ?: Jalali.nowJalali()[0]).toString()) }
+    var startMonth by remember(old) { mutableStateOf((old?.startMonth ?: 1).toString()) }
+    var startDay by remember(old) { mutableStateOf((old?.startDay ?: 1).toString()) }
+    var hasEnd by remember(old) { mutableStateOf(old?.endYear != null) }
+    var endYear by remember(old) { mutableStateOf(old?.endYear?.toString() ?: "") }
+    var endMonth by remember(old) { mutableStateOf(old?.endMonth?.toString() ?: "") }
+    var endDay by remember(old) { mutableStateOf(old?.endDay?.toString() ?: "") }
+    var payoutDay by remember(old) { mutableStateOf((old?.payoutDay ?: 30).toString()) }
+
+    var error by remember { mutableStateOf("") }
+
+    val allAccounts by db.accounts().all().collectAsState(emptyList())
+    var destAccountId by remember(old) { mutableStateOf(old?.destinationAccountId) }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(if (old == null) "بازه‌ی جدید" else "ویرایش بازه") },
+        text = {
+            Column {
+                // نوع سود
+                Text("نوع سود", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row {
+                    FilterChip(type == "ANNUAL", { type = "ANNUAL" }, label = { Text("سالانه") })
+                    Spacer(Modifier.width(6.dp))
+                    FilterChip(type == "MONTHLY", { type = "MONTHLY" }, label = { Text("ماهانه") })
+                }
                 Spacer(Modifier.height(8.dp))
+
+                // نرخ
                 OutlinedTextField(
-                    value = day,
-                    onValueChange = { day = it.filter { c -> c.isDigit() } },
+                    rate, { input ->
+                        val cleaned = input.filter { it.isDigit() || it == '.' }
+                        if (cleaned.count { it == '.' } <= 1) rate = cleaned
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    label = { Text(if (type == "ANNUAL") "نرخ سالانه ٪" else "نرخ ماهانه ٪") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+
+                // تاریخ شروع
+                Text("از تاریخ", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    OutlinedTextField(startYear, { startYear = it.filter { c -> c.isDigit() } },
+                        label = { Text("سال") }, modifier = Modifier.weight(1.2f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    OutlinedTextField(startMonth, { startMonth = it.filter { c -> c.isDigit() } },
+                        label = { Text("ماه") }, modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    OutlinedTextField(startDay, { startDay = it.filter { c -> c.isDigit() } },
+                        label = { Text("روز") }, modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                }
+                Spacer(Modifier.height(8.dp))
+
+                // تاریخ پایان
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = hasEnd, onCheckedChange = { hasEnd = !hasEnd })
+                    Text("تاریخ پایان دارد")
+                }
+                if (hasEnd) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedTextField(endYear, { endYear = it.filter { c -> c.isDigit() } },
+                            label = { Text("سال") }, modifier = Modifier.weight(1.2f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        OutlinedTextField(endMonth, { endMonth = it.filter { c -> c.isDigit() } },
+                            label = { Text("ماه") }, modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        OutlinedTextField(endDay, { endDay = it.filter { c -> c.isDigit() } },
+                            label = { Text("روز") }, modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+
+                // روز واریز
+                OutlinedTextField(
+                    payoutDay, { payoutDay = it.filter { c -> c.isDigit() } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     label = { Text("روز واریز ماه") },
                     modifier = Modifier.fillMaxWidth()
                 )
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                scope.launch {
-                    db.globalProfit().upsert(
-                        GlobalProfitSettings(
-                            id = 1,
-                            enabled = enabled,
-                            mode = mode,
-                            annualRate = annual.toDoubleOrNull() ?: 20.0,
-                            payoutDay = day.toIntOrNull()?.coerceIn(1, 31) ?: 30
-                        )
-                    )
-                    ProfitEngine.recalculateAll(db)
-                    close()
-                }
-            }) { Text("ذخیره") }
-        },
-        dismissButton = { TextButton(onClick = close) { Text("انصراف") } }
-    )
-    if (ratesOpen) GlobalMonthlyRatesEditor(db) { ratesOpen = false }
-}
 
-// ═══════════════════════════════════════════════════════
-// GlobalMonthlyRatesEditor — نرخ‌های ماهانه‌ی کلی
-// ═══════════════════════════════════════════════════════
-
-@Composable
-fun GlobalMonthlyRatesEditor(db: AppDb, close: () -> Unit) {
-    val rates by db.globalMonthlyRate().all().collectAsState(emptyList())
-    var year by rememberSaveable { mutableIntStateOf(Jalali.nowJalali()[0]) }
-    val values = remember(rates, year) {
-        mutableStateMapOf<Int, String>().apply {
-            for (m in 1..12) {
-                put(m, rates.find { it.year == year && it.month == m }?.ratePercent?.toString() ?: "")
-            }
-        }
-    }
-    val scope = rememberCoroutineScope()
-
-    AlertDialog(
-        onDismissRequest = close,
-        title = { Text("نرخ سود ماهانه‌ی کلی $year") },
-        text = {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    TextButton(onClick = { year-- }) { Text("سال قبل") }
-                    Text(year.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = { year++ }) { Text("سال بعد") }
-                }
-                LazyColumn {
-                    items((1..12).toList()) { m ->
-                        OutlinedTextField(
-                            value = values[m] ?: "",
-                            onValueChange = { input ->
-                                val cleaned = input.filter { it.isDigit() || it == '.' }
-                                if (cleaned.count { it == '.' } <= 1) values[m] = cleaned
-                            },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            label = { Text(Jalali.monthName(m)) },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                        )
+                // حساب مقصد (فقط برای سود اختصاصی)
+                if (accountId != 0L) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("حساب مقصد سود", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = destAccountId == null, onClick = { destAccountId = null })
+                        Text("همین حساب")
                     }
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                scope.launch {
-                    for (m in 1..12) {
-                        val v = values[m]?.replace(",", "")?.toDoubleOrNull()
-                        if (v != null) {
-                            db.globalMonthlyRate().upsert(
-                                GlobalMonthlyRate(year = year, month = m, ratePercent = v)
-                            )
+                    allAccounts.filter { it.id != accountId }.forEach { acc ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = destAccountId == acc.id, onClick = { destAccountId = acc.id })
+                            Text(acc.name)
                         }
                     }
-                    ProfitEngine.recalculateAll(db)
-                    close()
                 }
-            }) { Text("ذخیره نرخ‌ها") }
+
+                if (error.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(error, color = DebitRed, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         },
-        dismissButton = { TextButton(onClick = close) { Text("انصراف") } }
+        confirmButton = {
+            Button(onClick = {
+                val r = rate.toDoubleOrNull() ?: 0.0
+                val sy = startYear.toIntOrNull() ?: 0
+                val sm = startMonth.toIntOrNull() ?: 0
+                val sd = startDay.toIntOrNull() ?: 0
+                val pd = payoutDay.toIntOrNull()?.coerceIn(1, 31) ?: 30
+
+                if (r <= 0) { error = "نرخ باید بزرگتر از صفر باشد"; return@Button }
+                if (sm !in 1..12) { error = "ماه باید بین ۱ تا ۱۲ باشد"; return@Button }
+                if (sd !in 1..31) { error = "روز باید بین ۱ تا ۳۱ باشد"; return@Button }
+
+                var ey: Int? = null
+                var em: Int? = null
+                var ed: Int? = null
+                if (hasEnd) {
+                    ey = endYear.toIntOrNull() ?: 0
+                    em = endMonth.toIntOrNull() ?: 0
+                    ed = endDay.toIntOrNull() ?: 0
+                    if (em !in 1..12) { error = "ماه پایان باید بین ۱ تا ۱۲ باشد"; return@Button }
+                    if (ed !in 1..31) { error = "روز پایان باید بین ۱ تا ۳۱ باشد"; return@Button }
+                    if (compareJalali(ey, em, ed, sy, sm, sd) <= 0) {
+                        error = "تاریخ پایان باید بعد از تاریخ شروع باشد"
+                        return@Button
+                    }
+                }
+
+                onSave(ProfitPeriod(
+                    id = old?.id ?: 0,
+                    accountId = accountId,
+                    type = type,
+                    rate = r,
+                    startYear = sy, startMonth = sm, startDay = sd,
+                    endYear = ey, endMonth = em, endDay = ed,
+                    payoutDay = pd,
+                    destinationAccountId = destAccountId
+                ))
+            }) { Text("ذخیره") }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف") } }
     )
 }
 
@@ -2032,10 +1569,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             } catch (e: Exception) { e.printStackTrace() }
             saveBackupFolderUri(context, uri)
         }
@@ -2046,8 +1580,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     var confirmRestore by remember { mutableStateOf(false) }
     var confirmRemoveFolder by remember { mutableStateOf(false) }
     var customFolderName by remember { mutableStateOf<String?>(null) }
-    var globalProfitEditorOpen by remember { mutableStateOf(false) }
-    var globalSettings by remember { mutableStateOf<GlobalProfitSettings?>(null) }
+    var globalProfitOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val file = java.io.File(context.filesDir, "auto_backup.json")
@@ -2061,15 +1594,10 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             val folder = DocumentFile.fromTreeUri(context, customUri)
             customFolderName = folder?.name ?: "پوشه انتخاب شده"
         }
-        globalSettings = db.globalProfit().getNow()
     }
 
     Column(Modifier.fillMaxSize().background(BgLight)) {
-        PageHeader(
-            title = "تنظیمات",
-            subtitle = "مدیریت بکاپ و اطلاعات",
-            onBackClick = onBack
-        )
+        PageHeader(title = "تنظیمات", subtitle = "مدیریت سود و بکاپ", onBackClick = onBack)
 
         Spacer(Modifier.height(16.dp))
 
@@ -2079,45 +1607,25 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Text(
-                    "سود کلی برنامه",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1B1B1F),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                )
+                Text("سود کلی برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
             }
 
             item {
                 Card(
-                    Modifier.fillMaxWidth().clickable { globalProfitEditorOpen = true },
+                    Modifier.fillMaxWidth().clickable { globalProfitOpen = true },
                     shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            Box(Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
                                 Text("💰", fontSize = 18.sp, color = HeaderBlue)
                             }
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(
-                                    "تنظیم سود کلی",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                val gs = globalSettings
-                                Text(
-                                    if (gs?.enabled == true)
-                                        "فعال — ${if (gs.mode == "MONTHLY") "ماهانه" else "${gs.annualRate}% سالانه"}"
-                                    else "غیرفعال",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (gs?.enabled == true) CreditGreen else Color.Gray
-                                )
+                                Text("مدیریت بازه‌های سود کلی", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                Text("تعریف، ویرایش و حذف بازه‌ها", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
                             Text("‹", fontSize = 20.sp, color = Color.Gray)
                         }
@@ -2127,13 +1635,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 
             item {
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "پشتیبان و بازیابی",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1B1B1F),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                )
+                Text("پشتیبان و بازیابی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
             }
 
             item {
@@ -2144,24 +1646,16 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        SettingRow("گرفتن بکاپ", "ذخیره در حافظه یا Google Drive", "⬇",
-                            onClick = { create.launch("MaliManager-backup.json") })
+                        SettingRow("گرفتن بکاپ", "ذخیره در حافظه یا Google Drive", "⬇", onClick = { create.launch("MaliManager-backup.json") })
                         HorizontalDivider(color = Color(0xFFEEEEEE))
-                        SettingRow("بازیابی بکاپ", "از فایل JSON", "⬆",
-                            onClick = { open.launch(arrayOf("application/json", "text/*")) })
+                        SettingRow("بازیابی بکاپ", "از فایل JSON", "⬆", onClick = { open.launch(arrayOf("application/json", "text/*")) })
                     }
                 }
             }
 
             item {
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "بکاپ خودکار (هر ۵ ثانیه)",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1B1B1F),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                )
+                Text("بکاپ خودکار (هر ۵ ثانیه)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
             }
 
             item {
@@ -2174,40 +1668,26 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                     Column(Modifier.padding(16.dp)) {
                         if (autoBackupExists) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier.size(36.dp).background(CreditGreen.copy(alpha = 0.15f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
+                                Box(Modifier.size(36.dp).background(CreditGreen.copy(alpha = 0.15f), CircleShape), contentAlignment = Alignment.Center) {
                                     Text("✓", color = CreditGreen, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text("بکاپ خودکار فعال",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Bold)
-                                    Text("آخرین: $autoBackupInfo",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.Gray)
+                                    Text("بکاپ خودکار فعال", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                    Text("آخرین: $autoBackupInfo", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                 }
                             }
                             Spacer(Modifier.height(12.dp))
-                            OutlinedButton(
-                                onClick = { confirmRestore = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) { Text("بازیابی از بکاپ خودکار") }
+                            OutlinedButton(onClick = { confirmRestore = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                                Text("بازیابی از بکاپ خودکار")
+                            }
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier.size(36.dp).background(Color(0xFFFFE0B2), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
+                                Box(Modifier.size(36.dp).background(Color(0xFFFFE0B2), CircleShape), contentAlignment = Alignment.Center) {
                                     Text("!", color = Color(0xFFE65100), fontWeight = FontWeight.Bold, fontSize = 20.sp)
                                 }
                                 Spacer(Modifier.width(12.dp))
-                                Text("هنوز بکاپ خودکاری ذخیره نشده",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.Gray)
+                                Text("هنوز بکاپ خودکاری ذخیره نشده", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                             }
                         }
                     }
@@ -2222,22 +1702,17 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("محل ذخیره بکاپ خودکار",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Bold)
+                        Text("محل ذخیره بکاپ خودکار", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            if (customFolderName != null) "پوشه فعلی: $customFolderName"
-                            else "پیش‌فرض: حافظه داخلی برنامه",
+                            if (customFolderName != null) "پوشه فعلی: $customFolderName" else "پیش‌فرض: حافظه داخلی برنامه",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (customFolderName != null) CreditGreen else Color.Gray
                         )
                         Spacer(Modifier.height(12.dp))
-                        Button(
-                            onClick = { pickFolder.launch(null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) { Text(if (customFolderName != null) "تغییر پوشه" else "انتخاب پوشه") }
+                        Button(onClick = { pickFolder.launch(null) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                            Text(if (customFolderName != null) "تغییر پوشه" else "انتخاب پوشه")
+                        }
                         if (customFolderName != null) {
                             Spacer(Modifier.height(8.dp))
                             OutlinedButton(
@@ -2253,13 +1728,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 
             item {
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "درباره",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1B1B1F),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                )
+                Text("درباره", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
             }
 
             item {
@@ -2271,18 +1740,13 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier.size(48.dp).background(HeaderBlue, shape = RoundedCornerShape(12.dp)),
-                                contentAlignment = Alignment.Center
-                            ) { Text("💰", fontSize = 24.sp) }
+                            Box(Modifier.size(48.dp).background(HeaderBlue, shape = RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                                Text("💰", fontSize = 24.sp)
+                            }
                             Spacer(Modifier.width(14.dp))
                             Column {
-                                Text("مدیریت مالی",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold)
-                                Text("نسخه ۱.۰",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray)
+                                Text("مدیریت مالی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("نسخه ۱.۰", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
                         }
                         Spacer(Modifier.height(12.dp))
@@ -2293,9 +1757,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text("سازنده", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                                Text("sdamir66",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium)
+                                Text("sdamir66", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
@@ -2304,8 +1766,8 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    if (globalProfitEditorOpen) {
-        GlobalProfitEditor(db, globalSettings) { globalProfitEditorOpen = false }
+    if (globalProfitOpen) {
+        ProfitPeriodsScreen(db, 0L, "سود کلی") { globalProfitOpen = false }
     }
 
     if (confirmRestore) {
@@ -2315,9 +1777,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             onConfirm = {
                 scope.launch {
                     val file = java.io.File(context.filesDir, "auto_backup.json")
-                    if (file.exists()) {
-                        Backup.restoreOrExport(context, db, Uri.fromFile(file), true)
-                    }
+                    if (file.exists()) Backup.restoreOrExport(context, db, Uri.fromFile(file), true)
                     confirmRestore = false
                 }
             },
@@ -2332,17 +1792,11 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             text = { Text("بکاپ‌های بعدی در حافظه داخلی برنامه ذخیره می‌شوند.") },
             confirmButton = {
                 Button(
-                    onClick = {
-                        clearBackupFolderUri(context)
-                        customFolderName = null
-                        confirmRemoveFolder = false
-                    },
+                    onClick = { clearBackupFolderUri(context); customFolderName = null; confirmRemoveFolder = false },
                     colors = ButtonDefaults.buttonColors(containerColor = DebitRed)
                 ) { Text("حذف") }
             },
-            dismissButton = {
-                TextButton(onClick = { confirmRemoveFolder = false }) { Text("انصراف") }
-            }
+            dismissButton = { TextButton(onClick = { confirmRemoveFolder = false }) { Text("انصراف") } }
         )
     }
 }
@@ -2352,43 +1806,22 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 // ═══════════════════════════════════════════════════════
 
 @Composable
-fun ConfirmDeleteDialog(
-    title: String,
-    message: String,
-    onConfirm: () -> Unit,
-    onCancel: () -> Unit
-) {
+fun ConfirmDeleteDialog(title: String, message: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(title, fontWeight = FontWeight.Bold) },
         text = { Text(message) },
         confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = DebitRed)
-            ) { Text("حذف") }
+            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = DebitRed)) { Text("حذف") }
         },
-        dismissButton = {
-            TextButton(onClick = onCancel) { Text("انصراف") }
-        }
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف") } }
     )
 }
 
 @Composable
-fun SettingRow(
-    title: String,
-    subtitle: String,
-    icon: String,
-    onClick: () -> Unit
-) {
-    Row(
-        Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center
-        ) {
+fun SettingRow(title: String, subtitle: String, icon: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
             Text(icon, fontSize = 18.sp, color = HeaderBlue)
         }
         Spacer(Modifier.width(14.dp))
@@ -2401,195 +1834,159 @@ fun SettingRow(
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine — با سود ماهانه‌ی کلی
+// ProfitEngine — محاسبه‌ی سود بر اساس بازه‌ها
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
     suspend fun recalculateAll(db: AppDb) {
         db.tx().deleteAllAuto()
-        val globalSettings: GlobalProfitSettings? = db.globalProfit().getNow()
-        val globalRates = db.globalMonthlyRate().allNow()
 
-        for (a in db.accounts().allNow()) {
-            val accountSettings: ProfitSettings? = db.profit().byAccountNow(a.id)
-            if (a.useGlobalProfit) {
-                if (globalSettings != null) {
-                    if (globalSettings.mode == "MONTHLY") {
-                        recalculateWithGlobalMonthly(
-                            db = db,
-                            accountId = a.id,
-                            payoutDay = globalSettings.payoutDay,
-                            globalRates = globalRates
-                        )
-                    } else {
-                        recalculateWithSettings(
-                            db = db,
-                            accountId = a.id,
-                            enabled = globalSettings.enabled,
-                            mode = globalSettings.mode,
-                            annualRate = globalSettings.annualRate,
-                            payoutDay = globalSettings.payoutDay,
-                            destinationAccountId = null
-                        )
-                    }
-                }
+        for (account in db.accounts().allNow()) {
+            // بازه‌های سود کلی
+            val globalPeriods = db.profitPeriod().byAccountNow(0L)
+            // بازه‌های سود اختصاصی
+            val customPeriods = db.profitPeriod().byAccountNow(account.id)
+
+            // ترکیب: اختصاصی ارجحیت داره (اگه وجود داشت)
+            val periodsToUse = if (customPeriods.isNotEmpty()) customPeriods else globalPeriods
+
+            if (periodsToUse.isEmpty()) continue
+
+            recalculateForAccount(db, account.id, periodsToUse)
+        }
+    }
+
+    suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
+        val base = db.tx().byAccountNow(accountId).filter { !it.isAutoProfit }
+        val today = Jalali.nowJalali()
+        val todayMillis = System.currentTimeMillis()
+
+        // ✅ پاک کردن سودهای خودکار قبلی این حساب
+        db.tx().deleteAutoByPrefix(accountId.toString())
+
+        val out = mutableListOf<Transaction>()
+
+        // ✅ برای هر بازه، روزهای داخل بازه رو محاسبه کن
+        for (period in periods) {
+            // تاریخ شروع و پایان (میلی‌ثانیه)
+            val periodStart = toMillis(period.startYear, period.startMonth, period.startDay)
+
+            val periodEnd = if (period.endYear != null && period.endMonth != null && period.endDay != null) {
+                toMillis(period.endYear, period.endMonth, period.endDay)
             } else {
-                if (accountSettings != null) {
-                    recalculateWithSettings(
-                        db = db,
-                        accountId = a.id,
-                        enabled = accountSettings.enabled,
-                        mode = accountSettings.mode,
-                        annualRate = accountSettings.annualRate,
-                        payoutDay = accountSettings.payoutDay,
-                        destinationAccountId = accountSettings.destinationAccountId
-                    )
-                }
+                // بی‌نهایت = امروز
+                todayMillis
             }
-        }
-    }
 
-    suspend fun recalculateForAccount(db: AppDb, accountId: Long) {
-        val account = db.accounts().byId(accountId) ?: return
-        val globalSettings: GlobalProfitSettings? = db.globalProfit().getNow()
-        val accountSettings: ProfitSettings? = db.profit().byAccountNow(accountId)
-        val globalRates = db.globalMonthlyRate().allNow()
+            // ✅ تاریخ پرداخت (روز واریز ماه) برای هر ماه
+            // از ماه شروع تا ماه امروز
+            var y = period.startYear
+            var m = period.startMonth
 
-        if (account.useGlobalProfit) {
-            if (globalSettings != null) {
-                if (globalSettings.mode == "MONTHLY") {
-                    recalculateWithGlobalMonthly(
-                        db = db,
-                        accountId = accountId,
-                        payoutDay = globalSettings.payoutDay,
-                        globalRates = globalRates
-                    )
-                } else {
-                    recalculateWithSettings(
-                        db = db,
-                        accountId = accountId,
-                        enabled = globalSettings.enabled,
-                        mode = globalSettings.mode,
-                        annualRate = globalSettings.annualRate,
-                        payoutDay = globalSettings.payoutDay,
-                        destinationAccountId = null
-                    )
+            while (true) {
+                // چک کن که تاریخ پرداخت این ماه بعد از شروع بازه باشه
+                val daysInMonth = Jalali.daysInMonth(y, m)
+                val payoutDayClamped = period.payoutDay.coerceIn(1, daysInMonth)
+                val payoutMillis = toMillis(y, m, payoutDayClamped)
+
+                // اگه از بازه بیرون باشه، رد کن
+                if (payoutMillis > periodEnd) break
+                if (payoutMillis > todayMillis) break
+
+                // اگه قبل از شروع بازه باشه، برو ماه بعد
+                if (payoutMillis < periodStart) {
+                    // برو ماه بعد
+                    m++
+                    if (m > 12) { m = 1; y++ }
+                    continue
                 }
-            }
-        } else {
-            if (accountSettings != null) {
-                recalculateWithSettings(
-                    db = db,
-                    accountId = accountId,
-                    enabled = accountSettings.enabled,
-                    mode = accountSettings.mode,
-                    annualRate = accountSettings.annualRate,
-                    payoutDay = accountSettings.payoutDay,
-                    destinationAccountId = accountSettings.destinationAccountId
+
+                // ✅ محاسبه‌ی سود برای این ماه
+                val amount = calculateMonthlyProfit(
+                    base = base,
+                    periodStart = periodStart,
+                    payoutMillis = payoutMillis,
+                    y = y,
+                    m = m,
+                    type = period.type,
+                    rate = period.rate
                 )
-            }
-        }
-    }
 
-    private suspend fun recalculateWithGlobalMonthly(
-        db: AppDb,
-        accountId: Long,
-        payoutDay: Int,
-        globalRates: List<GlobalMonthlyRate>
-    ) {
-        val base = db.tx().byAccountNow(accountId).filter { !it.isAutoProfit }
-        val today = Jalali.nowJalali()
-        val out = mutableListOf<Transaction>()
+                if (amount > 0) {
+                    val dest = period.destinationAccountId ?: accountId
+                    val text = if (period.type == "ANNUAL")
+                        "سود سالانه ${Jalali.monthName(m)} $y — نرخ ${period.rate}%"
+                    else
+                        "سود ماهانه ${Jalali.monthName(m)} $y — نرخ ${period.rate}%"
 
-        for (y in (today[0] - 2)..today[0]) {
-            for (m in 1..12) {
-                if (y > today[0] || (y == today[0] && m > today[1])) continue
-
-                val rate = globalRates.find { it.year == y && it.month == m }?.ratePercent
-                    ?: continue
-                val days = Jalali.daysInMonth(y, m)
-
-                var total = 0.0
-                for (d in 1..days) {
-                    val t = Jalali.startOfJalaliMonth(y, m) + ((d - 1) * 86400000L)
-                    val bal = base.filter { it.dateMillis <= t }
-                        .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
-                    total += bal * (rate / 100.0) / days
+                    out.add(Transaction(0, dest, payoutMillis, "بستانکار", amount, text, true, "$accountId:$y:$m"))
                 }
 
-                val amount = kotlin.math.round(total).toLong()
-                if (amount <= 0) continue
+                // برو ماه بعد
+                m++
+                if (m > 12) { m = 1; y++ }
 
-                val payout = jalaliPayout(y, m, payoutDay)
-                if (payout > System.currentTimeMillis()) continue
-
-                val text = "سود ماهانه‌ی کلی ${Jalali.monthName(m)} $y — نرخ ${rate}%"
-                out.add(Transaction(0, accountId, payout, "بستانکار", amount, text, true, "$accountId:$y:$m"))
+                // چک کن از امروز رد نشده باشه
+                if (y > today[0] || (y == today[0] && m > today[1])) break
             }
         }
+
         db.tx().insertAll(out)
     }
 
-    private suspend fun recalculateWithSettings(
-        db: AppDb,
-        accountId: Long,
-        enabled: Boolean,
-        mode: String,
-        annualRate: Double,
-        payoutDay: Int,
-        destinationAccountId: Long?
-    ) {
-        if (!enabled) return
-        val base = db.tx().byAccountNow(accountId).filter { !it.isAutoProfit }
-        val rates = db.profit().ratesNow(accountId)
-        val today = Jalali.nowJalali()
-        val out = mutableListOf<Transaction>()
+    /**
+     * محاسبه‌ی سود یک ماه
+     * @param periodStart تاریخ شروعی که کاربر تعیین کرده (میلی‌ثانیه)
+     * @param payoutMillis تاریخ پرداخت (میلی‌ثانیه)
+     * @param y سال شمسی
+     * @param m ماه شمسی
+     * @param type ANNUAL یا MONTHLY
+     * @param rate نرخ سود
+     */
+    private fun calculateMonthlyProfit(
+        base: List<Transaction>,
+        periodStart: Long,
+        payoutMillis: Long,
+        y: Int,
+        m: Int,
+        type: String,
+        rate: Double
+    ): Long {
+        val monthStart = Jalali.startOfJalaliMonth(y, m)
+        val monthEnd = payoutMillis
 
-        val months = rates.map { it.year * 12 + it.month }.toMutableSet()
-        if (mode == "DAILY_ANNUAL") {
-            for (y in (today[0] - 2)..today[0]) for (m in 1..12) months.add(y * 12 + m)
+        // اگه ماه کاملاً قبل از periodStart باشه → سود صفر
+        if (monthEnd <= periodStart) return 0L
+
+        // روز شروع محاسبه (بیشترین از ماه یا periodStart)
+        val effectiveStart = if (monthStart > periodStart) monthStart else periodStart
+
+        // تعداد روز محاسبه
+        val daysToCalc = ((monthEnd - effectiveStart) / 86400000L).toInt() + 1
+        if (daysToCalc <= 0) return 0L
+
+        // روزهای ماه (برای تقسیم)
+        val daysInMonth = if (type == "MONTHLY") {
+            Jalali.daysInMonth(y, m)
+        } else {
+            365
         }
 
-        for (key in months.sorted()) {
-            val y = key / 12
-            val m = key % 12
-            if (y > today[0] || (y == today[0] && m > today[1])) continue
-            val days = Jalali.daysInMonth(y, m)
-
-            val rate = if (mode == "MONTHLY") {
-                rates.find { it.year == y && it.month == m }?.ratePercent ?: continue
-            } else annualRate
-
-            var total = 0.0
-            for (d in 1..days) {
-                val t = Jalali.startOfJalaliMonth(y, m) + ((d - 1) * 86400000L)
-                val bal = base.filter { it.dateMillis <= t }
-                    .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
-                total += if (mode == "MONTHLY") bal * (rate / 100.0) / days
-                else bal * (rate / 100.0) / 365.0
-            }
-            val amount = kotlin.math.round(total).toLong()
-            if (amount <= 0) continue
-
-            val payout = jalaliPayout(y, m, payoutDay)
-            if (payout > System.currentTimeMillis()) continue
-
-            val destCandidate = destinationAccountId ?: accountId
-            val dest = if (db.accounts().byId(destCandidate) != null) destCandidate else accountId
-
-            val text = if (mode == "MONTHLY")
-                "سود ماهانه ${Jalali.monthName(m)} $y — نرخ ${rate}%"
-            else
-                "سود روزشمار ${Jalali.monthName(m)} $y — نرخ ${annualRate}% سالانه"
-
-            out.add(Transaction(0, dest, payout, "بستانکار", amount, text, true, "$accountId:$y:$m"))
+        // ✅ برای هر روز، مانده حساب رو در اون روز محاسبه کن
+        var total = 0.0
+        for (d in 0 until daysToCalc) {
+            val dayMillis = effectiveStart + (d * 86400000L)
+            val bal = base.filter { it.dateMillis <= dayMillis }
+                .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+            total += bal * (rate / 100.0) / daysInMonth
         }
-        db.tx().insertAll(out)
+
+        return kotlin.math.round(total).toLong()
     }
 }
 
 // ═══════════════════════════════════════════════════════
-// Backup — با نرخ‌های ماهانه‌ی کلی
+// Backup — با بازه‌های سود
 // ═══════════════════════════════════════════════════════
 
 object Backup {
@@ -2601,9 +1998,7 @@ object Backup {
         val pp = arr()
         for (p in db.persons().allNow()) {
             val o = JSONObject()
-            o.put("id", p.id)
-            o.put("name", p.name)
-            o.put("note", p.note)
+            o.put("id", p.id); o.put("name", p.name); o.put("note", p.note)
             o.put("displayOrder", p.displayOrder)
             o.put("displayedCurrencies", p.displayedCurrencies)
             pp.put(o)
@@ -2613,14 +2008,9 @@ object Backup {
         val aa = arr()
         for (a in db.accounts().allNow()) {
             val o = JSONObject()
-            o.put("id", a.id)
-            o.put("personId", a.personId)
-            o.put("name", a.name)
-            o.put("note", a.note)
-            o.put("currency", a.currency)
-            o.put("customUnit", a.customUnit)
-            o.put("displayOrder", a.displayOrder)
-            o.put("useGlobalProfit", a.useGlobalProfit)
+            o.put("id", a.id); o.put("personId", a.personId); o.put("name", a.name)
+            o.put("note", a.note); o.put("currency", a.currency)
+            o.put("customUnit", a.customUnit); o.put("displayOrder", a.displayOrder)
             aa.put(o)
         }
         root.put("accounts", aa)
@@ -2628,63 +2018,28 @@ object Backup {
         val tt = arr()
         for (a in db.accounts().allNow()) for (t in db.tx().byAccountNow(a.id)) {
             val o = JSONObject()
-            o.put("accountId", t.accountId)
-            o.put("dateMillis", t.dateMillis)
-            o.put("type", t.type)
-            o.put("amount", t.amount)
-            o.put("note", t.note)
-            o.put("isAutoProfit", t.isAutoProfit)
+            o.put("accountId", t.accountId); o.put("dateMillis", t.dateMillis)
+            o.put("type", t.type); o.put("amount", t.amount)
+            o.put("note", t.note); o.put("isAutoProfit", t.isAutoProfit)
             o.put("profitKey", t.profitKey)
             tt.put(o)
         }
         root.put("transactions", tt)
 
-        val ps = arr()
-        for (a in db.accounts().allNow()) {
-            val s = db.profit().byAccountNow(a.id)
-            if (s != null) {
-                val o = JSONObject()
-                o.put("accountId", a.id)
-                o.put("enabled", s.enabled)
-                o.put("mode", s.mode)
-                o.put("annualRate", s.annualRate)
-                o.put("payoutDay", s.payoutDay)
-                o.put("destinationAccountId", s.destinationAccountId ?: JSONObject.NULL)
-                ps.put(o)
-            }
-        }
-        root.put("profitSettings", ps)
-
-        val mr = arr()
-        for (a in db.accounts().allNow()) for (r in db.profit().ratesNow(a.id)) {
+        val pp2 = arr()
+        for (p in db.profitPeriod().allNow()) {
             val o = JSONObject()
-            o.put("accountId", r.accountId)
-            o.put("year", r.year)
-            o.put("month", r.month)
-            o.put("ratePercent", r.ratePercent)
-            mr.put(o)
+            o.put("id", p.id); o.put("accountId", p.accountId)
+            o.put("type", p.type); o.put("rate", p.rate)
+            o.put("startYear", p.startYear); o.put("startMonth", p.startMonth); o.put("startDay", p.startDay)
+            o.put("endYear", p.endYear ?: JSONObject.NULL)
+            o.put("endMonth", p.endMonth ?: JSONObject.NULL)
+            o.put("endDay", p.endDay ?: JSONObject.NULL)
+            o.put("payoutDay", p.payoutDay)
+            o.put("destinationAccountId", p.destinationAccountId ?: JSONObject.NULL)
+            pp2.put(o)
         }
-        root.put("monthlyRates", mr)
-
-        val gs = db.globalProfit().getNow()
-        if (gs != null) {
-            val o = JSONObject()
-            o.put("enabled", gs.enabled)
-            o.put("mode", gs.mode)
-            o.put("annualRate", gs.annualRate)
-            o.put("payoutDay", gs.payoutDay)
-            root.put("globalProfit", o)
-        }
-
-        val gmr = arr()
-        for (r in db.globalMonthlyRate().allNow()) {
-            val o = JSONObject()
-            o.put("year", r.year)
-            o.put("month", r.month)
-            o.put("ratePercent", r.ratePercent)
-            gmr.put(o)
-        }
-        root.put("globalMonthlyRates", gmr)
+        root.put("profitPeriods", pp2)
 
         return root.toString(2)
     }
@@ -2693,106 +2048,72 @@ object Backup {
         if (restore) {
             val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return
             val root = JSONObject(text)
-            db.tx().clear()
-            db.profit().clearRates()
-            db.profit().clearSettings()
-            db.accounts().clear()
-            db.persons().clear()
-            db.globalMonthlyRate().clear()
+            db.tx().clear(); db.accounts().clear(); db.persons().clear(); db.profitPeriod().clear()
 
             val persons = root.optJSONArray("persons") ?: JSONArray()
             val personIdMap = mutableMapOf<Long, Long>()
             for (i in 0 until persons.length()) {
                 val o = persons.getJSONObject(i)
-                val oldId = o.optLong("id", 0)
-                val newId = db.persons().insert(Person(
+                val old = o.optLong("id", 0)
+                val id = db.persons().insert(Person(
                     name = o.getString("name"),
                     note = o.optString("note"),
                     displayOrder = o.optInt("displayOrder", 0),
                     displayedCurrencies = o.optString("displayedCurrencies", "")
                 ))
-                personIdMap[oldId] = newId
+                personIdMap[old] = id
             }
 
             val accounts = root.optJSONArray("accounts") ?: JSONArray()
             val accountIdMap = mutableMapOf<Long, Long>()
             for (i in 0 until accounts.length()) {
                 val o = accounts.getJSONObject(i)
-                val oldId = o.optLong("id", 0)
-                val newPersonId = personIdMap[o.optLong("personId")] ?: continue
-                val newId = db.accounts().insert(Account(
-                    personId = newPersonId,
+                val old = o.optLong("id", 0)
+                val newPid = personIdMap[o.optLong("personId")] ?: continue
+                val id = db.accounts().insert(Account(
+                    personId = newPid,
                     name = o.getString("name"),
                     note = o.optString("note"),
                     currency = o.optString("currency", "تومان"),
                     customUnit = o.optString("customUnit", ""),
-                    displayOrder = o.optInt("displayOrder", 0),
-                    useGlobalProfit = o.optBoolean("useGlobalProfit", true)
+                    displayOrder = o.optInt("displayOrder", 0)
                 ))
-                accountIdMap[oldId] = newId
+                accountIdMap[old] = id
             }
 
             val tx = root.optJSONArray("transactions") ?: JSONArray()
             for (i in 0 until tx.length()) {
                 val o = tx.getJSONObject(i)
-                val newAccountId = accountIdMap[o.optLong("accountId")] ?: continue
+                val aid = accountIdMap[o.optLong("accountId")] ?: continue
                 db.tx().insert(Transaction(
-                    accountId = newAccountId,
-                    dateMillis = o.getLong("dateMillis"),
-                    type = o.getString("type"),
-                    amount = o.getLong("amount"),
+                    accountId = aid, dateMillis = o.getLong("dateMillis"),
+                    type = o.getString("type"), amount = o.getLong("amount"),
                     note = o.optString("note"),
                     isAutoProfit = o.optBoolean("isAutoProfit", false),
                     profitKey = o.optString("profitKey").ifBlank { null }
                 ))
             }
 
-            val ps = root.optJSONArray("profitSettings") ?: JSONArray()
-            for (i in 0 until ps.length()) {
-                val o = ps.getJSONObject(i)
-                val newAccountId = accountIdMap[o.optLong("accountId")] ?: continue
-                val newDestId = if (o.has("destinationAccountId") && !o.isNull("destinationAccountId"))
-                    accountIdMap[o.optLong("destinationAccountId")] else null
-                db.profit().upsert(ProfitSettings(
-                    accountId = newAccountId,
-                    enabled = o.optBoolean("enabled"),
-                    mode = o.optString("mode", "DAILY_ANNUAL"),
-                    annualRate = o.optDouble("annualRate"),
+            val periods = root.optJSONArray("profitPeriods") ?: JSONArray()
+            for (i in 0 until periods.length()) {
+                val o = periods.getJSONObject(i)
+                val aid = o.optLong("accountId", 0)
+                val newAid = if (aid == 0L) 0L else accountIdMap[aid] ?: continue
+                val destRaw = o.optLong("destinationAccountId", 0)
+                val newDest = if (o.isNull("destinationAccountId")) null
+                else accountIdMap[destRaw]
+                db.profitPeriod().insert(ProfitPeriod(
+                    accountId = newAid,
+                    type = o.optString("type", "ANNUAL"),
+                    rate = o.optDouble("rate"),
+                    startYear = o.getInt("startYear"),
+                    startMonth = o.getInt("startMonth"),
+                    startDay = o.getInt("startDay"),
+                    endYear = if (o.isNull("endYear")) null else o.getInt("endYear"),
+                    endMonth = if (o.isNull("endMonth")) null else o.getInt("endMonth"),
+                    endDay = if (o.isNull("endDay")) null else o.getInt("endDay"),
                     payoutDay = o.optInt("payoutDay", 30),
-                    destinationAccountId = newDestId
-                ))
-            }
-
-            val mr = root.optJSONArray("monthlyRates") ?: JSONArray()
-            for (i in 0 until mr.length()) {
-                val o = mr.getJSONObject(i)
-                val newAccountId = accountIdMap[o.optLong("accountId")] ?: continue
-                db.profit().upsertRate(MonthlyRate(
-                    accountId = newAccountId,
-                    year = o.getInt("year"),
-                    month = o.getInt("month"),
-                    ratePercent = o.getDouble("ratePercent")
-                ))
-            }
-
-            val gs = root.optJSONObject("globalProfit")
-            if (gs != null) {
-                db.globalProfit().upsert(GlobalProfitSettings(
-                    id = 1,
-                    enabled = gs.optBoolean("enabled", false),
-                    mode = gs.optString("mode", "DAILY_ANNUAL"),
-                    annualRate = gs.optDouble("annualRate", 20.0),
-                    payoutDay = gs.optInt("payoutDay", 30)
-                ))
-            }
-
-            val gmr = root.optJSONArray("globalMonthlyRates") ?: JSONArray()
-            for (i in 0 until gmr.length()) {
-                val o = gmr.getJSONObject(i)
-                db.globalMonthlyRate().upsert(GlobalMonthlyRate(
-                    year = o.getInt("year"),
-                    month = o.getInt("month"),
-                    ratePercent = o.getDouble("ratePercent")
+                    destinationAccountId = newDest
                 ))
             }
         } else {
