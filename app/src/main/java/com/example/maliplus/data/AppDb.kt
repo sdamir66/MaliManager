@@ -5,20 +5,20 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [
+        Person::class,
         Account::class,
         Transaction::class,
-        Good::class,
-        GoodTransaction::class,
         ProfitSettings::class,
-        MonthlyRate::class
+        MonthlyRate::class,
+        GlobalProfitSettings::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDb : RoomDatabase() {
+    abstract fun persons(): PersonDao
     abstract fun accounts(): AccountDao
     abstract fun tx(): TxDao
-    abstract fun goods(): GoodDao
-    abstract fun goodTx(): GoodTxDao
     abstract fun profit(): ProfitDao
+    abstract fun globalProfit(): GlobalProfitDao
 }
