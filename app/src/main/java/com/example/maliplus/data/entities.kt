@@ -66,3 +66,10 @@ data class GlobalProfitSettings(
     val annualRate: Double = 20.0,
     val payoutDay: Int = 30
 )
+
+@Entity(tableName = "global_monthly_rates", primaryKeys = ["year", "month"])
+data class GlobalMonthlyRate(
+    val year: Int,
+    val month: Int,
+    val ratePercent: Double
+)
