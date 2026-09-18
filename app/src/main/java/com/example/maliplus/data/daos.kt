@@ -95,17 +95,11 @@ interface TxDao {
 
 @Dao
 interface ProfitPeriodDao {
-    @Query("SELECT * FROM profit_periods ORDER BY startYear ASC, startMonth ASC, startDay ASC")
-    fun all(): Flow<List<ProfitPeriod>>
-
     @Query("SELECT * FROM profit_periods WHERE accountId = :accountId ORDER BY startYear ASC, startMonth ASC, startDay ASC")
     fun byAccount(accountId: Long): Flow<List<ProfitPeriod>>
 
     @Query("SELECT * FROM profit_periods WHERE accountId = :accountId ORDER BY startYear ASC, startMonth ASC, startDay ASC")
     suspend fun byAccountNow(accountId: Long): List<ProfitPeriod>
-
-    @Query("SELECT * FROM profit_periods ORDER BY startYear ASC, startMonth ASC, startDay ASC")
-    suspend fun allNow(): List<ProfitPeriod>
 
     @Insert
     suspend fun insert(p: ProfitPeriod): Long
