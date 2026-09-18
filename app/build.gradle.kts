@@ -62,8 +62,5 @@ dependencies {
     // DocumentFile (برای بکاپ)
     implementation("androidx.documentfile:documentfile:1.0.1")
 
-    // Reorderable (برای Drag & Drop نرم)
-    implementation("sh.calvin.reorderable:reorderable:2.5.1")
-
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
