@@ -138,3 +138,18 @@ interface GlobalProfitDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(s: GlobalProfitSettings)
 }
+
+@Dao
+interface GlobalMonthlyRateDao {
+    @Query("SELECT * FROM global_monthly_rates")
+    fun all(): Flow<List<GlobalMonthlyRate>>
+
+    @Query("SELECT * FROM global_monthly_rates")
+    suspend fun allNow(): List<GlobalMonthlyRate>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(r: GlobalMonthlyRate)
+
+    @Query("DELETE FROM global_monthly_rates")
+    suspend fun clear()
+}
