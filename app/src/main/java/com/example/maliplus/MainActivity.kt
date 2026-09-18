@@ -383,7 +383,7 @@ fun PersonsScreen(
 
         LazyColumn(
             state = listState,
-            Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -1938,7 +1938,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         LazyColumn(
-            Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
