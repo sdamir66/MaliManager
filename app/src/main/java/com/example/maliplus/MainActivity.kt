@@ -13,9 +13,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -224,7 +227,7 @@ fun FinanceApp(db: AppDb) {
 }
 
 // ═══════════════════════════════════════════════════════
-// PageHeader — با extraActions بالاتر
+// PageHeader — بدون سایه
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -275,11 +278,8 @@ fun PageHeader(
                 )
             }
 
-            // ✅ extraActions ۱۵dp بالاتر
             if (extraActions != null) {
-                Box(
-                    Modifier.offset(y = (-15).dp)
-                ) {
+                Box(Modifier.offset(y = (-15).dp)) {
                     extraActions()
                 }
             }
@@ -288,7 +288,7 @@ fun PageHeader(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonsScreen
+// PersonsScreen — با Drag & Drop
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -302,7 +302,13 @@ fun PersonsScreen(
     var add by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<Person?>(null) }
     var deleteTarget by remember { mutableStateOf<Person?>(null) }
+    var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    // ✅ Drag & Drop ساده
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
 
     Column(Modifier.fillMaxSize().background(BgLight)) {
         Box(
@@ -321,38 +327,54 @@ fun PersonsScreen(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "مدیریت مالی",
+                        if (editMode) "مرتب‌سازی" else "مدیریت مالی",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "${persons.size} شخص  •  ${allAccounts.size} حساب",
+                        if (editMode) "با کشیدن ☰ جابه‌جا کن"
+                        else "${persons.size} شخص  •  ${allAccounts.size} حساب",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.8f)
                     )
                 }
+
+                // دکمه مرتب‌سازی
                 IconButton(
-                    onClick = onOpenSettings,
+                    onClick = { editMode = !editMode },
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "تنظیمات",
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
+                    Text(
+                        if (editMode) "✓" else "⇅",
+                        color = Color.White,
+                        fontSize = 24.sp
                     )
                 }
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier
-                        .size(52.dp)
-                        .background(Color.White, shape = CircleShape)
-                        .clickable { add = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("+", color = HeaderBlue, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+
+                if (!editMode) {
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "تنظیمات",
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        Modifier
+                            .size(52.dp)
+                            .background(Color.White, shape = CircleShape)
+                            .clickable { add = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("+", color = HeaderBlue, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -360,6 +382,7 @@ fun PersonsScreen(
         Spacer(Modifier.height(16.dp))
 
         LazyColumn(
+            state = listState,
             Modifier.fillMaxSize().padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -389,16 +412,57 @@ fun PersonsScreen(
                 }
             }
 
-            items(persons, key = { it.id }) { p ->
+            items(persons.size) { index ->
+                val p = persons[index]
                 val personAccounts = allAccounts.filter { it.personId == p.id }
-                PersonCard(
-                    person = p,
-                    accounts = personAccounts,
-                    onClick = { onOpenPerson(p) },
-                    onEdit = { editTarget = p },
-                    onDelete = { deleteTarget = p },
-                    db = db
-                )
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (editMode) {
+                        // ✅ Drag handle با دکمه‌های بالا/پایین به‌جای pointer (ساده‌تر)
+                        Column(Modifier.padding(end = 4.dp)) {
+                            IconButton(
+                                onClick = {
+                                    if (index > 0) {
+                                        scope.launch {
+                                            db.persons().updateOrder(persons[index].id, index - 1)
+                                            db.persons().updateOrder(persons[index - 1].id, index)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text("▲", fontSize = 14.sp, color = Color.Gray)
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (index < persons.size - 1) {
+                                        scope.launch {
+                                            db.persons().updateOrder(persons[index].id, index + 1)
+                                            db.persons().updateOrder(persons[index + 1].id, index)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text("▼", fontSize = 14.sp, color = Color.Gray)
+                            }
+                        }
+                    }
+
+                    Box(Modifier.weight(1f)) {
+                        PersonCard(
+                            person = p,
+                            accounts = personAccounts,
+                            onClick = { if (!editMode) onOpenPerson(p) },
+                            onEdit = { if (!editMode) editTarget = p },
+                            onDelete = { if (!editMode) deleteTarget = p },
+                            db = db
+                        )
+                    }
+                }
             }
         }
     }
@@ -440,7 +504,7 @@ fun PersonsScreen(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonCard
+// PersonCard — چیدمان جدید (بدون دایره)
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -453,17 +517,20 @@ fun PersonCard(
     onDelete: () -> Unit,
     db: AppDb
 ) {
+    // ✅ مانده‌های همه حساب‌ها
     val accountsWithBalance = accounts.map { acc ->
         val txs = remember(acc.id) { mutableStateOf<List<Transaction>>(emptyList()) }
-        LaunchedEffect(acc.id) {
-            txs.value = db.tx().byAccountNow(acc.id)
-        }
+        LaunchedEffect(acc.id) { txs.value = db.tx().byAccountNow(acc.id) }
         val bal = txs.value.sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
         acc to bal
     }
 
+    // ✅ ارزهای قابل نمایش — از person.displayedCurrencies
     val displayCurrencies = remember(person, accountsWithBalance) {
-        val saved = person.displayedCurrencies.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val saved = person.displayedCurrencies
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
         if (saved.isNotEmpty()) saved
         else accountsWithBalance.map { it.first.displayUnit() }.distinct().take(3)
     }
@@ -511,60 +578,75 @@ fun PersonCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(52.dp)
-                            .background(HeaderBlue, shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            accounts.size.toString(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp
-                        )
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            person.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            "${accounts.size} حساب",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-                    }
-                    Text("‹", fontSize = 22.sp, color = Color.Gray)
+
+                // ✅ ردیف اول: نام (راست) + تعداد حساب (چپ)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        person.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "${accounts.size} حساب",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray
+                    )
                 }
 
-                if (displayCurrencies.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    HorizontalDivider(color = Color(0xFFEEEEEE))
-                    Spacer(Modifier.height(12.dp))
-                    displayCurrencies.take(3).forEach { cur ->
-                        val sum = accountsWithBalance
-                            .filter { it.first.displayUnit() == cur }
-                            .sumOf { it.second }
+                Spacer(Modifier.height(12.dp))
+
+                // ✅ لیست حساب‌ها — هر حساب: عنوان + مبلغ + ارز + بدهکار/بستانکار
+                // فقط حساب‌هایی که ارزشون توی displayCurrencies هست
+                val filteredAccounts = if (displayCurrencies.isEmpty())
+                    accountsWithBalance
+                else
+                    accountsWithBalance.filter { (acc, _) ->
+                        acc.displayUnit() in displayCurrencies
+                    }
+
+                if (filteredAccounts.isEmpty()) {
+                    Text(
+                        "حسابی وجود ندارد",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                } else {
+                    filteredAccounts.take(5).forEach { (acc, bal) ->
                         Row(
-                            Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                cur,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.Gray
-                            )
-                            Text(
-                                money(kotlin.math.abs(sum)),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (sum >= 0) CreditGreen else DebitRed
-                            )
+                            // عنوان + ارز
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    acc.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    acc.displayUnit(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.Gray
+                                )
+                            }
+                            // مانده + بدهکار/بستانکار
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    money(kotlin.math.abs(bal)),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (bal >= 0) CreditGreen else DebitRed
+                                )
+                                Text(
+                                    if (bal >= 0) "بستانکار" else "بدهکار",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (bal >= 0) CreditGreen else DebitRed
+                                )
+                            }
                         }
                     }
                 }
@@ -589,6 +671,7 @@ fun PersonScreen(
     var editTarget by remember { mutableStateOf<Account?>(null) }
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var editPerson by remember { mutableStateOf(false) }
+    var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val accountBalances = accounts.map { acc ->
@@ -598,79 +681,54 @@ fun PersonScreen(
         acc to bal
     }
 
-    val currencyTotals = accountBalances
-        .groupBy { it.first.displayUnit() }
-        .mapValues { entry -> entry.value.sumOf { it.second } }
-
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
             PageHeader(
-                title = person.name,
-                subtitle = "${accounts.size} حساب",
+                title = if (editMode) "مرتب‌سازی" else person.name,
+                subtitle = if (editMode) "با دکمه‌های ▲▼ جابه‌جا کن"
+                else "${accounts.size} حساب",
                 onBackClick = onBack,
                 extraActions = {
-                    IconButton(onClick = { editPerson = true }, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "ویرایش شخص",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                    IconButton(
+                        onClick = { editMode = !editMode },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Text(
+                            if (editMode) "✓" else "⇅",
+                            color = Color.White,
+                            fontSize = 24.sp
                         )
                     }
-                    Box(
-                        Modifier
-                            .size(48.dp)
-                            .background(Color.White, shape = CircleShape)
-                            .clickable { add = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("+", color = HeaderBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+
+                    if (!editMode) {
+                        IconButton(onClick = { editPerson = true }, modifier = Modifier.size(48.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "ویرایش شخص",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .size(48.dp)
+                                .background(Color.White, shape = CircleShape)
+                                .clickable { add = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("+", color = HeaderBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             )
 
-            Card(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .offset(y = (-40).dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-            ) {
-                Column(Modifier.fillMaxWidth().padding(18.dp)) {
-                    Text("مانده‌های کل", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                    Spacer(Modifier.height(8.dp))
-                    if (currencyTotals.isEmpty()) {
-                        Text("—", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                    } else {
-                        currencyTotals.forEach { (cur, total) ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    cur,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.Gray
-                                )
-                                Text(
-                                    money(kotlin.math.abs(total)),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (total >= 0) CreditGreen else DebitRed
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            // ✅ حذف کارت «مانده‌های کل»
+            // به‌جاش، Spacer ساده
+            Spacer(Modifier.height(16.dp))
 
             LazyColumn(
                 Modifier
                     .fillMaxSize()
-                    .offset(y = (-25).dp)
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -685,15 +743,55 @@ fun PersonScreen(
                     )
                 }
 
-                items(accounts, key = { it.id }) { acc ->
+                items(accounts.size) { index ->
+                    val acc = accounts[index]
                     val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0L
-                    SwipeableAccountCard(
-                        account = acc,
-                        balance = bal,
-                        onClick = { onOpenAccount(acc) },
-                        onEdit = { editTarget = acc },
-                        onDelete = { deleteTarget = acc }
-                    )
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (editMode) {
+                            Column(Modifier.padding(end = 4.dp)) {
+                                IconButton(
+                                    onClick = {
+                                        if (index > 0) {
+                                            scope.launch {
+                                                db.accounts().updateOrder(accounts[index].id, index - 1)
+                                                db.accounts().updateOrder(accounts[index - 1].id, index)
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Text("▲", fontSize = 14.sp, color = Color.Gray)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (index < accounts.size - 1) {
+                                            scope.launch {
+                                                db.accounts().updateOrder(accounts[index].id, index + 1)
+                                                db.accounts().updateOrder(accounts[index + 1].id, index)
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Text("▼", fontSize = 14.sp, color = Color.Gray)
+                                }
+                            }
+                        }
+
+                        Box(Modifier.weight(1f)) {
+                            SwipeableAccountCard(
+                                account = acc,
+                                balance = bal,
+                                onClick = { if (!editMode) onOpenAccount(acc) },
+                                onEdit = { if (!editMode) editTarget = acc },
+                                onDelete = { if (!editMode) deleteTarget = acc }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -738,7 +836,7 @@ fun PersonScreen(
 }
 
 // ═══════════════════════════════════════════════════════
-// SwipeableAccountCard
+// SwipeableAccountCard — هم‌اندازه با کارت تراکنش
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -794,12 +892,13 @@ fun SwipeableAccountCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(16.dp),
+                Modifier.fillMaxWidth().padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // ✅ دایره کوچیک‌تر — هم‌اندازه تراکنش
                 Box(
                     Modifier
-                        .size(52.dp)
+                        .size(46.dp)
                         .background(
                             color = if (isCredit) CreditGreen else DebitRed,
                             shape = CircleShape
@@ -807,17 +906,17 @@ fun SwipeableAccountCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        if (isCredit) "بس" else "بد",
+                        if (isCredit) "↓" else "↑",
                         color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         account.name,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(2.dp))
@@ -826,15 +925,22 @@ fun SwipeableAccountCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
-                    Spacer(Modifier.height(6.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
                         money(kotlin.math.abs(balance)),
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (isCredit) CreditGreen else DebitRed
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        if (isCredit) "بستانکار" else "بدهکار",
+                        style = MaterialTheme.typography.labelSmall,
                         color = if (isCredit) CreditGreen else DebitRed
                     )
                 }
-                Text("‹", fontSize = 22.sp, color = Color.Gray)
             }
         }
     }
@@ -875,6 +981,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 }
             )
 
+            // ✅ کارت هدر — بدون «مانده کل»، فقط مبلغ + ارز + بدهکار/بستانکار
             Card(
                 Modifier
                     .fillMaxWidth()
@@ -889,8 +996,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("مانده کل", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                        Spacer(Modifier.height(4.dp))
                         Text(
                             money(kotlin.math.abs(bal)),
                             style = MaterialTheme.typography.headlineMedium,
@@ -985,7 +1090,8 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 scope.launch {
                     db.tx().delete(target)
                     ProfitEngine.recalculateAll(db)
-                    deleteTarget = null                }
+                    deleteTarget = null
+                }
             },
             onCancel = { deleteTarget = null }
         )
@@ -993,7 +1099,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
 }
 
 // ═══════════════════════════════════════════════════════
-// SwipeableTransactionCard
+// SwipeableTransactionCard — بدون تغییر
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1189,13 +1295,16 @@ fun AutoTransactionCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonEditor
+// PersonEditor — با انتخاب مانده‌های نمایشی
 // ═══════════════════════════════════════════════════════
 
 @Composable
 fun PersonEditor(old: Person?, onSave: (Person) -> Unit, onCancel: () -> Unit) {
     var name by remember(old) { mutableStateOf(old?.name ?: "") }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
+    var currenciesText by remember(old) {
+        mutableStateOf(old?.displayedCurrencies ?: "")
+    }
 
     AlertDialog(
         onDismissRequest = onCancel,
@@ -1215,6 +1324,14 @@ fun PersonEditor(old: Person?, onSave: (Person) -> Unit, onCancel: () -> Unit) {
                     label = { Text("توضیحات (اختیاری)") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = currenciesText,
+                    onValueChange = { currenciesText = it },
+                    label = { Text("ارزهای نمایشی (با کاما جدا کن)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Text("مثلاً: ریال,دلار,یورو — حداکثر ۳ تا") }
+                )
             }
         },
         confirmButton = {
@@ -1225,7 +1342,7 @@ fun PersonEditor(old: Person?, onSave: (Person) -> Unit, onCancel: () -> Unit) {
                         name = name,
                         note = note,
                         displayOrder = old?.displayOrder ?: 0,
-                        displayedCurrencies = old?.displayedCurrencies ?: ""
+                        displayedCurrencies = currenciesText
                     ))
             }) { Text("ذخیره") }
         },
@@ -1350,7 +1467,7 @@ fun AccountEditor(
 }
 
 // ═══════════════════════════════════════════════════════
-// TxEditor — با فیلد مبلغ اصلاح‌شده
+// TxEditor — فیلد مبلغ اصلاح‌شده
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1391,11 +1508,10 @@ fun TxEditor(
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-
-                // ✅ فیلد مبلغ اصلاح‌شده — cursor آخر می‌مونه
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { input ->
+                        // ✅ فقط رقم‌ها رو نگه دار، بعد فرمت کن
                         val digits = input.filter { it.isDigit() }
                         amount = if (digits.isEmpty()) "" else {
                             try {
@@ -1503,12 +1619,6 @@ fun ProfitSettingsEditor(
                                     color = Color(0xFFE65100)
                                 )
                             }
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "برای تنظیم اختصاصی، از «ویرایش حساب» گزینه‌ی «اختصاصی» را انتخاب کن.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFFE65100)
-                            )
                         }
                     }
                 }
@@ -1675,7 +1785,7 @@ fun MonthlyRatesEditor(db: AppDb, accountId: Long, close: () -> Unit) {
 }
 
 // ═══════════════════════════════════════════════════════
-// GlobalProfitEditor
+// GlobalProfitEditor — با سود ماهانه کلی
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -2155,7 +2265,7 @@ fun SettingRow(
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine
+// ProfitEngine — با سود ماهانه کلی
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
