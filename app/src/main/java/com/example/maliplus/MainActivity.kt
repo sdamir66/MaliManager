@@ -1989,7 +1989,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         }
         val customUri = getSavedBackupFolderUri(context)
         if (customUri != null) {
-            val folder = DocumentTree(context, customUri)
+            val folder = DocumentFile.fromTreeUri(context, customUri)
             customFolderName = folder?.name ?: "پوشه انتخاب شده"
         }
     }
