@@ -231,7 +231,7 @@ fun FinanceApp(db: AppDb) {
 }
 
 // ═══════════════════════════════════════════════════════
-// PageHeader — هدر بلندتر
+// PageHeader
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1605,7 +1605,7 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitPeriodEditor
+// ProfitPeriodEditor — با payoutDay خالی پیش‌فرض
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1627,8 +1627,9 @@ fun ProfitPeriodEditor(
     var endY by remember(old) { mutableStateOf(old?.endYear) }
     var endM by remember(old) { mutableStateOf(old?.endMonth) }
     var endD by remember(old) { mutableStateOf(old?.endDay) }
-    var isLastDayOfMonth by remember(old) { mutableStateOf(old?.payoutDay == 0 || old == null) }
-    var payoutDay by remember(old) { mutableIntStateOf(if (old?.payoutDay == 0 || old == null) 16 else old.payoutDay) }
+    var isLastDayOfMonth by remember(old) { mutableStateOf(old?.payoutDay == 0 && old != null) }
+    var payoutDay by remember(old) { mutableIntStateOf(old?.payoutDay ?: 0) }
+    var payoutDayText by remember(old) { mutableStateOf(if (old?.payoutDay != null && old.payoutDay > 0) old.payoutDay.toString() else "") }
     var destinationAccountId by remember(old) { mutableStateOf(old?.destinationAccountId) }
 
     var showStartCalendar by remember { mutableStateOf(false) }
@@ -1807,13 +1808,16 @@ fun ProfitPeriodEditor(
                         Text("آخر ماه", color = textColor, fontSize = 13.sp)
                         Spacer(Modifier.width(12.dp))
                         OutlinedTextField(
-                            value = payoutDay.toString(),
-                            onValueChange = {
-                                payoutDay = it.filter { c -> c.isDigit() }.toIntOrNull()?.coerceIn(1, 31) ?: 1
+                            value = payoutDayText,
+                            onValueChange = { input ->
+                                val cleaned = input.filter { c -> c.isDigit() }.take(2)
+                                payoutDayText = cleaned
+                                payoutDay = cleaned.toIntOrNull()?.coerceIn(1, 31) ?: 0
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             enabled = !isLastDayOfMonth,
+                            placeholder = { Text("16", color = labelColor.copy(alpha = 0.5f)) },
                             modifier = Modifier.width(80.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = textColor,
@@ -1885,6 +1889,10 @@ fun ProfitPeriodEditor(
                         val startMs = toMillis(startY, startM, startD)
                         val endMs = toMillis(endY!!, endM!!, endD!!)
                         if (endMs <= startMs) { error = "تاریخ پایان باید بعد از شروع باشه"; return@Button }
+                    }
+                    if (!isLastDayOfMonth && payoutDay <= 0) {
+                        error = "روز واریز رو مشخص کن یا آخر ماه رو انتخاب کن"
+                        return@Button
                     }
 
                     scope.launch {
@@ -2207,7 +2215,7 @@ fun SettingRow(title: String, subtitle: String, icon: String, onClick: () -> Uni
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine — با منطق جدید
+// ProfitEngine — با حداقل بالانس روز
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
@@ -2223,7 +2231,10 @@ object ProfitEngine {
     suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
         if (periods.isEmpty()) return
 
-        val base = db.tx().byAccountNow(accountId).filter { !it.isAutoProfit }
+        val base = db.tx().byAccountNow(accountId)
+            .filter { !it.isAutoProfit }
+            .sortedBy { it.dateMillis }
+
         val today = Jalali.nowJalali()
         val todayMillis = System.currentTimeMillis()
 
@@ -2264,7 +2275,7 @@ object ProfitEngine {
             }
 
             if (activePeriod != null) {
-                val payoutDayActual = if (activePeriod.payoutDay == 0) daysInMonth
+                val payoutDayActual = if (activePeriod.payoutDay <= 0) daysInMonth
                                       else activePeriod.payoutDay.coerceIn(1, daysInMonth)
                 val payoutMillis = toMillis(cy, cm, payoutDayActual)
 
@@ -2287,18 +2298,23 @@ object ProfitEngine {
 
                 while (currentMillis <= periodEndMillis) {
                     val j = millisToJalali(currentMillis)
-                    val dayBal = base
-                        .filter { it.dateMillis <= currentMillis + 86399000L }
-                        .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+                    val dayStartMillis = currentMillis
+                    val dayEndMillis = currentMillis + 86399000L
 
-                    if (dayBal != 0L) {
+                    val minBalance = calculateMinBalanceInDay(
+                        base = base,
+                        dayStartMillis = dayStartMillis,
+                        dayEndMillis = dayEndMillis
+                    )
+
+                    if (minBalance > 0L) {
                         val dailyRate = if (activePeriod.type == "ANNUAL") {
                             activePeriod.rate / 100.0 / 365.0
                         } else {
                             val daysInCurMonth = Jalali.daysInMonth(j[0], j[1])
                             activePeriod.rate / 100.0 / daysInCurMonth
                         }
-                        totalProfit += dayBal * dailyRate
+                        totalProfit += minBalance * dailyRate
                     }
 
                     currentMillis += 86400000L
@@ -2307,7 +2323,9 @@ object ProfitEngine {
                 val roundedProfit = kotlin.math.round(totalProfit).toLong()
                 if (roundedProfit > 0) {
                     val dest = activePeriod.destinationAccountId ?: accountId
-                    val text = "سود روزشمار ${Jalali.monthName(cm)} $cy — نرخ ${activePeriod.rate}%"
+                    val typeLabel = if (activePeriod.type == "ANNUAL") "سالانه" else "ماهانه"
+                    val rateDisplay = if (activePeriod.rate % 1.0 == 0.0) activePeriod.rate.toLong().toString() else activePeriod.rate.toString()
+                    val text = "سود ${Jalali.monthName(cm)} $cy — نرخ $rateDisplay% $typeLabel"
 
                     out.add(Transaction(
                         id = 0,
@@ -2326,6 +2344,37 @@ object ProfitEngine {
         }
 
         db.tx().insertAll(out)
+    }
+
+    /**
+     * محاسبه‌ی حداقل بالانس توی یه روز
+     * - بالانس قبل از اولین تراکنش روز
+     * - بالانس بعد از هر تراکنش توی روز
+     * - حداقل بین همه‌ی اینا
+     */
+    private fun calculateMinBalanceInDay(
+        base: List<Transaction>,
+        dayStartMillis: Long,
+        dayEndMillis: Long
+    ): Long {
+        val balanceAtStart = base
+            .filter { it.dateMillis < dayStartMillis }
+            .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+
+        val dayTransactions = base
+            .filter { it.dateMillis in dayStartMillis..dayEndMillis }
+            .sortedBy { it.dateMillis }
+
+        if (dayTransactions.isEmpty()) return balanceAtStart
+
+        var minBal = balanceAtStart
+        var runningBal = balanceAtStart
+        for (t in dayTransactions) {
+            runningBal += if (t.type == "بستانکار") t.amount else -t.amount
+            if (runningBal < minBal) minBal = runningBal
+        }
+
+        return minBal
     }
 
     private fun millisToJalali(millis: Long): IntArray {
