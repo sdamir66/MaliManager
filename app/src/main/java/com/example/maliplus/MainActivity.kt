@@ -808,7 +808,7 @@ fun SwipeableAccountCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// AccountScreen — بدون ارز زیر عنوان
+// AccountScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1455,7 +1455,7 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitPeriodsScreen
+// ProfitPeriodsScreen — با LaunchedEffect
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1465,6 +1465,13 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
     var editTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
     var deleteTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
     val scope = rememberCoroutineScope()
+
+    // ✅ LaunchedEffect: هر وقت بازه‌ها عوض شدن، دوباره محاسبه کن
+    LaunchedEffect(periods) {
+        if (periods.isNotEmpty()) {
+            ProfitEngine.recalculateForAccount(db, accountId, periods)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = close,
@@ -1569,7 +1576,6 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
         ProfitPeriodEditor(null, accountId, db, {
             scope.launch {
                 db.profitPeriod().insert(it)
-                ProfitEngine.recalculateAll(db)
                 addPeriod = false
             }
         }, { addPeriod = false })
@@ -1579,7 +1585,6 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
         ProfitPeriodEditor(target, accountId, db, {
             scope.launch {
                 db.profitPeriod().update(it)
-                ProfitEngine.recalculateAll(db)
                 editTarget = null
             }
         }, { editTarget = null })
@@ -1592,7 +1597,6 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
             onConfirm = {
                 scope.launch {
                     db.profitPeriod().delete(target)
-                    ProfitEngine.recalculateAll(db)
                     deleteTarget = null
                 }
             },
@@ -1602,7 +1606,7 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitPeriodEditor — بک‌گراند سفید + نوار آبی
+// ProfitPeriodEditor
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1653,7 +1657,6 @@ fun ProfitPeriodEditor(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-                // ─── نوع سود ───
                 Column {
                     Text("نوع سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(6.dp))
@@ -1697,7 +1700,6 @@ fun ProfitPeriodEditor(
                     }
                 }
 
-                // ─── نرخ ───
                 Column {
                     Text(
                         if (type == "ANNUAL") "نرخ سالانه" else "نرخ ماهانه",
@@ -1729,7 +1731,6 @@ fun ProfitPeriodEditor(
                     }
                 }
 
-                // ─── از تاریخ تا تاریخ ───
                 Column {
                     Text("دوره", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(6.dp))
@@ -1791,7 +1792,6 @@ fun ProfitPeriodEditor(
                     }
                 }
 
-                // ─── روز واریز ───
                 Column {
                     Text("روز واریز سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(6.dp))
@@ -1831,7 +1831,6 @@ fun ProfitPeriodEditor(
                     }
                 }
 
-                // ─── حساب مقصد ───
                 if (accountId != 0L) {
                     Column {
                         Text("حساب مقصد سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
@@ -2209,7 +2208,7 @@ fun SettingRow(title: String, subtitle: String, icon: String, onClick: () -> Uni
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine — با رفع باگ محاسبه
+// ProfitEngine
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
@@ -2257,7 +2256,6 @@ object ProfitEngine {
                                       else period.payoutDay.coerceIn(1, daysInMonth)
                 val payoutMillisRaw = toMillis(y, m, payoutDayActual)
 
-                // ✅ clamp payout به periodEnd
                 val payoutMillis = if (payoutMillisRaw > periodEnd) periodEnd else payoutMillisRaw
 
                 if (payoutMillis < periodStart) {
@@ -2306,7 +2304,7 @@ object ProfitEngine {
 
         var total = 0.0
         for (d in 0 until daysToCalc) {
-            val dayMillis = effectiveStart + (d * 86400000L)
+            val dayMillis = effectiveStart + (d * 86400000L) + 86399000L
             val bal = base.filter { it.dateMillis <= dayMillis }
                 .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
             total += bal * (rate / 100.0) / daysInMonth
