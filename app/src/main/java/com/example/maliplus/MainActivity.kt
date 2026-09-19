@@ -11,7 +11,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -824,7 +826,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
         Column(Modifier.fillMaxSize()) {
             PageHeader(
                 title = a.name,
-                subtitle = "${tx.size} تراکنش",
+                subtitle = "",
                 onBackClick = onBack,
                 extraActions = {
                     IconButton(onClick = { profit = true }, modifier = Modifier.size(44.dp)) {
@@ -1024,7 +1026,7 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
 }
 
 // ═══════════════════════════════════════════════════════
-// JalaliCalendarDialog — اصلاح‌شده
+// JalaliCalendarDialog
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1042,7 +1044,6 @@ fun JalaliCalendarDialog(
     val daysInMonth = Jalali.daysInMonth(year, month)
     val firstDayMillis = Jalali.parse("%04d/%02d/%02d".format(Locale.US, year, month, 1)) ?: 0L
 
-    // ✅ فرمول درست روز هفته
     val firstDayOfWeek = remember(firstDayMillis) {
         val cal = java.util.Calendar.getInstance().apply { timeInMillis = firstDayMillis }
         when (cal.get(java.util.Calendar.DAY_OF_WEEK)) {
@@ -1065,6 +1066,7 @@ fun JalaliCalendarDialog(
     AlertDialog(
         onDismissRequest = onCancel,
         containerColor = HeaderBlue,
+        shape = RoundedCornerShape(20.dp),
         title = {
             Column {
                 Text("انتخاب تاریخ", fontWeight = FontWeight.Bold, color = Color.White)
@@ -1193,45 +1195,33 @@ fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: ()
         mutableStateOf(old?.displayedCurrencies?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet())
     }
 
+    val textColor = Color(0xFF1B1B1F)
+    val labelColor = Color(0xFF5C5D72)
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = textColor,
+        unfocusedTextColor = textColor,
+        focusedBorderColor = HeaderBlue,
+        unfocusedBorderColor = Color(0xFFCCCCCC),
+        focusedLabelColor = HeaderBlue,
+        unfocusedLabelColor = labelColor,
+        cursorColor = HeaderBlue
+    )
+
     AlertDialog(
         onDismissRequest = onCancel,
-        containerColor = HeaderBlue,
-        title = { Text(if (old == null) "شخص جدید" else "ویرایش شخص", fontWeight = FontWeight.Bold, color = Color.White) },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = { Text(if (old == null) "شخص جدید" else "ویرایش شخص", fontWeight = FontWeight.Bold, color = HeaderBlue) },
         text = {
             Column {
-                OutlinedTextField(
-                    name, { name = it },
-                    label = { Text("نام شخص") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color.White,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
-                        focusedLabelColor = Color.White,
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.7f),
-                        cursorColor = Color.White
-                    )
-                )
+                OutlinedTextField(name, { name = it }, label = { Text("نام شخص") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    note, { note = it },
-                    label = { Text("توضیحات (اختیاری)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color.White,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
-                        focusedLabelColor = Color.White,
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.7f),
-                        cursorColor = Color.White
-                    )
-                )
+                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
 
                 if (old != null && personAccounts.isNotEmpty()) {
                     Spacer(Modifier.height(16.dp))
-                    Text("حساب‌های نمایشی (حداکثر ۳ تا)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("حساب‌های نمایشی (حداکثر ۳ تا)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = HeaderBlue)
                     Spacer(Modifier.height(8.dp))
                     personAccounts.forEach { acc ->
                         Row(
@@ -1250,14 +1240,14 @@ fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: ()
                                     else selectedAccounts
                                 },
                                 colors = CheckboxDefaults.colors(
-                                    checkedColor = Color.White,
-                                    checkmarkColor = HeaderBlue,
-                                    uncheckedColor = Color.White
+                                    checkedColor = HeaderBlue,
+                                    checkmarkColor = Color.White,
+                                    uncheckedColor = labelColor
                                 )
                             )
-                            Text(acc.name, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                            Text(acc.name, style = MaterialTheme.typography.bodyMedium, color = textColor)
                             Spacer(Modifier.weight(1f))
-                            Text(acc.displayUnit(), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
+                            Text(acc.displayUnit(), style = MaterialTheme.typography.labelSmall, color = labelColor)
                         }
                     }
                 }
@@ -1269,10 +1259,10 @@ fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: ()
                     if (name.isNotBlank())
                         onSave(Person(old?.id ?: 0, name, note, old?.displayOrder ?: 0, selectedAccounts.joinToString(",")))
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = HeaderBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
             ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
         },
-        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = Color.White) } }
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
     )
 }
 
@@ -1290,20 +1280,24 @@ fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCa
     val currencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
     val hasCustomUnit = customUnit.isNotBlank()
 
+    val textColor = Color(0xFF1B1B1F)
+    val labelColor = Color(0xFF5C5D72)
     val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        focusedBorderColor = Color.White,
-        unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
-        focusedLabelColor = Color.White,
-        unfocusedLabelColor = Color.White.copy(alpha = 0.7f),
-        cursorColor = Color.White
+        focusedTextColor = textColor,
+        unfocusedTextColor = textColor,
+        focusedBorderColor = HeaderBlue,
+        unfocusedBorderColor = Color(0xFFCCCCCC),
+        focusedLabelColor = HeaderBlue,
+        unfocusedLabelColor = labelColor,
+        cursorColor = HeaderBlue
     )
 
     AlertDialog(
         onDismissRequest = onCancel,
-        containerColor = HeaderBlue,
-        title = { Text(if (old == null) "حساب جدید" else "ویرایش حساب", fontWeight = FontWeight.Bold, color = Color.White) },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = { Text(if (old == null) "حساب جدید" else "ویرایش حساب", fontWeight = FontWeight.Bold, color = HeaderBlue) },
         text = {
             Column {
                 OutlinedTextField(name, { name = it }, label = { Text("عنوان حساب") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
@@ -1314,21 +1308,21 @@ fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCa
                     customUnit, { customUnit = it },
                     label = { Text("واحد دلخواه (اختیاری)") },
                     modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Text("اگه پر بشه، جایگزین ارز می‌شه", color = Color.White.copy(alpha = 0.7f)) },
+                    supportingText = { Text("اگه پر بشه، جایگزین ارز می‌شه", color = labelColor) },
                     colors = fieldColors
                 )
                 Spacer(Modifier.height(12.dp))
-                Text("ارز", style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.Bold)
+                Text("ارز", style = MaterialTheme.typography.titleSmall, color = HeaderBlue, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
                 Box(Modifier.fillMaxWidth()) {
                     OutlinedButton(
                         onClick = { if (!hasCustomUnit) currencyExpanded = true },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !hasCustomUnit,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = HeaderBlue)
                     ) {
-                        Text(currency, modifier = Modifier.weight(1f), color = Color.White)
-                        Text("▼", color = Color.White)
+                        Text(currency, modifier = Modifier.weight(1f), color = HeaderBlue)
+                        Text("▼", color = HeaderBlue)
                     }
                     DropdownMenu(expanded = currencyExpanded, onDismissRequest = { currencyExpanded = false }) {
                         currencies.forEach { c ->
@@ -1344,10 +1338,10 @@ fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCa
                     if (name.isNotBlank())
                         onSave(Account(old?.id ?: 0, personId, name, note, currency, customUnit, old?.displayOrder ?: 0))
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = HeaderBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
             ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
         },
-        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = Color.White) } }
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
     )
 }
 
@@ -1365,20 +1359,24 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
     }
     var showCalendar by remember { mutableStateOf(false) }
 
+    val textColor = Color(0xFF1B1B1F)
+    val labelColor = Color(0xFF5C5D72)
     val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        focusedBorderColor = Color.White,
-        unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
-        focusedLabelColor = Color.White,
-        unfocusedLabelColor = Color.White.copy(alpha = 0.7f),
-        cursorColor = Color.White
+        focusedTextColor = textColor,
+        unfocusedTextColor = textColor,
+        focusedBorderColor = HeaderBlue,
+        unfocusedBorderColor = Color(0xFFCCCCCC),
+        focusedLabelColor = HeaderBlue,
+        unfocusedLabelColor = labelColor,
+        cursorColor = HeaderBlue
     )
 
     AlertDialog(
         onDismissRequest = onCancel,
-        containerColor = HeaderBlue,
-        title = { Text(if (old == null) "ثبت تراکنش" else "ویرایش تراکنش", fontWeight = FontWeight.Bold, color = Color.White) },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = { Text(if (old == null) "ثبت تراکنش" else "ویرایش تراکنش", fontWeight = FontWeight.Bold, color = HeaderBlue) },
         text = {
             Column {
                 Row {
@@ -1387,9 +1385,10 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                         onClick = { type = "بدهکار" },
                         label = { Text("بدهکار") },
                         colors = FilterChipDefaults.filterChipColors(
-                            labelColor = Color.White,
-                            selectedLabelColor = HeaderBlue,
-                            selectedContainerColor = Color.White
+                            labelColor = labelColor,
+                            selectedLabelColor = Color.White,
+                            selectedContainerColor = HeaderBlue,
+                            containerColor = Color(0xFFF0F1F7)
                         )
                     )
                     Spacer(Modifier.width(8.dp))
@@ -1398,9 +1397,10 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                         onClick = { type = "بستانکار" },
                         label = { Text("بستانکار") },
                         colors = FilterChipDefaults.filterChipColors(
-                            labelColor = Color.White,
-                            selectedLabelColor = HeaderBlue,
-                            selectedContainerColor = Color.White
+                            labelColor = labelColor,
+                            selectedLabelColor = Color.White,
+                            selectedContainerColor = HeaderBlue,
+                            containerColor = Color(0xFFF0F1F7)
                         )
                     )
                 }
@@ -1416,11 +1416,11 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                 OutlinedButton(
                     onClick = { showCalendar = true },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = HeaderBlue)
                 ) {
-                    Icon(Icons.Default.DateRange, null, modifier = Modifier.size(18.dp), tint = Color.White)
+                    Icon(Icons.Default.DateRange, null, modifier = Modifier.size(18.dp), tint = HeaderBlue)
                     Spacer(Modifier.width(8.dp))
-                    Text(Jalali.format(dateMillis), color = Color.White)
+                    Text(Jalali.format(dateMillis), color = HeaderBlue)
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(note, { note = it }, label = { Text("شرح") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
@@ -1433,10 +1433,10 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                     if (n != null && n > 0)
                         onSave(Transaction(old?.id ?: 0, accountId, dateMillis, type, n, note, false, null))
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = HeaderBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
             ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
         },
-        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = Color.White) } }
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
     )
 
     if (showCalendar) {
@@ -1468,24 +1468,42 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
 
     AlertDialog(
         onDismissRequest = close,
-        containerColor = HeaderBlue,
-        title = { Text("بازه‌های سود — $accountName", fontWeight = FontWeight.Bold, color = Color.White) },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = {
+            Text(
+                "بازه‌های سود — $accountName",
+                fontWeight = FontWeight.Bold,
+                color = HeaderBlue,
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
         text = {
             Column {
-                Text("هر بازه یه نرخ سود برای یه دوره‌ست.", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f))
+                Text(
+                    "هر بازه یه نرخ سود برای یه دوره‌ست.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF5C5D72)
+                )
                 Spacer(Modifier.height(12.dp))
 
                 Button(
                     onClick = { addPeriod = true },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = HeaderBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
                 ) { Text("+ تعریف بازه‌ی سود", fontWeight = FontWeight.Bold) }
 
                 Spacer(Modifier.height(12.dp))
 
                 if (periods.isEmpty()) {
-                    Text("هنوز بازه‌ای تعریف نشده", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(vertical = 20.dp))
+                    Text(
+                        "هنوز بازه‌ای تعریف نشده",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF5C5D72),
+                        modifier = Modifier.padding(vertical = 20.dp)
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 400.dp),
@@ -1495,9 +1513,13 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
                             Card(
                                 Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF3F4FB5))
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F1F7)),
+                                border = BorderStroke(1.dp, HeaderBlue.copy(alpha = 0.3f))
                             ) {
-                                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Column(Modifier.weight(1f)) {
                                         Text(
                                             "از ${period.startYear}/${period.startMonth.toString().padStart(2, '0')}/${period.startDay.toString().padStart(2, '0')}" +
@@ -1506,7 +1528,7 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
                                             else " تا بی‌نهایت",
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                            color = HeaderBlue
                                         )
                                         Spacer(Modifier.height(2.dp))
                                         Text(
@@ -1514,14 +1536,20 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
                                             "نرخ: ${period.rate}% | " +
                                             "واریز: ${if (period.payoutDay == 0) "آخر ماه" else "روز ${period.payoutDay}"}",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = Color.White.copy(alpha = 0.85f)
+                                            color = Color(0xFF5C5D72)
                                         )
                                     }
-                                    IconButton(onClick = { editTarget = period }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Edit, "ویرایش", modifier = Modifier.size(18.dp), tint = Color.White)
+                                    IconButton(
+                                        onClick = { editTarget = period },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Edit, "ویرایش", modifier = Modifier.size(18.dp), tint = HeaderBlue)
                                     }
-                                    IconButton(onClick = { deleteTarget = period }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Delete, "حذف", modifier = Modifier.size(18.dp), tint = Color(0xFFFFCDD2))
+                                    IconButton(
+                                        onClick = { deleteTarget = period },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, "حذف", modifier = Modifier.size(18.dp), tint = DebitRed)
                                     }
                                 }
                             }
@@ -1531,7 +1559,9 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
             }
         },
         confirmButton = {
-            TextButton(onClick = close) { Text("بستن", color = Color.White, fontWeight = FontWeight.Bold) }
+            TextButton(onClick = close) {
+                Text("بستن", color = HeaderBlue, fontWeight = FontWeight.Bold)
+            }
         }
     )
 
@@ -1572,7 +1602,7 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitPeriodEditor — با چک تداخل
+// ProfitPeriodEditor — بک‌گراند سفید + نوار آبی
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1594,7 +1624,8 @@ fun ProfitPeriodEditor(
     var endY by remember(old) { mutableStateOf(old?.endYear) }
     var endM by remember(old) { mutableStateOf(old?.endMonth) }
     var endD by remember(old) { mutableStateOf(old?.endDay) }
-    var payoutDay by remember(old) { mutableIntStateOf(old?.payoutDay ?: 0) }
+    var isLastDayOfMonth by remember(old) { mutableStateOf(old?.payoutDay == 0 || old == null) }
+    var payoutDay by remember(old) { mutableIntStateOf(if (old?.payoutDay == 0 || old == null) 1 else old.payoutDay) }
     var destinationAccountId by remember(old) { mutableStateOf(old?.destinationAccountId) }
 
     var showStartCalendar by remember { mutableStateOf(false) }
@@ -1603,205 +1634,247 @@ fun ProfitPeriodEditor(
 
     val allAccounts by db.accounts().all().collectAsState(emptyList())
 
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        focusedBorderColor = Color.White,
-        unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
-        cursorColor = Color.White
-    )
+    val textColor = Color(0xFF1B1B1F)
+    val labelColor = Color(0xFF5C5D72)
 
     AlertDialog(
         onDismissRequest = onCancel,
-        containerColor = HeaderBlue,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
         title = {
             Text(
                 if (old == null) "بازه‌ی جدید" else "ویرایش بازه",
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = HeaderBlue,
+                style = MaterialTheme.typography.titleLarge
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
                 // ─── نوع سود ───
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("نوع سود", style = MaterialTheme.typography.bodyMedium, color = Color.White, modifier = Modifier.width(80.dp))
-                    Spacer(Modifier.width(8.dp))
-                    FilterChip(
-                        selected = type == "ANNUAL",
-                        onClick = {
-                            type = "ANNUAL"
-                            if (old == null) {
-                                startY = today[0]; startM = today[1]; startD = today[2]
-                                endY = null; endM = null; endD = null
-                            }
-                        },
-                        label = { Text("سالانه") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            labelColor = Color.White,
-                            selectedLabelColor = HeaderBlue,
-                            selectedContainerColor = Color.White
+                Column {
+                    Text("نوع سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(6.dp))
+                    Row {
+                        FilterChip(
+                            selected = type == "ANNUAL",
+                            onClick = {
+                                type = "ANNUAL"
+                                if (old == null) {
+                                    startY = today[0]; startM = today[1]; startD = today[2]
+                                    endY = null; endM = null; endD = null
+                                }
+                            },
+                            label = { Text("سالانه") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                labelColor = labelColor,
+                                selectedLabelColor = Color.White,
+                                selectedContainerColor = HeaderBlue,
+                                containerColor = Color(0xFFF0F1F7)
+                            )
                         )
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    FilterChip(
-                        selected = type == "MONTHLY",
-                        onClick = {
-                            type = "MONTHLY"
-                            if (old == null) {
-                                startY = today[0]; startM = today[1]; startD = 1
-                                endY = today[0]; endM = today[1]
-                                endD = Jalali.daysInMonth(today[0], today[1])
-                            }
-                        },
-                        label = { Text("ماهانه") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            labelColor = Color.White,
-                            selectedLabelColor = HeaderBlue,
-                            selectedContainerColor = Color.White
+                        Spacer(Modifier.width(8.dp))
+                        FilterChip(
+                            selected = type == "MONTHLY",
+                            onClick = {
+                                type = "MONTHLY"
+                                if (old == null) {
+                                    startY = today[0]; startM = today[1]; startD = 1
+                                    endY = today[0]; endM = today[1]
+                                    endD = Jalali.daysInMonth(today[0], today[1])
+                                }
+                            },
+                            label = { Text("ماهانه") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                labelColor = labelColor,
+                                selectedLabelColor = Color.White,
+                                selectedContainerColor = HeaderBlue,
+                                containerColor = Color(0xFFF0F1F7)
+                            )
                         )
-                    )
+                    }
                 }
 
                 // ─── نرخ ───
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column {
                     Text(
                         if (type == "ANNUAL") "نرخ سالانه" else "نرخ ماهانه",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White,
-                        modifier = Modifier.width(80.dp)
+                        style = MaterialTheme.typography.labelLarge,
+                        color = labelColor,
+                        fontWeight = FontWeight.Medium
                     )
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedTextField(
-                        value = rate,
-                        onValueChange = { input ->
-                            val cleaned = input.filter { it.isDigit() || it == '.' }
-                            if (cleaned.count { it == '.' } <= 1) rate = cleaned
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.width(80.dp),
-                        colors = fieldColors
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("%", color = Color.White)
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = rate,
+                            onValueChange = { input ->
+                                val cleaned = input.filter { it.isDigit() || it == '.' }
+                                if (cleaned.count { it == '.' } <= 1) rate = cleaned
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier.width(90.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = textColor,
+                                unfocusedTextColor = textColor,
+                                focusedBorderColor = HeaderBlue,
+                                unfocusedBorderColor = Color(0xFFCCCCCC),
+                                cursorColor = HeaderBlue
+                            )
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("%", color = labelColor, fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 // ─── از تاریخ تا تاریخ ───
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("از تاریخ", style = MaterialTheme.typography.bodyMedium, color = Color.White, modifier = Modifier.width(80.dp))
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedButton(
-                        onClick = { showStartCalendar = true },
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                Column {
+                    Text("دوره", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(Icons.Default.DateRange, null, modifier = Modifier.size(14.dp), tint = Color.White)
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            "$startY/${startM.toString().padStart(2, '0')}/${startD.toString().padStart(2, '0')}",
-                            fontSize = 11.sp,
-                            color = Color.White
-                        )
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    Text("تا", color = Color.White, fontSize = 11.sp)
-                    Spacer(Modifier.width(4.dp))
-                    OutlinedButton(
-                        onClick = { showEndCalendar = true },
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-                    ) {
-                        Icon(Icons.Default.DateRange, null, modifier = Modifier.size(14.dp), tint = Color.White)
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            if (endY != null)
-                                "$endY/${endM?.toString()?.padStart(2, '0')}/${endD?.toString()?.padStart(2, '0')}"
-                            else "بی‌نهایت",
-                            fontSize = 11.sp,
-                            color = Color.White
-                        )
-                    }
-                }
+                        OutlinedButton(
+                            onClick = { showStartCalendar = true },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = textColor),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.DateRange, null, modifier = Modifier.size(14.dp), tint = HeaderBlue)
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "$startY/${startM.toString().padStart(2, '0')}/${startD.toString().padStart(2, '0')}",
+                                fontSize = 11.sp,
+                                color = textColor,
+                                maxLines = 1
+                            )
+                        }
 
-                if (endY != null) {
-                    TextButton(
-                        onClick = { endY = null; endM = null; endD = null },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("حذف تاریخ پایان", color = Color.White, fontSize = 11.sp)
+                        Text("تا", color = labelColor, fontSize = 12.sp)
+
+                        OutlinedButton(
+                            onClick = { showEndCalendar = true },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = textColor),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.DateRange, null, modifier = Modifier.size(14.dp), tint = HeaderBlue)
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                if (endY != null)
+                                    "$endY/${endM?.toString()?.padStart(2, '0')}/${endD?.toString()?.padStart(2, '0')}"
+                                else "بی‌نهایت",
+                                fontSize = 11.sp,
+                                color = textColor,
+                                maxLines = 1
+                            )
+                        }
+
+                        if (endY != null) {
+                            IconButton(
+                                onClick = { endY = null; endM = null; endD = null },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    "حذف پایان",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = DebitRed
+                                )
+                            }
+                        }
                     }
                 }
 
                 // ─── روز واریز ───
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("روز واریز", style = MaterialTheme.typography.bodyMedium, color = Color.White, modifier = Modifier.width(80.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Row(
-                        Modifier.clickable { payoutDay = 0 },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Column {
+                    Text("روز واریز سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
-                            checked = payoutDay == 0,
-                            onCheckedChange = { if (it) payoutDay = 0 },
+                            checked = isLastDayOfMonth,
+                            onCheckedChange = { isLastDayOfMonth = it },
                             colors = CheckboxDefaults.colors(
-                                checkedColor = Color.White,
-                                checkmarkColor = HeaderBlue,
-                                uncheckedColor = Color.White
+                                checkedColor = HeaderBlue,
+                                checkmarkColor = Color.White,
+                                uncheckedColor = labelColor
                             )
                         )
-                        Text("آخر ماه", color = Color.White, fontSize = 12.sp)
-                    }
-                    if (payoutDay != 0) {
-                        Spacer(Modifier.width(8.dp))
+                        Text("آخر ماه", color = textColor, fontSize = 13.sp)
+                        Spacer(Modifier.width(12.dp))
                         OutlinedTextField(
                             value = payoutDay.toString(),
-                            onValueChange = { payoutDay = it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 },
+                            onValueChange = {
+                                payoutDay = it.filter { c -> c.isDigit() }.toIntOrNull()?.coerceIn(1, 31) ?: 1
+                            },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
-                            modifier = Modifier.width(70.dp),
-                            colors = fieldColors
+                            enabled = !isLastDayOfMonth,
+                            modifier = Modifier.width(80.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = textColor,
+                                unfocusedTextColor = textColor,
+                                disabledTextColor = labelColor.copy(alpha = 0.5f),
+                                focusedBorderColor = HeaderBlue,
+                                unfocusedBorderColor = Color(0xFFCCCCCC),
+                                disabledBorderColor = Color(0xFFE0E0E0),
+                                cursorColor = HeaderBlue
+                            )
                         )
-                    }
-                }
-
-                if (payoutDay == 0) {
-                    TextButton(
-                        onClick = { payoutDay = 15 },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("تعیین روز مشخص", color = Color.White, fontSize = 11.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("روز", color = labelColor, fontSize = 12.sp)
                     }
                 }
 
                 // ─── حساب مقصد ───
                 if (accountId != 0L) {
-                    Text("حساب مقصد سود", style = MaterialTheme.typography.bodyMedium, color = Color.White, fontWeight = FontWeight.Bold)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(
-                            selected = destinationAccountId == null,
-                            onClick = { destinationAccountId = null },
-                            colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.White)
-                        )
-                        Text("همین حساب", color = Color.White, fontSize = 13.sp)
-                    }
-                    allAccounts.filter { it.id != accountId }.take(5).forEach { acc ->
+                    Column {
+                        Text("حساب مقصد سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(
-                                selected = destinationAccountId == acc.id,
-                                onClick = { destinationAccountId = acc.id },
-                                colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.White)
+                                selected = destinationAccountId == null,
+                                onClick = { destinationAccountId = null },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = HeaderBlue,
+                                    unselectedColor = labelColor
+                                )
                             )
-                            Text(acc.name, color = Color.White, fontSize = 13.sp)
+                            Text("همین حساب", color = textColor, fontSize = 13.sp)
+                        }
+                        allAccounts.filter { it.id != accountId }.take(5).forEach { acc ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = destinationAccountId == acc.id,
+                                    onClick = { destinationAccountId = acc.id },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = HeaderBlue,
+                                        unselectedColor = labelColor
+                                    )
+                                )
+                                Text(acc.name, color = textColor, fontSize = 13.sp)
+                            }
                         }
                     }
                 }
 
                 if (error.isNotBlank()) {
-                    Text(error, color = Color(0xFFFFCDD2), style = MaterialTheme.typography.bodySmall)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            error,
+                            color = DebitRed,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
                 }
             }
         },
@@ -1816,7 +1889,6 @@ fun ProfitPeriodEditor(
                         if (endMs <= startMs) { error = "تاریخ پایان باید بعد از شروع باشه"; return@Button }
                     }
 
-                    // ✅ چک تداخل با بازه‌های قبلی
                     scope.launch {
                         val existingPeriods = db.profitPeriod().byAccountNow(accountId)
                         val newStartMs = toMillis(startY, startM, startD)
@@ -1846,17 +1918,18 @@ fun ProfitPeriodEditor(
                             rate = r,
                             startYear = startY, startMonth = startM, startDay = startD,
                             endYear = endY, endMonth = endM, endDay = endD,
-                            payoutDay = payoutDay,
+                            payoutDay = if (isLastDayOfMonth) 0 else payoutDay,
                             destinationAccountId = destinationAccountId
                         ))
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = HeaderBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White),
+                shape = RoundedCornerShape(12.dp)
             ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
-                Text("انصراف", color = Color.White)
+                Text("انصراف", color = HeaderBlue)
             }
         }
     )
@@ -1916,7 +1989,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         }
         val customUri = getSavedBackupFolderUri(context)
         if (customUri != null) {
-            val folder = DocumentFile.fromTreeUri(context, customUri)
+            val folder = DocumentTree(context, customUri)
             customFolderName = folder?.name ?: "پوشه انتخاب شده"
         }
     }
@@ -2084,16 +2157,18 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     if (confirmRemoveFolder) {
         AlertDialog(
             onDismissRequest = { confirmRemoveFolder = false },
-            containerColor = HeaderBlue,
-            title = { Text("حذف پوشه بکاپ", fontWeight = FontWeight.Bold, color = Color.White) },
-            text = { Text("بکاپ‌های بعدی در حافظه داخلی برنامه ذخیره می‌شوند.", color = Color.White) },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+            title = { Text("حذف پوشه بکاپ", fontWeight = FontWeight.Bold, color = HeaderBlue) },
+            text = { Text("بکاپ‌های بعدی در حافظه داخلی برنامه ذخیره می‌شوند.") },
             confirmButton = {
                 Button(
                     onClick = { clearBackupFolderUri(context); customFolderName = null; confirmRemoveFolder = false },
                     colors = ButtonDefaults.buttonColors(containerColor = DebitRed)
                 ) { Text("حذف") }
             },
-            dismissButton = { TextButton(onClick = { confirmRemoveFolder = false }) { Text("انصراف", color = Color.White) } }
+            dismissButton = { TextButton(onClick = { confirmRemoveFolder = false }) { Text("انصراف", color = HeaderBlue) } }
         )
     }
 }
@@ -2106,13 +2181,15 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 fun ConfirmDeleteDialog(title: String, message: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
     AlertDialog(
         onDismissRequest = onCancel,
-        containerColor = HeaderBlue,
-        title = { Text(title, fontWeight = FontWeight.Bold, color = Color.White) },
-        text = { Text(message, color = Color.White) },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = { Text(title, fontWeight = FontWeight.Bold, color = HeaderBlue) },
+        text = { Text(message) },
         confirmButton = {
             Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = DebitRed)) { Text("حذف") }
         },
-        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = Color.White) } }
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
     )
 }
 
@@ -2132,7 +2209,7 @@ fun SettingRow(title: String, subtitle: String, icon: String, onClick: () -> Uni
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine — با اصلاح محاسبه
+// ProfitEngine — با رفع باگ محاسبه
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
@@ -2163,6 +2240,8 @@ object ProfitEngine {
                 todayMillis
             }
 
+            if (periodEnd <= periodStart) continue
+
             var y = period.startYear
             var m = period.startMonth
 
@@ -2172,25 +2251,23 @@ object ProfitEngine {
                 val daysInMonth = Jalali.daysInMonth(y, m)
                 val monthStart = Jalali.startOfJalaliMonth(y, m)
 
-                // اگه ماه کاملاً بعد از periodEnd هست → break
                 if (monthStart > periodEnd) break
 
-                val payoutDayActual = if (period.payoutDay == 0) daysInMonth else period.payoutDay.coerceIn(1, daysInMonth)
+                val payoutDayActual = if (period.payoutDay == 0) daysInMonth
+                                      else period.payoutDay.coerceIn(1, daysInMonth)
                 val payoutMillisRaw = toMillis(y, m, payoutDayActual)
 
-                // اگه تاریخ پرداخت بعد از periodEnd باشه، از periodEnd استفاده کن
+                // ✅ clamp payout به periodEnd
                 val payoutMillis = if (payoutMillisRaw > periodEnd) periodEnd else payoutMillisRaw
 
-                // اگه payoutMillis قبل از periodStart باشه → برو ماه بعد
                 if (payoutMillis < periodStart) {
                     m++; if (m > 12) { m = 1; y++ }
                     continue
                 }
 
-                // اگه هنوز نرسیده → break
-                if (payoutMillisRaw > todayMillis && periodEnd >= todayMillis) break
-
-                val amount = calculateMonthlyProfit(base, periodStart, payoutMillis, y, m, period.type, period.rate)
+                val amount = calculateMonthlyProfit(
+                    base, periodStart, payoutMillis, y, m, period.type, period.rate
+                )
 
                 if (amount > 0) {
                     val dest = period.destinationAccountId ?: accountId
