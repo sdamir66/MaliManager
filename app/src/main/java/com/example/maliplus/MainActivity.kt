@@ -231,7 +231,7 @@ fun FinanceApp(db: AppDb) {
 }
 
 // ═══════════════════════════════════════════════════════
-// PageHeader
+// PageHeader — هدر بلندتر
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -249,7 +249,7 @@ fun PageHeader(
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             )
             .statusBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp)
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -302,7 +302,7 @@ fun PersonsScreen(
                     shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                 )
                 .statusBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp)
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -343,7 +343,7 @@ fun PersonsScreen(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -584,7 +584,7 @@ fun PersonScreen(
                         shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
                     )
                     .statusBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp)
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
@@ -628,7 +628,7 @@ fun PersonScreen(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -1455,7 +1455,7 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitPeriodsScreen — با LaunchedEffect
+// ProfitPeriodsScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1466,7 +1466,6 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
     var deleteTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
     val scope = rememberCoroutineScope()
 
-    // ✅ LaunchedEffect: هر وقت بازه‌ها عوض شدن، دوباره محاسبه کن
     LaunchedEffect(periods) {
         if (periods.isNotEmpty()) {
             ProfitEngine.recalculateForAccount(db, accountId, periods)
@@ -1629,7 +1628,7 @@ fun ProfitPeriodEditor(
     var endM by remember(old) { mutableStateOf(old?.endMonth) }
     var endD by remember(old) { mutableStateOf(old?.endDay) }
     var isLastDayOfMonth by remember(old) { mutableStateOf(old?.payoutDay == 0 || old == null) }
-    var payoutDay by remember(old) { mutableIntStateOf(if (old?.payoutDay == 0 || old == null) 1 else old.payoutDay) }
+    var payoutDay by remember(old) { mutableIntStateOf(if (old?.payoutDay == 0 || old == null) 16 else old.payoutDay) }
     var destinationAccountId by remember(old) { mutableStateOf(old?.destinationAccountId) }
 
     var showStartCalendar by remember { mutableStateOf(false) }
@@ -1996,7 +1995,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(BgLight)) {
         PageHeader(title = "تنظیمات", subtitle = "مدیریت بکاپ و اطلاعات", onBackClick = onBack)
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -2208,13 +2207,12 @@ fun SettingRow(title: String, subtitle: String, icon: String, onClick: () -> Uni
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitEngine
+// ProfitEngine — با منطق جدید
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
     suspend fun recalculateAll(db: AppDb) {
         db.tx().deleteAllAuto()
-
         for (account in db.accounts().allNow()) {
             val periods = db.profitPeriod().byAccountNow(account.id)
             if (periods.isEmpty()) continue
@@ -2223,94 +2221,122 @@ object ProfitEngine {
     }
 
     suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
+        if (periods.isEmpty()) return
+
         val base = db.tx().byAccountNow(accountId).filter { !it.isAutoProfit }
         val today = Jalali.nowJalali()
         val todayMillis = System.currentTimeMillis()
 
         db.tx().deleteAutoByPrefix(accountId.toString())
 
+        val sortedByStart = periods.sortedWith(
+            compareBy({ it.startYear }, { it.startMonth }, { it.startDay })
+        )
+        val firstPeriod = sortedByStart.first()
+        val overallStartMillis = toMillis(
+            firstPeriod.startYear, firstPeriod.startMonth, firstPeriod.startDay
+        )
+
         val out = mutableListOf<Transaction>()
 
-        for (period in periods) {
-            val periodStart = toMillis(period.startYear, period.startMonth, period.startDay)
-            val periodEnd = if (period.endYear != null && period.endMonth != null && period.endDay != null) {
-                toMillis(period.endYear, period.endMonth, period.endDay)
-            } else {
-                todayMillis
+        var cy = firstPeriod.startYear
+        var cm = firstPeriod.startMonth
+
+        while (true) {
+            if (cy > today[0] || (cy == today[0] && cm > today[1])) break
+
+            val daysInMonth = Jalali.daysInMonth(cy, cm)
+
+            val activePeriod = periods.find { period ->
+                val payoutDayForPeriod = if (period.payoutDay == 0) daysInMonth
+                                         else period.payoutDay.coerceIn(1, daysInMonth)
+                val monthStart = toMillis(cy, cm, 1)
+                val monthEnd = toMillis(cy, cm, payoutDayForPeriod)
+
+                val pStart = toMillis(period.startYear, period.startMonth, period.startDay)
+                val pEnd = if (period.endYear != null && period.endMonth != null && period.endDay != null) {
+                    toMillis(period.endYear, period.endMonth, period.endDay)
+                } else {
+                    Long.MAX_VALUE
+                }
+
+                monthStart <= pEnd && pStart <= monthEnd
             }
 
-            if (periodEnd <= periodStart) continue
+            if (activePeriod != null) {
+                val payoutDayActual = if (activePeriod.payoutDay == 0) daysInMonth
+                                      else activePeriod.payoutDay.coerceIn(1, daysInMonth)
+                val payoutMillis = toMillis(cy, cm, payoutDayActual)
 
-            var y = period.startYear
-            var m = period.startMonth
-
-            while (true) {
-                if (y > today[0] || (y == today[0] && m > today[1])) break
-
-                val daysInMonth = Jalali.daysInMonth(y, m)
-                val monthStart = Jalali.startOfJalaliMonth(y, m)
-
-                if (monthStart > periodEnd) break
-
-                val payoutDayActual = if (period.payoutDay == 0) daysInMonth
-                                      else period.payoutDay.coerceIn(1, daysInMonth)
-                val payoutMillisRaw = toMillis(y, m, payoutDayActual)
-
-                val payoutMillis = if (payoutMillisRaw > periodEnd) periodEnd else payoutMillisRaw
-
-                if (payoutMillis < periodStart) {
-                    m++; if (m > 12) { m = 1; y++ }
+                if (payoutMillis > todayMillis) {
+                    cm++; if (cm > 12) { cm = 1; cy++ }
                     continue
                 }
 
-                val amount = calculateMonthlyProfit(
-                    base, periodStart, payoutMillis, y, m, period.type, period.rate
-                )
+                val prevY: Int
+                val prevM: Int
+                if (cm == 1) { prevY = cy - 1; prevM = 12 } else { prevY = cy; prevM = cm - 1 }
+                val prevMonthDays = Jalali.daysInMonth(prevY, prevM)
+                val startDayInPrevMonth = payoutDayActual.coerceAtMost(prevMonthDays)
+                val periodStartMillis = toMillis(prevY, prevM, startDayInPrevMonth)
+                val periodEndMillis = payoutMillis - 86400000L
+                val effectiveStart = maxOf(periodStartMillis, overallStartMillis)
 
-                if (amount > 0) {
-                    val dest = period.destinationAccountId ?: accountId
-                    val text = if (period.type == "ANNUAL")
-                        "سود سالانه ${Jalali.monthName(m)} $y — نرخ ${period.rate}%"
-                    else
-                        "سود ماهانه ${Jalali.monthName(m)} $y — نرخ ${period.rate}%"
-                    out.add(Transaction(0, dest, payoutMillis, "بستانکار", amount, text, true, "$accountId:$y:$m"))
+                var totalProfit = 0.0
+                var currentMillis = effectiveStart
+
+                while (currentMillis <= periodEndMillis) {
+                    val j = millisToJalali(currentMillis)
+                    val dayBal = base
+                        .filter { it.dateMillis <= currentMillis + 86399000L }
+                        .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+
+                    if (dayBal != 0L) {
+                        val dailyRate = if (activePeriod.type == "ANNUAL") {
+                            activePeriod.rate / 100.0 / 365.0
+                        } else {
+                            val daysInCurMonth = Jalali.daysInMonth(j[0], j[1])
+                            activePeriod.rate / 100.0 / daysInCurMonth
+                        }
+                        totalProfit += dayBal * dailyRate
+                    }
+
+                    currentMillis += 86400000L
                 }
 
-                m++; if (m > 12) { m = 1; y++ }
+                val roundedProfit = kotlin.math.round(totalProfit).toLong()
+                if (roundedProfit > 0) {
+                    val dest = activePeriod.destinationAccountId ?: accountId
+                    val text = "سود روزشمار ${Jalali.monthName(cm)} $cy — نرخ ${activePeriod.rate}%"
+
+                    out.add(Transaction(
+                        id = 0,
+                        accountId = dest,
+                        dateMillis = payoutMillis,
+                        type = "بستانکار",
+                        amount = roundedProfit,
+                        note = text,
+                        isAutoProfit = true,
+                        profitKey = "$accountId:$cy:$cm"
+                    ))
+                }
             }
+
+            cm++; if (cm > 12) { cm = 1; cy++ }
         }
+
         db.tx().insertAll(out)
     }
 
-    private fun calculateMonthlyProfit(
-        base: List<Transaction>,
-        periodStart: Long,
-        payoutMillis: Long,
-        y: Int,
-        m: Int,
-        type: String,
-        rate: Double
-    ): Long {
-        val monthStart = Jalali.startOfJalaliMonth(y, m)
-        val monthEnd = payoutMillis
-
-        if (monthEnd <= periodStart) return 0L
-
-        val effectiveStart = if (monthStart > periodStart) monthStart else periodStart
-        val daysToCalc = ((monthEnd - effectiveStart) / 86400000L).toInt() + 1
-        if (daysToCalc <= 0) return 0L
-
-        val daysInMonth = if (type == "MONTHLY") Jalali.daysInMonth(y, m) else 365
-
-        var total = 0.0
-        for (d in 0 until daysToCalc) {
-            val dayMillis = effectiveStart + (d * 86400000L) + 86399000L
-            val bal = base.filter { it.dateMillis <= dayMillis }
-                .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
-            total += bal * (rate / 100.0) / daysInMonth
-        }
-
-        return kotlin.math.round(total).toLong()
+    private fun millisToJalali(millis: Long): IntArray {
+        val formatted = Jalali.format(millis)
+        val datePart = formatted.substringBefore(" ")
+        val parts = datePart.split("/")
+        return intArrayOf(
+            parts.getOrNull(0)?.toIntOrNull() ?: 0,
+            parts.getOrNull(1)?.toIntOrNull() ?: 0,
+            parts.getOrNull(2)?.toIntOrNull() ?: 0
+        )
     }
 }
 
