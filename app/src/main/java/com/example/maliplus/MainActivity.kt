@@ -1466,12 +1466,6 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
     var deleteTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(periods) {
-        if (periods.isNotEmpty()) {
-            ProfitEngine.recalculateForAccount(db, accountId, periods)
-        }
-    }
-
     AlertDialog(
         onDismissRequest = close,
         containerColor = Color.White,
@@ -1571,24 +1565,31 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
         }
     )
 
+    // ✅ اضافه کردن بازه‌ی جدید
     if (addPeriod) {
-        ProfitPeriodEditor(null, accountId, db, {
+        ProfitPeriodEditor(null, accountId, db, { newPeriod ->
             scope.launch {
-                db.profitPeriod().insert(it)
+                db.profitPeriod().insert(newPeriod)
+                val updatedPeriods = db.profitPeriod().byAccountNow(accountId)
+                ProfitEngine.recalculateForAccount(db, accountId, updatedPeriods)
                 addPeriod = false
             }
         }, { addPeriod = false })
     }
 
+    // ✅ ویرایش بازه
     editTarget?.let { target ->
-        ProfitPeriodEditor(target, accountId, db, {
+        ProfitPeriodEditor(target, accountId, db, { updated ->
             scope.launch {
-                db.profitPeriod().update(it)
+                db.profitPeriod().update(updated)
+                val updatedPeriods = db.profitPeriod().byAccountNow(accountId)
+                ProfitEngine.recalculateForAccount(db, accountId, updatedPeriods)
                 editTarget = null
             }
         }, { editTarget = null })
     }
 
+    // ✅ حذف بازه
     deleteTarget?.let { target ->
         ConfirmDeleteDialog(
             title = "حذف بازه",
@@ -1596,6 +1597,8 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
             onConfirm = {
                 scope.launch {
                     db.profitPeriod().delete(target)
+                    val updatedPeriods = db.profitPeriod().byAccountNow(accountId)
+                    ProfitEngine.recalculateForAccount(db, accountId, updatedPeriods)
                     deleteTarget = null
                 }
             },
