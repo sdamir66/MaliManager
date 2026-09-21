@@ -2221,7 +2221,14 @@ fun SettingRow(title: String, subtitle: String, icon: String, onClick: () -> Uni
 // ProfitEngine — با حداقل بالانس روز
 // ═══════════════════════════════════════════════════════
 
-object ProfitEngine {
+
+// ═══════════════════════════════════════════════════════
+// Backup
+// ═══════════════════════════════════════════════════════
+
+object Backup {
+    suspend fun exportToJson(db: AppDb): String {
+        val root = JSONObject()object ProfitEngine {
     suspend fun recalculateAll(db: AppDb) {
         db.tx().deleteAllAuto()
         for (account in db.accounts().allNow()) {
@@ -2234,7 +2241,7 @@ object ProfitEngine {
     suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
         if (periods.isEmpty()) return
 
-        // ✅ base قابل تغییر (تا سودهای قبلی بهش اضافه بشن)
+        // ✅ همه‌ی تراکنش‌ها (عادی + سودهای قبلی که تو base اضافه می‌شن)
         val base = db.tx().byAccountNow(accountId)
             .filter { !it.isAutoProfit }
             .sortedBy { it.dateMillis }
@@ -2255,6 +2262,7 @@ object ProfitEngine {
 
         val out = mutableListOf<Transaction>()
 
+        // ✅ برای هر ماه (از ماه شروع بازه تا امروز)
         var cy = firstPeriod.startYear
         var cm = firstPeriod.startMonth
 
@@ -2284,20 +2292,27 @@ object ProfitEngine {
                                       else activePeriod.payoutDay.coerceIn(1, daysInMonth)
                 val payoutMillis = toMillis(cy, cm, payoutDayActual)
 
+                // اگه هنوز نرسیده، برو ماه بعد
                 if (payoutMillis > todayMillis) {
                     cm++; if (cm > 12) { cm = 1; cy++ }
                     continue
                 }
 
+                // ✅ شروع دوره = payoutDay ماه قبل
                 val prevY: Int
                 val prevM: Int
                 if (cm == 1) { prevY = cy - 1; prevM = 12 } else { prevY = cy; prevM = cm - 1 }
                 val prevMonthDays = Jalali.daysInMonth(prevY, prevM)
                 val startDayInPrevMonth = payoutDayActual.coerceAtMost(prevMonthDays)
                 val periodStartMillis = toMillis(prevY, prevM, startDayInPrevMonth)
+
+                // ✅ پایان دوره = payoutDay - 1 روز این ماه
                 val periodEndMillis = payoutMillis - 86400000L
                 val effectiveStart = maxOf(periodStartMillis, overallStartMillis)
 
+                // ✅ برای هر روز از دوره:
+                //    - کمترین مانده‌ی روز رو حساب کن
+                //    - سود روز رو اضافه کن
                 var totalProfit = 0.0
                 var currentMillis = effectiveStart
 
@@ -2306,7 +2321,7 @@ object ProfitEngine {
                     val dayStartMillis = currentMillis
                     val dayEndMillis = currentMillis + 86399000L
 
-                    // ✅ استفاده از base (شامل سودهای قبلی)
+                    // ✅ کمترین مانده‌ی این روز
                     val minBalance = calculateMinBalanceInDay(
                         base = base,
                         dayStartMillis = dayStartMillis,
@@ -2317,6 +2332,7 @@ object ProfitEngine {
                         val dailyRate = if (activePeriod.type == "ANNUAL") {
                             activePeriod.rate / 100.0 / 365.0
                         } else {
+                            // ✅ ماهانه: تقسیم بر تعداد روزهای ماه
                             val daysInCurMonth = Jalali.daysInMonth(j[0], j[1])
                             activePeriod.rate / 100.0 / daysInCurMonth
                         }
@@ -2346,7 +2362,7 @@ object ProfitEngine {
 
                     out.add(profitTx)
 
-                    // ✅ اگه سود به همین حساب واریز می‌شه، به base اضافه کن
+                    // ✅ سود به حساب اضافه می‌شه (برای محاسبه‌ی ماه‌های بعد)
                     if (dest == accountId) {
                         base.add(profitTx)
                         base.sortBy { it.dateMillis }
@@ -2360,21 +2376,31 @@ object ProfitEngine {
         db.tx().insertAll(out)
     }
 
+    /**
+     * کمترین مانده‌ی توی یه روز:
+     * - مانده‌ی قبل از اولین تراکنش روز
+     * - مانده‌ی بعد از هر تراکنش توی روز
+     * - کمترین بین همه‌ی اینا
+     */
     private fun calculateMinBalanceInDay(
         base: MutableList<Transaction>,
         dayStartMillis: Long,
         dayEndMillis: Long
     ): Long {
+        // مانده قبل از این روز
         val balanceAtStart = base
             .filter { it.dateMillis < dayStartMillis }
             .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
 
+        // تراکنش‌های این روز (به ترتیب زمان)
         val dayTransactions = base
             .filter { it.dateMillis in dayStartMillis..dayEndMillis }
             .sortedBy { it.dateMillis }
 
+        // اگه تراکنشی توی این روز نیست، مانده ثابت بوده
         if (dayTransactions.isEmpty()) return balanceAtStart
 
+        // ✅ محاسبه‌ی کمترین مانده
         var minBal = balanceAtStart
         var runningBal = balanceAtStart
         for (t in dayTransactions) {
@@ -2396,14 +2422,6 @@ object ProfitEngine {
         )
     }
 }
-
-// ═══════════════════════════════════════════════════════
-// Backup
-// ═══════════════════════════════════════════════════════
-
-object Backup {
-    suspend fun exportToJson(db: AppDb): String {
-        val root = JSONObject()
         fun arr() = JSONArray()
 
         val pp = arr()
