@@ -2357,178 +2357,134 @@ object Backup {
 // ═══════════════════════════════════════════════════════
 
 object ProfitEngine {
-    suspend fun recalculateAll(db: AppDb) {
-        db.tx().deleteAllAuto()
-        for (account in db.accounts().allNow()) {
-            val periods = db.profitPeriod().byAccountNow(account.id)
-            if (periods.isEmpty()) continue
-            recalculateForAccount(db, account.id, periods)
-        }
-    }
-
     suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
-        if (periods.isEmpty()) return
+    if (periods.isEmpty()) return
 
-        val base = db.tx().byAccountNow(accountId)
-            .filter { !it.isAutoProfit }
-            .sortedBy { it.dateMillis }
-            .toMutableList()
+    val base = db.tx().byAccountNow(accountId)
+        .filter { !it.isAutoProfit }
+        .sortedBy { it.dateMillis }
+        .toMutableList()
 
-        val today = Jalali.nowJalali()
-        val todayMillis = System.currentTimeMillis()
+    val today = Jalali.nowJalali()
+    val todayMillis = System.currentTimeMillis()
 
-        db.tx().deleteAutoByPrefix(accountId.toString())
+    db.tx().deleteAutoByPrefix(accountId.toString())
 
-        val sortedByStart = periods.sortedWith(
-            compareBy({ it.startYear }, { it.startMonth }, { it.startDay })
-        )
-        val firstPeriod = sortedByStart.first()
-        val overallStartMillis = toMillis(
-            firstPeriod.startYear, firstPeriod.startMonth, firstPeriod.startDay
-        )
+    val sortedByStart = periods.sortedWith(
+        compareBy({ it.startYear }, { it.startMonth }, { it.startDay })
+    )
+    val firstPeriod = sortedByStart.first()
+    val overallStartMillis = toMillis(
+        firstPeriod.startYear, firstPeriod.startMonth, firstPeriod.startDay
+    )
 
-        val out = mutableListOf<Transaction>()
+    val out = mutableListOf<Transaction>()
 
-        var cy = firstPeriod.startYear
-        var cm = firstPeriod.startMonth
+    var cy = firstPeriod.startYear
+    var cm = firstPeriod.startMonth
 
-        while (true) {
-            if (cy > today[0] || (cy == today[0] && cm > today[1])) break
+    while (true) {
+        if (cy > today[0] || (cy == today[0] && cm > today[1])) break
 
-            val daysInMonth = Jalali.daysInMonth(cy, cm)
+        val daysInMonth = Jalali.daysInMonth(cy, cm)
 
-            val activePeriod = periods.find { period ->
-                val payoutDayForPeriod = if (period.payoutDay == 0) daysInMonth
-                                         else period.payoutDay.coerceIn(1, daysInMonth)
-                val monthStart = toMillis(cy, cm, 1)
-                val monthEnd = toMillis(cy, cm, payoutDayForPeriod)
+        val activePeriod = periods.find { period ->
+            val payoutDayForPeriod = if (period.payoutDay == 0) daysInMonth
+                                     else period.payoutDay.coerceIn(1, daysInMonth)
+            val monthStart = toMillis(cy, cm, 1)
+            val monthEnd = toMillis(cy, cm, payoutDayForPeriod)
 
-                val pStart = toMillis(period.startYear, period.startMonth, period.startDay)
-                val pEnd = if (period.endYear != null && period.endMonth != null && period.endDay != null) {
-                    toMillis(period.endYear, period.endMonth, period.endDay)
+            val pStart = toMillis(period.startYear, period.startMonth, period.startDay)
+            val pEnd = if (period.endYear != null && period.endMonth != null && period.endDay != null) {
+                toMillis(period.endYear, period.endMonth, period.endDay)
+            } else {
+                Long.MAX_VALUE
+            }
+
+            monthStart <= pEnd && pStart <= monthEnd
+        }
+
+        if (activePeriod != null) {
+            val payoutDayActual = if (activePeriod.payoutDay <= 0) daysInMonth
+                                  else activePeriod.payoutDay.coerceIn(1, daysInMonth)
+            val payoutMillis = toMillis(cy, cm, payoutDayActual)
+
+            if (payoutMillis > todayMillis) {
+                cm++; if (cm > 12) { cm = 1; cy++ }
+                continue
+            }
+
+            val prevY: Int
+            val prevM: Int
+            if (cm == 1) { prevY = cy - 1; prevM = 12 } else { prevY = cy; prevM = cm - 1 }
+            val prevMonthDays = Jalali.daysInMonth(prevY, prevM)
+            val startDayInPrevMonth = payoutDayActual.coerceAtMost(prevMonthDays)
+            val periodStartMillis = toMillis(prevY, prevM, startDayInPrevMonth)
+
+            val periodEndMillis = payoutMillis - 86400000L
+            val effectiveStart = maxOf(periodStartMillis, overallStartMillis)
+
+            val daysForRate = prevMonthDays
+
+            var totalProfit = 0.0
+            var currentMillis = effectiveStart
+
+            while (currentMillis <= periodEndMillis) {
+                val dayStartMillis = currentMillis
+                val dayEndMillis = currentMillis + 86399000L
+
+                val minBalance = calculateMinBalanceInDay(
+                    base = base,
+                    dayStartMillis = dayStartMillis,
+                    dayEndMillis = dayEndMillis
+                )
+
+                if (minBalance > 0L) {
+                    val dailyRate = if (activePeriod.type == "ANNUAL") {
+                        activePeriod.rate / 100.0 / 365.0
+                    } else {
+                        activePeriod.rate / 100.0 / daysForRate
+                    }
+                    totalProfit += minBalance * dailyRate
+                }
+
+                currentMillis += 86400000L
+            }
+
+            val roundedProfit = kotlin.math.round(totalProfit).toLong()
+            if (roundedProfit > 0) {
+                val dest = activePeriod.destinationAccountId ?: accountId
+                val typeLabel = if (activePeriod.type == "ANNUAL") "سالانه" else "ماهانه"
+                val rateDisplay = if (activePeriod.rate % 1.0 == 0.0) {
+                    activePeriod.rate.toLong().toString()
                 } else {
-                    Long.MAX_VALUE
+                    activePeriod.rate.toString()
                 }
+                // ✅ متن شرح جدید
+                val text = "واریز سود با نرخ $rateDisplay درصد $typeLabel"
 
-                monthStart <= pEnd && pStart <= monthEnd
-            }
+                val profitTx = Transaction(
+                    id = 0,
+                    accountId = dest,
+                    dateMillis = payoutMillis,
+                    type = "بستانکار",
+                    amount = roundedProfit,
+                    note = text,
+                    isAutoProfit = true,
+                    profitKey = "$accountId:$cy:$cm"
+                )
 
-            if (activePeriod != null) {
-                val payoutDayActual = if (activePeriod.payoutDay <= 0) daysInMonth
-                                      else activePeriod.payoutDay.coerceIn(1, daysInMonth)
-                val payoutMillis = toMillis(cy, cm, payoutDayActual)
+                out.add(profitTx)
 
-                if (payoutMillis > todayMillis) {
-                    cm++; if (cm > 12) { cm = 1; cy++ }
-                    continue
-                }
-
-                val prevY: Int
-                val prevM: Int
-                if (cm == 1) { prevY = cy - 1; prevM = 12 } else { prevY = cy; prevM = cm - 1 }
-                val prevMonthDays = Jalali.daysInMonth(prevY, prevM)
-                val startDayInPrevMonth = payoutDayActual.coerceAtMost(prevMonthDays)
-                val periodStartMillis = toMillis(prevY, prevM, startDayInPrevMonth)
-
-                val periodEndMillis = payoutMillis - 86400000L
-                val effectiveStart = maxOf(periodStartMillis, overallStartMillis)
-
-                var totalProfit = 0.0
-                var currentMillis = effectiveStart
-
-                while (currentMillis <= periodEndMillis) {
-                    val j = millisToJalali(currentMillis)
-                    val dayStartMillis = currentMillis
-                    val dayEndMillis = currentMillis + 86399000L
-
-                    val minBalance = calculateMinBalanceInDay(
-                        base = base,
-                        dayStartMillis = dayStartMillis,
-                        dayEndMillis = dayEndMillis
-                    )
-
-                    if (minBalance > 0L) {
-                        val dailyRate = if (activePeriod.type == "ANNUAL") {
-                            activePeriod.rate / 100.0 / 365.0
-                        } else {
-                            val daysInCurMonth = Jalali.daysInMonth(j[0], j[1])
-                            activePeriod.rate / 100.0 / daysInCurMonth
-                        }
-                        totalProfit += minBalance * dailyRate
-                    }
-
-                    currentMillis += 86400000L
-                }
-
-                val roundedProfit = kotlin.math.round(totalProfit).toLong()
-                if (roundedProfit > 0) {
-                    val dest = activePeriod.destinationAccountId ?: accountId
-                    val typeLabel = if (activePeriod.type == "ANNUAL") "سالانه" else "ماهانه"
-                    val rateDisplay = if (activePeriod.rate % 1.0 == 0.0) activePeriod.rate.toLong().toString() else activePeriod.rate.toString()
-                    val text = "سود ${Jalali.monthName(cm)} $cy — نرخ $rateDisplay% $typeLabel"
-
-                    val profitTx = Transaction(
-                        id = 0,
-                        accountId = dest,
-                        dateMillis = payoutMillis,
-                        type = "بستانکار",
-                        amount = roundedProfit,
-                        note = text,
-                        isAutoProfit = true,
-                        profitKey = "$accountId:$cy:$cm"
-                    )
-
-                    out.add(profitTx)
-
-                    if (dest == accountId) {
-                        base.add(profitTx)
-                        base.sortBy { it.dateMillis }
-                    }
+                if (dest == accountId) {
+                    base.add(profitTx)
+                    base.sortBy { it.dateMillis }
                 }
             }
-
-            cm++; if (cm > 12) { cm = 1; cy++ }
         }
 
-        db.tx().insertAll(out)
+        cm++; if (cm > 12) { cm = 1; cy++ }
     }
 
-    /**
-     * کمترین مانده‌ی توی یه روز
-     */
-    private fun calculateMinBalanceInDay(
-        base: MutableList<Transaction>,
-        dayStartMillis: Long,
-        dayEndMillis: Long
-    ): Long {
-        val balanceAtStart = base
-            .filter { it.dateMillis < dayStartMillis }
-            .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
-
-        val dayTransactions = base
-            .filter { it.dateMillis in dayStartMillis..dayEndMillis }
-            .sortedBy { it.dateMillis }
-
-        if (dayTransactions.isEmpty()) return balanceAtStart
-
-        var minBal = balanceAtStart
-        var runningBal = balanceAtStart
-        for (t in dayTransactions) {
-            runningBal += if (t.type == "بستانکار") t.amount else -t.amount
-            if (runningBal < minBal) minBal = runningBal
-        }
-
-        return minBal
-    }
-
-    private fun millisToJalali(millis: Long): IntArray {
-        val formatted = Jalali.format(millis)
-        val datePart = formatted.substringBefore(" ")
-        val parts = datePart.split("/")
-        return intArrayOf(
-            parts.getOrNull(0)?.toIntOrNull() ?: 0,
-            parts.getOrNull(1)?.toIntOrNull() ?: 0,
-            parts.getOrNull(2)?.toIntOrNull() ?: 0
-        )
-    }
+    db.tx().insertAll(out)
 }
