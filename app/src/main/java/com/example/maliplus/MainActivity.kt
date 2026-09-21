@@ -2231,9 +2231,11 @@ object ProfitEngine {
     suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
         if (periods.isEmpty()) return
 
+        // ✅ base قابل تغییر (تا سودهای قبلی بهش اضافه بشن)
         val base = db.tx().byAccountNow(accountId)
             .filter { !it.isAutoProfit }
             .sortedBy { it.dateMillis }
+            .toMutableList()
 
         val today = Jalali.nowJalali()
         val todayMillis = System.currentTimeMillis()
@@ -2301,6 +2303,7 @@ object ProfitEngine {
                     val dayStartMillis = currentMillis
                     val dayEndMillis = currentMillis + 86399000L
 
+                    // ✅ استفاده از base (شامل سودهای قبلی)
                     val minBalance = calculateMinBalanceInDay(
                         base = base,
                         dayStartMillis = dayStartMillis,
@@ -2327,7 +2330,7 @@ object ProfitEngine {
                     val rateDisplay = if (activePeriod.rate % 1.0 == 0.0) activePeriod.rate.toLong().toString() else activePeriod.rate.toString()
                     val text = "سود ${Jalali.monthName(cm)} $cy — نرخ $rateDisplay% $typeLabel"
 
-                    out.add(Transaction(
+                    val profitTx = Transaction(
                         id = 0,
                         accountId = dest,
                         dateMillis = payoutMillis,
@@ -2336,7 +2339,15 @@ object ProfitEngine {
                         note = text,
                         isAutoProfit = true,
                         profitKey = "$accountId:$cy:$cm"
-                    ))
+                    )
+
+                    out.add(profitTx)
+
+                    // ✅ اگه سود به همین حساب واریز می‌شه، به base اضافه کن
+                    if (dest == accountId) {
+                        base.add(profitTx)
+                        base.sortBy { it.dateMillis }
+                    }
                 }
             }
 
@@ -2346,14 +2357,8 @@ object ProfitEngine {
         db.tx().insertAll(out)
     }
 
-    /**
-     * محاسبه‌ی حداقل بالانس توی یه روز
-     * - بالانس قبل از اولین تراکنش روز
-     * - بالانس بعد از هر تراکنش توی روز
-     * - حداقل بین همه‌ی اینا
-     */
     private fun calculateMinBalanceInDay(
-        base: List<Transaction>,
+        base: MutableList<Transaction>,
         dayStartMillis: Long,
         dayEndMillis: Long
     ): Long {
