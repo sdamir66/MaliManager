@@ -535,7 +535,13 @@ fun PersonCard(
                     filteredAccounts.forEach { (acc, bal) ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(acc.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                            Text(money(kotlin.math.abs(bal)), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (bal >= 0) CreditGreen else DebitRed)
+                            // ✅ مانده منفی
+                            Text(
+                                if (bal >= 0) money(bal) else "−${money(-bal)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (bal >= 0) CreditGreen else DebitRed
+                            )
                             Spacer(Modifier.width(6.dp))
                             Text(acc.displayUnit(), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                             Spacer(Modifier.width(6.dp))
@@ -798,7 +804,13 @@ fun SwipeableAccountCard(
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(money(kotlin.math.abs(balance)), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge, color = if (isCredit) CreditGreen else DebitRed)
+                    // ✅ مانده منفی
+                    Text(
+                        if (isCredit) money(balance) else "−${money(-balance)}",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (isCredit) CreditGreen else DebitRed
+                    )
                     Spacer(Modifier.height(2.dp))
                     Text(if (isCredit) "بستانکار" else "بدهکار", style = MaterialTheme.typography.labelSmall, color = if (isCredit) CreditGreen else DebitRed)
                 }
@@ -806,7 +818,6 @@ fun SwipeableAccountCard(
         }
     }
 }
-
 // ═══════════════════════════════════════════════════════
 // AccountScreen
 // ═══════════════════════════════════════════════════════
@@ -846,10 +857,21 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             ) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(money(kotlin.math.abs(bal)), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
+                        // ✅ مانده کل با علامت منفی و رنگ قرمز/سبز
+                        Text(
+                            if (isCredit) money(bal) else "−${money(-bal)}",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isCredit) CreditGreen else DebitRed
+                        )
                         Spacer(Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (isCredit) "بستانکار" else "بدهکار", style = MaterialTheme.typography.bodyMedium, color = if (isCredit) CreditGreen else DebitRed, fontWeight = FontWeight.Medium)
+                            Text(
+                                if (isCredit) "بستانکار" else "بدهکار",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isCredit) CreditGreen else DebitRed,
+                                fontWeight = FontWeight.Medium
+                            )
                             Spacer(Modifier.width(4.dp))
                             Text(a.displayUnit(), style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                         }
@@ -910,7 +932,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
         )
     }
 }
-
 // ═══════════════════════════════════════════════════════
 // SwipeableTransactionCard
 // ═══════════════════════════════════════════════════════
@@ -1358,6 +1379,7 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
         mutableStateOf(old?.dateMillis ?: System.currentTimeMillis())
     }
     var showCalendar by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     val textColor = Color(0xFF1B1B1F)
     val labelColor = Color(0xFF5C5D72)
@@ -1413,6 +1435,8 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                     colors = fieldColors
                 )
                 Spacer(Modifier.height(8.dp))
+
+                // ✅ دکمه تاریخ
                 OutlinedButton(
                     onClick = { showCalendar = true },
                     modifier = Modifier.fillMaxWidth(),
@@ -1420,8 +1444,26 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                 ) {
                     Icon(Icons.Default.DateRange, null, modifier = Modifier.size(18.dp), tint = HeaderBlue)
                     Spacer(Modifier.width(8.dp))
-                    Text(Jalali.format(dateMillis), color = HeaderBlue)
+                    Text(Jalali.format(dateMillis).substringBefore(" "), color = HeaderBlue)
                 }
+                Spacer(Modifier.height(8.dp))
+
+                // ✅ دکمه ساعت
+                OutlinedButton(
+                    onClick = { showTimePicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = HeaderBlue)
+                ) {
+                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = dateMillis }
+                    Text(
+                        "⏰  %02d:%02d".format(
+                            cal.get(java.util.Calendar.HOUR_OF_DAY),
+                            cal.get(java.util.Calendar.MINUTE)
+                        ),
+                        color = HeaderBlue
+                    )
+                }
+
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(note, { note = it }, label = { Text("شرح") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
             }
@@ -1440,17 +1482,46 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
     )
 
     if (showCalendar) {
-        val j = Jalali.nowJalali()
+        val j = Jalali.toJalaliPublic(dateMillis)
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = dateMillis }
         JalaliCalendarDialog(
             initialYear = j[0],
             initialMonth = j[1],
             initialDay = j[2],
             onSelect = { y, m, d ->
-                dateMillis = toMillis(y, m, d)
+                val newCal = java.util.Calendar.getInstance().apply {
+                    timeInMillis = toMillis(y, m, d)
+                    set(java.util.Calendar.HOUR_OF_DAY, cal.get(java.util.Calendar.HOUR_OF_DAY))
+                    set(java.util.Calendar.MINUTE, cal.get(java.util.Calendar.MINUTE))
+                    set(java.util.Calendar.SECOND, 0)
+                    set(java.util.Calendar.MILLISECOND, 0)
+                }
+                dateMillis = newCal.timeInMillis
                 showCalendar = false
             },
             onCancel = { showCalendar = false }
         )
+    }
+
+    if (showTimePicker) {
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = dateMillis }
+        android.app.TimePickerDialog(
+            LocalContext.current,
+            { _, hour, minute ->
+                val newCal = java.util.Calendar.getInstance().apply {
+                    timeInMillis = dateMillis
+                    set(java.util.Calendar.HOUR_OF_DAY, hour)
+                    set(java.util.Calendar.MINUTE, minute)
+                    set(java.util.Calendar.SECOND, 0)
+                    set(java.util.Calendar.MILLISECOND, 0)
+                }
+                dateMillis = newCal.timeInMillis
+                showTimePicker = false
+            },
+            cal.get(java.util.Calendar.HOUR_OF_DAY),
+            cal.get(java.util.Calendar.MINUTE),
+            true
+        ).show()
     }
 }
 
@@ -1638,8 +1709,12 @@ fun ProfitPeriodEditor(
     var showStartCalendar by remember { mutableStateOf(false) }
     var showEndCalendar by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+    var conflictError by remember { mutableStateOf<String?>(null) }
+    var isChecking by remember { mutableStateOf(false) }
 
     val allAccounts by db.accounts().all().collectAsState(emptyList())
+    val currentAccount = allAccounts.find { it.id == accountId }
+    val currentUnit = currentAccount?.displayUnit() ?: ""
 
     val textColor = Color(0xFF1B1B1F)
     val labelColor = Color(0xFF5C5D72)
@@ -1837,7 +1912,7 @@ fun ProfitPeriodEditor(
                     }
                 }
 
-                if (accountId != 0L) {
+                if (accountId != 0L && currentAccount != null) {
                     Column {
                         Text("حساب مقصد سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
                         Spacer(Modifier.height(4.dp))
@@ -1852,32 +1927,37 @@ fun ProfitPeriodEditor(
                             )
                             Text("همین حساب", color = textColor, fontSize = 13.sp)
                         }
-                        allAccounts.filter { it.id != accountId }.take(5).forEach { acc ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                RadioButton(
-                                    selected = destinationAccountId == acc.id,
-                                    onClick = { destinationAccountId = acc.id },
-                                    colors = RadioButtonDefaults.colors(
-                                        selectedColor = HeaderBlue,
-                                        unselectedColor = labelColor
+                        allAccounts
+                            .filter { it.id != accountId && it.displayUnit() == currentUnit }
+                            .take(5)
+                            .forEach { acc ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    RadioButton(
+                                        selected = destinationAccountId == acc.id,
+                                        onClick = { destinationAccountId = acc.id },
+                                        colors = RadioButtonDefaults.colors(
+                                            selectedColor = HeaderBlue,
+                                            unselectedColor = labelColor
+                                        )
                                     )
-                                )
-                                Text(acc.name, color = textColor, fontSize = 13.sp)
+                                    Text(acc.name, color = textColor, fontSize = 13.sp)
+                                }
                             }
-                        }
                     }
                 }
 
                 if (error.isNotBlank()) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             error,
                             color = DebitRed,
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(8.dp)
+                            modifier = Modifier.padding(10.dp),
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -1898,11 +1978,24 @@ fun ProfitPeriodEditor(
                         return@Button
                     }
 
+                    if (destinationAccountId != null) {
+                        val destAcc = allAccounts.find { it.id == destinationAccountId }
+                        if (destAcc != null && currentAccount != null &&
+                            destAcc.displayUnit() != currentAccount.displayUnit()) {
+                            error = "حساب مقصد باید هم‌ارز با حساب اصلی باشه (${currentAccount.displayUnit()})"
+                            return@Button
+                        }
+                    }
+
+                    error = ""
+                    isChecking = true
+
                     scope.launch {
                         val existingPeriods = db.profitPeriod().byAccountNow(accountId)
                         val newStartMs = toMillis(startY, startM, startD)
                         val newEndMs = if (endY != null) toMillis(endY!!, endM!!, endD!!) else Long.MAX_VALUE
 
+                        var conflictMsg: String? = null
                         for (existing in existingPeriods) {
                             if (existing.id == old?.id) continue
 
@@ -1914,12 +2007,18 @@ fun ProfitPeriodEditor(
                             }
 
                             if (newStartMs <= existingEndMs && existingStartMs <= newEndMs) {
-                                error = "این بازه با بازه‌ی موجود تداخل داره"
-                                return@launch
+                                conflictMsg = "این بازه با بازه‌ی موجود تداخل داره"
+                                break
                             }
                         }
 
-                        error = ""
+                        isChecking = false
+
+                        if (conflictMsg != null) {
+                            conflictError = conflictMsg
+                            return@launch
+                        }
+
                         onSave(ProfitPeriod(
                             id = old?.id ?: 0,
                             accountId = accountId,
@@ -1932,6 +2031,7 @@ fun ProfitPeriodEditor(
                         ))
                     }
                 },
+                enabled = !isChecking,
                 colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White),
                 shape = RoundedCornerShape(12.dp)
             ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
@@ -1951,11 +2051,28 @@ fun ProfitPeriodEditor(
 
     if (showEndCalendar) {
         JalaliCalendarDialog(
-            endY ?: startY,
-            endM ?: startM,
-            endD ?: startD,
+            endY ?: today[0],
+            endM ?: today[1],
+            endD ?: today[2],
             { y, m, d -> endY = y; endM = m; endD = d; showEndCalendar = false },
             { showEndCalendar = false }
+        )
+    }
+
+    if (conflictError != null) {
+        AlertDialog(
+            onDismissRequest = { conflictError = null },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.border(2.dp, DebitRed, RoundedCornerShape(20.dp)),
+            title = { Text("خطا", fontWeight = FontWeight.Bold, color = DebitRed) },
+            text = { Text(conflictError!!, color = Color(0xFF1B1B1F)) },
+            confirmButton = {
+                Button(
+                    onClick = { conflictError = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = DebitRed)
+                ) { Text("باشه") }
+            }
         )
     }
 }
