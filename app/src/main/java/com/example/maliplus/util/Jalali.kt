@@ -56,6 +56,12 @@ object Jalali {
 
     fun startOfJalaliMonth(y: Int, m: Int): Long = toGregorian(y, m, 1)
 
+    /**
+     * ✅ تابع عمومی برای تبدیل millis به تاریخ شمسی
+     * (برای استفاده در TxEditor و جاهای دیگه)
+     */
+    fun toJalaliPublic(millis: Long): IntArray = toJalali(millis)
+
     private fun isLeap(y: Int): Boolean {
         val r = y % 33
         return r in intArrayOf(1, 5, 9, 13, 17, 22, 26, 30)
