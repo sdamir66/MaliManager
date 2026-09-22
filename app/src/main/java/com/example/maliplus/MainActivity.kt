@@ -535,7 +535,6 @@ fun PersonCard(
                     filteredAccounts.forEach { (acc, bal) ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(acc.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                            // ✅ مانده منفی
                             Text(
                                 if (bal >= 0) money(bal) else "−${money(-bal)}",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -804,7 +803,6 @@ fun SwipeableAccountCard(
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    // ✅ مانده منفی
                     Text(
                         if (isCredit) money(balance) else "−${money(-balance)}",
                         fontWeight = FontWeight.Bold,
@@ -857,7 +855,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             ) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        // ✅ مانده کل با علامت منفی و رنگ قرمز/سبز
                         Text(
                             if (isCredit) money(bal) else "−${money(-bal)}",
                             style = MaterialTheme.typography.headlineMedium,
@@ -932,6 +929,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
         )
     }
 }
+
 // ═══════════════════════════════════════════════════════
 // SwipeableTransactionCard
 // ═══════════════════════════════════════════════════════
@@ -1000,14 +998,28 @@ fun SwipeableTransactionCard(
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("${if (isTxCredit) "+" else "−"}${money(transaction.amount)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = if (isTxCredit) CreditGreen else DebitRed)
+                    Text(
+                        "${if (isTxCredit) "+" else "−"}${money(transaction.amount)}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isTxCredit) CreditGreen else DebitRed
+                    )
                     Spacer(Modifier.height(2.dp))
-                    Text("مانده: ${money(kotlin.math.abs(runningBalance))}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Text(
+                        "مانده: ${if (runningBalance >= 0) money(runningBalance) else "−${money(-runningBalance)}"}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (runningBalance >= 0) Color.Gray else DebitRed,
+                        fontWeight = if (runningBalance >= 0) FontWeight.Normal else FontWeight.Bold
+                    )
                 }
             }
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════
+// AutoTransactionCard  ← ✅ این تابع قبلاً گم شده بود
+// ═══════════════════════════════════════════════════════
 
 @Composable
 fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalance: Long) {
@@ -1027,7 +1039,12 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
                     Text(transaction.type, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = CreditGreen)
                     Spacer(Modifier.width(6.dp))
                     Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = RoundedCornerShape(6.dp)) {
-                        Text("خودکار", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        Text(
+                            "خودکار",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
                     }
                 }
                 Spacer(Modifier.height(2.dp))
@@ -1040,7 +1057,12 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
             Column(horizontalAlignment = Alignment.End) {
                 Text("+${money(transaction.amount)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = CreditGreen)
                 Spacer(Modifier.height(2.dp))
-                Text("مانده: ${money(kotlin.math.abs(runningBalance))}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Text(
+                    "مانده: ${if (runningBalance >= 0) money(runningBalance) else "−${money(-runningBalance)}"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (runningBalance >= 0) Color.Gray else DebitRed,
+                    fontWeight = if (runningBalance >= 0) FontWeight.Normal else FontWeight.Bold
+                )
             }
         }
     }
@@ -1365,7 +1387,6 @@ fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCa
         dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
     )
 }
-
 // ═══════════════════════════════════════════════════════
 // TxEditor
 // ═══════════════════════════════════════════════════════
@@ -1436,7 +1457,6 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                 )
                 Spacer(Modifier.height(8.dp))
 
-                // ✅ دکمه تاریخ
                 OutlinedButton(
                     onClick = { showCalendar = true },
                     modifier = Modifier.fillMaxWidth(),
@@ -1448,7 +1468,6 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
                 }
                 Spacer(Modifier.height(8.dp))
 
-                // ✅ دکمه ساعت
                 OutlinedButton(
                     onClick = { showTimePicker = true },
                     modifier = Modifier.fillMaxWidth(),
@@ -1636,7 +1655,6 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
         }
     )
 
-    // ✅ اضافه کردن بازه‌ی جدید
     if (addPeriod) {
         ProfitPeriodEditor(null, accountId, db, { newPeriod ->
             scope.launch {
@@ -1648,7 +1666,6 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
         }, { addPeriod = false })
     }
 
-    // ✅ ویرایش بازه
     editTarget?.let { target ->
         ProfitPeriodEditor(target, accountId, db, { updated ->
             scope.launch {
@@ -1660,7 +1677,6 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
         }, { editTarget = null })
     }
 
-    // ✅ حذف بازه
     deleteTarget?.let { target ->
         ConfirmDeleteDialog(
             title = "حذف بازه",
@@ -1679,7 +1695,7 @@ fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: 
 }
 
 // ═══════════════════════════════════════════════════════
-// ProfitPeriodEditor — با payoutDay خالی پیش‌فرض
+// ProfitPeriodEditor
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1762,9 +1778,18 @@ fun ProfitPeriodEditor(
                             onClick = {
                                 type = "MONTHLY"
                                 if (old == null) {
-                                    startY = today[0]; startM = today[1]; startD = 1
-                                    endY = today[0]; endM = today[1]
-                                    endD = Jalali.daysInMonth(today[0], today[1])
+                                    val prevY: Int
+                                    val prevM: Int
+                                    if (today[1] == 1) {
+                                        prevY = today[0] - 1
+                                        prevM = 12
+                                    } else {
+                                        prevY = today[0]
+                                        prevM = today[1] - 1
+                                    }
+                                    startY = prevY; startM = prevM; startD = 1
+                                    endY = prevY; endM = prevM
+                                    endD = Jalali.daysInMonth(prevY, prevM)
                                 }
                             },
                             label = { Text("ماهانه") },
