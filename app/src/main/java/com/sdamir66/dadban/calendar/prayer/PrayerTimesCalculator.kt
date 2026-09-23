@@ -13,16 +13,12 @@ import java.util.TimeZone
 object PrayerTimesCalculator {
 
     /**
-     * محاسبه‌ی اوقات شرعی به روش شیعه اثناعشری (Jafari)
+     * محاسبه‌ی اوقات شرعی به روش مؤسسه ژئوفیزیک دانشگاه تهران
      *
-     * - زاویه فجر: 16 درجه
+     * - زاویه فجر: 17.7 درجه
      * - زاویه عشا: 14 درجه
+     * - زاویه مغرب: 4.5 درجه (ذهاب حمره مشرقیه)
      * - اسر: شافعی (ضریب سایه = 1، مطابق فقه جعفری)
-     *
-     * @param latitude عرض جغرافیایی
-     * @param longitude طول جغرافیایی
-     * @param date تاریخ (پیش‌فرض: امروز)
-     * @return PrayerTimesData
      */
     fun calculate(
         latitude: Double,
@@ -36,12 +32,13 @@ object PrayerTimesCalculator {
         // ═══ ۲. تاریخ میلادی ═══
         val dateComponents = DateComponents.from(date)
 
-        // ═══ ۳. تنظیم پارامترها برای شیعه اثناعشری ═══
+        // ═══ ۳. تنظیم پارامترها برای روش ژئوفیزیک تهران ═══
         val params = CalculationParameters(
-            /* fajrAngle = */ 16.0,
+            /* fajrAngle = */ 17.7,
             /* ishaAngle = */ 14.0
         ).apply {
             method = CalculationMethod.OTHER
+            maghribAngle = 4.5  // ← زاویه مغرب مؤسسه ژئوفیزیک
             madhab = Madhab.SHAFI  // مطابق فقه جعفری
         }
 
@@ -62,7 +59,7 @@ object PrayerTimesCalculator {
             sunrise = formatter.format(times.sunrise),
             dhuhr = formatter.format(times.dhuhr),
             asr = formatter.format(times.asr),
-            maghrib = formatter.format(times.maghrib),
+            maghrib = formatter.format(times.maghrib),  // ← با maghribAngle محاسبه می‌شود
             isha = formatter.format(times.isha),
             dateMillis = date.time,
             latitude = latitude,
