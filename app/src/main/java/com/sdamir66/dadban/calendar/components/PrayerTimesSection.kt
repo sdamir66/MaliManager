@@ -6,7 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.Textب
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,7 +20,7 @@ import com.sdamir66.dadban.ui.theme.HeaderBlue
 
 @Composable
 fun PrayerTimesSection(
-    prayerTimes: PrayerTimesData
+    prayerTimes = prayerTimes
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
         // ═══ عنوان (با نام شهر) ═══
