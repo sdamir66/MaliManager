@@ -40,7 +40,7 @@ fun EventsSection(
             color = Color(0xFF1B1B1F),
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
         )
-        
+
         if (events.isEmpty()) {
             Card(
                 Modifier.fillMaxWidth(),
@@ -77,7 +77,7 @@ private fun EventCard(event: Event) {
         event.category == EventCategory.GLOBAL -> Color(0xFF9C27B0)
         else -> HeaderBlue
     }
-    
+
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -88,16 +88,12 @@ private fun EventCard(event: Event) {
             Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ═══ نقطه‌ی رنگی ═══
             Box(
                 Modifier
                     .size(12.dp)
                     .background(color, shape = CircleShape)
             )
-            
             Spacer(Modifier.width(12.dp))
-            
-            // ═══ متن رویداد ═══
             Column(Modifier.weight(1f)) {
                 Text(
                     event.title,
@@ -114,8 +110,6 @@ private fun EventCard(event: Event) {
                     )
                 }
             }
-            
-            // ═══ برچسب تعطیل رسمی ═══
             if (event.isHoliday) {
                 Box(
                     Modifier
