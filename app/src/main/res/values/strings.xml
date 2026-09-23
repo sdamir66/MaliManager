@@ -1,1 +1,3 @@
-<resources><string name="app_name">مدیریت مالی</string></resources>
+<resources>
+    <string name="app_name">دادبان</string>
+</resources>
