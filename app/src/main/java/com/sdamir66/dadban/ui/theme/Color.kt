@@ -1,4 +1,4 @@
-package com.example.maliplus.ui.theme
+package com.sdamir66.dadban.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
