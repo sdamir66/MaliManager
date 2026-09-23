@@ -28,30 +28,25 @@ data class Transaction(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val accountId: Long,
     val dateMillis: Long,
-    val type: String,
-    val amount: Long,
+    val type: String,          // "بدهکار" یا "بستانکار"
+    val amount: Double,        // ✅ Double برای اعشار
     val note: String = "",
     val isAutoProfit: Boolean = false,
     val profitKey: String? = null
 )
 
-/**
- * بازه‌ی سود اختصاصی هر حساب
- * - endYear = null → تا بی‌نهایت (پایان نداره)
- * - payoutDay = 0 → آخر ماه (خودکار بر اساس ماه)
- */
 @Entity(tableName = "profit_periods")
 data class ProfitPeriod(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val accountId: Long,
-    val type: String = "ANNUAL",        // "ANNUAL" یا "MONTHLY"
-    val rate: Double = 0.0,
+    val type: String,          // "ANNUAL" یا "MONTHLY"
+    val rate: Double,
     val startYear: Int,
     val startMonth: Int,
     val startDay: Int,
     val endYear: Int? = null,
     val endMonth: Int? = null,
     val endDay: Int? = null,
-    val payoutDay: Int = 0,             // 0 = آخر ماه
+    val payoutDay: Int = 0,
     val destinationAccountId: Long? = null
 )
