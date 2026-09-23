@@ -1,12 +1,10 @@
-package com.sdamir66.dadban.calendar.prayer
-
 data class PrayerTimesData(
-    val fajr: String,
-    val sunrise: String,
-    val dhuhr: String,
-    val asr: String,
-    val maghrib: String,
-    val isha: String,
+    val fajr: String,        // اذان صبح
+    val sunrise: String,     // طلوع آفتاب
+    val dhuhr: String,       // اذان ظهر
+    val asr: String,         // عصر
+    val maghrib: String,     // اذان مغرب (= غروب آفتاب در این روش)
+    val isha: String,        // اذان عشا
     val dateMillis: Long,
     val latitude: Double,
     val longitude: Double
