@@ -1,4 +1,4 @@
-package com.example.maliplus.data
+package com.sdamir66.dadban.data
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
