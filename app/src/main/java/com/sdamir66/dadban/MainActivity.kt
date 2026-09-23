@@ -132,6 +132,18 @@ class MainActivity : ComponentActivity() {
         window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
         window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
 
+        // ✅ insert رویدادهای آماده (فقط بار اول)
+        backupScope.launch {
+            delay(500L)
+            if (db.eventDao().allNow().isEmpty()) {
+                db.eventDao().insertAll(IranEvents.events)
+            }
+            if (db.calendarSettingsDao().getNow() == null) {
+                db.calendarSettingsDao().insert(CalendarSettings())
+            }
+        }
+
+        // ✅ بکاپ خودکار
         backupScope.launch {
             while (true) {
                 delay(5_000L)
@@ -139,25 +151,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        backupScope.launch {
-        delay(500L)
-        if (db.eventDao().allNow().isEmpty()) {
-            db.eventDao().insertAll(IranEvents.events)
-        }
-        if (db.calendarSettingsDao().getNow() == null) {
-            db.calendarSettingsDao().insert(CalendarSettings())
+        setContent {
+            MaliManagerTheme { FinanceApp(db) }
         }
     }
 
-    backupScope.launch {
-        while (true) {
-            delay(5_000L)
-            autoBackupToInternal(applicationContext, db)
-        }
+    override fun onStop() {
+        super.onStop()
+        backupScope.launch { autoBackupToInternal(applicationContext, db) }
     }
 
-    setContent {
-        MaliManagerTheme { FinanceApp(db) }
+    override fun onDestroy() {
+        backupScope.launch { autoBackupToInternal(applicationContext, db) }
+        super.onDestroy()
     }
 }
     
