@@ -52,6 +52,8 @@ import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.ui.theme.MaliManagerTheme
 import com.sdamir66.dadban.util.Jalali
+import com.sdamir66.dadban.calendar.data.CalendarSettings
+import com.sdamir66.dadban.calendar.data.IranEvents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -137,6 +139,28 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        backupScope.launch {
+        delay(500L)
+        if (db.eventDao().allNow().isEmpty()) {
+            db.eventDao().insertAll(IranEvents.events)
+        }
+        if (db.calendarSettingsDao().getNow() == null) {
+            db.calendarSettingsDao().insert(CalendarSettings())
+        }
+    }
+
+    backupScope.launch {
+        while (true) {
+            delay(5_000L)
+            autoBackupToInternal(applicationContext, db)
+        }
+    }
+
+    setContent {
+        MaliManagerTheme { FinanceApp(db) }
+    }
+}
+    
         setContent {
             MaliManagerTheme { FinanceApp(db) }
         }
