@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.example.maliplus
+package com.sdamir66.dadban
 
 import android.content.Context
 import android.content.Intent
