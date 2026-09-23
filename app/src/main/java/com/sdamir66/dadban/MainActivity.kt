@@ -152,7 +152,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaliManagerTheme { FinanceApp(db) }
+            MaliManagerTheme { DadbanApp(db) }
         }
     }
 
