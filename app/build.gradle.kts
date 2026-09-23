@@ -67,17 +67,14 @@ dependencies {
     implementation("com.github.SeyyedAliTabatabaei.ZamanakCalendar:core:1.0.0")
     implementation("com.github.SeyyedAliTabatabaei.ZamanakCalendar:compose-ui-date-picker:1.0.0")
 
-    // ═══ اوقات شرعی (نسخه جاوا - بدون مشکل Kotlin) ═══
-    // GitHub: https://github.com/batoulapps/adhan-java
-    // این کتابخانه جاوا خالص است و روی همه API ها کار می‌کند
+    // ═══ اوقات شرعی ═══
     implementation("com.batoulapps.adhan:adhan:1.2.1")
 
     // ═══ موقعیت مکانی ═══
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
-    // ═══ WorkManager (یادآور رویدادها) ═══
+    // ═══ WorkManager ═══
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
-    // ═══ Debug ═══
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
