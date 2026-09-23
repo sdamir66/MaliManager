@@ -2,6 +2,7 @@ package com.sdamir66.dadban
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -16,15 +17,12 @@ import com.sdamir66.dadban.calendar.CalendarScreen
 import com.sdamir66.dadban.data.AppDb
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 
-/**
- * تب‌های اصلی برنامه
- */
 enum class DadbanTab(
     val title: String,
     val icon: ImageVector
 ) {
     CALENDAR("تقویم", Icons.Default.DateRange),
-    FINANCE("مالی", Icons.Default.Settings),   // آیکون موقت
+    FINANCE("مالی", Icons.Default.AccountBalance),
     SETTINGS("تنظیمات", Icons.Default.Settings)
 }
 
