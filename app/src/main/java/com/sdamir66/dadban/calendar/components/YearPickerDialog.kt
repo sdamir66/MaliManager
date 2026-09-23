@@ -27,7 +27,12 @@ fun YearPickerDialog(
     onDismiss: () -> Unit
 ) {
     var selectedYear by remember { mutableIntStateOf(currentYear) }
-    
+
+    // لیست سال‌ها (۱۰ سال قبل و ۱۰ سال بعد)
+    val years = remember(currentYear) {
+        ((currentYear - 10)..(currentYear + 10)).toList()
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color.White,
@@ -42,14 +47,14 @@ fun YearPickerDialog(
         },
         text = {
             Column {
-                // دکمه‌های + و -
+                // ═══ دکمه‌های + و − ═══
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { selectedYear-- }) {
-                        Text("−", fontSize = 24.sp, color = HeaderBlue)
+                        Text("−", fontSize = 24.sp, color = HeaderBlue, fontWeight = FontWeight.Bold)
                     }
                     Text(
                         selectedYear.toString(),
@@ -59,19 +64,17 @@ fun YearPickerDialog(
                         modifier = Modifier.padding(horizontal = 24.dp)
                     )
                     IconButton(onClick = { selectedYear++ }) {
-                        Text("+", fontSize = 24.sp, color = HeaderBlue)
+                        Text("+", fontSize = 24.sp, color = HeaderBlue, fontWeight = FontWeight.Bold)
                     }
                 }
-                
+
                 Spacer(Modifier.height(16.dp))
-                
-                // لیست سال‌های اخیر
+
+                // ═══ لیست سال‌ها ═══
                 LazyColumn(
                     modifier = Modifier.heightIn(max = 300.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    val years = remember(currentYear) { ((currentYear - 5)..(currentYear + 5)).toList() }
-                    // ...
                     items(years) { year ->
                         Card(
                             Modifier
