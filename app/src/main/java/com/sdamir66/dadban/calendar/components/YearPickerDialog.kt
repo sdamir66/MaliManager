@@ -70,7 +70,9 @@ fun YearPickerDialog(
                     modifier = Modifier.heightIn(max = 300.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items((currentYear - 5)..(currentYear + 5)) { year ->
+                    val years = remember(currentYear) { ((currentYear - 5)..(currentYear + 5)).toList() }
+                    // ...
+                    items(years) { year ->
                         Card(
                             Modifier
                                 .fillMaxWidth()
