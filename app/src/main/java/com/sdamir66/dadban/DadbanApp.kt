@@ -10,7 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.CalendarScreen
@@ -30,51 +32,54 @@ enum class DadbanTab(
 fun DadbanApp(db: AppDb) {
     var currentTab by remember { mutableStateOf(DadbanTab.CALENDAR) }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = Color.White,
-                tonalElevation = 8.dp
-            ) {
-                DadbanTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = currentTab == tab,
-                        onClick = { currentTab = tab },
-                        icon = {
-                            Icon(
-                                tab.icon,
-                                contentDescription = tab.title,
-                                modifier = Modifier.size(24.dp)
+    // ✅ RTL برای کل برنامه
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Scaffold(
+            bottomBar = {
+                NavigationBar(
+                    containerColor = Color.White,
+                    tonalElevation = 8.dp
+                ) {
+                    DadbanTab.entries.forEach { tab ->
+                        NavigationBarItem(
+                            selected = currentTab == tab,
+                            onClick = { currentTab = tab },
+                            icon = {
+                                Icon(
+                                    tab.icon,
+                                    contentDescription = tab.title,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    tab.title,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (currentTab == tab) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = HeaderBlue,
+                                selectedTextColor = HeaderBlue,
+                                indicatorColor = HeaderBlue.copy(alpha = 0.15f),
+                                unselectedIconColor = Color.Gray,
+                                unselectedTextColor = Color.Gray
                             )
-                        },
-                        label = {
-                            Text(
-                                tab.title,
-                                fontSize = 11.sp,
-                                fontWeight = if (currentTab == tab) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = HeaderBlue,
-                            selectedTextColor = HeaderBlue,
-                            indicatorColor = HeaderBlue.copy(alpha = 0.15f),
-                            unselectedIconColor = Color.Gray,
-                            unselectedTextColor = Color.Gray
                         )
-                    )
+                    }
                 }
             }
-        }
-    ) { padding ->
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            when (currentTab) {
-                DadbanTab.CALENDAR -> CalendarScreen(db)
-                DadbanTab.FINANCE -> FinanceApp(db)
-                DadbanTab.SETTINGS -> SettingsScreen(db) { currentTab = DadbanTab.CALENDAR }
+        ) { padding ->
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                when (currentTab) {
+                    DadbanTab.CALENDAR -> CalendarScreen(db)
+                    DadbanTab.FINANCE -> FinanceApp(db)
+                    DadbanTab.SETTINGS -> SettingsScreen(db) { currentTab = DadbanTab.CALENDAR }
+                }
             }
         }
     }
