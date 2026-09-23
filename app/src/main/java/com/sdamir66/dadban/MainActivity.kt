@@ -125,9 +125,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        db = Room.databaseBuilder(applicationContext, AppDb::class.java, "finance.db")
-            .fallbackToDestructiveMigration()
-            .build()
+        db = AppDb.build(applicationContext)
 
         window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
         window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
