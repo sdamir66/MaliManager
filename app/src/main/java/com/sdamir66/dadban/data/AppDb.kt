@@ -20,24 +20,21 @@ import com.sdamir66.dadban.calendar.data.EventDao
         Event::class,
         CalendarSettings::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDb : RoomDatabase() {
-    
+
     abstract fun persons(): PersonDao
     abstract fun accounts(): AccountDao
     abstract fun tx(): TxDao
     abstract fun profitPeriod(): ProfitPeriodDao
-    
-    // ✅ جدید
     abstract fun eventDao(): EventDao
     abstract fun calendarSettingsDao(): CalendarSettingsDao
-    
+
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // جدول رویدادها
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS events (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -54,8 +51,6 @@ abstract class AppDb : RoomDatabase() {
                         reminderMinutesBefore INTEGER
                     )
                 """.trimIndent())
-                
-                // جدول تنظیمات تقویم
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS calendar_settings (
                         id INTEGER PRIMARY KEY NOT NULL,
@@ -78,14 +73,41 @@ abstract class AppDb : RoomDatabase() {
                 """.trimIndent())
             }
         }
-        
+
+        // ✅ migration نسخه ۳: تغییر amount از Long به Double
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // ساخت جدول جدید با amount به صورت REAL
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS transactions_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        accountId INTEGER NOT NULL,
+                        dateMillis INTEGER NOT NULL,
+                        type TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        note TEXT NOT NULL DEFAULT '',
+                        isAutoProfit INTEGER NOT NULL DEFAULT 0,
+                        profitKey TEXT
+                    )
+                """.trimIndent())
+                // کپی دیتا از جدول قدیمی
+                db.execSQL("""
+                    INSERT INTO transactions_new (id, accountId, dateMillis, type, amount, note, isAutoProfit, profitKey)
+                    SELECT id, accountId, dateMillis, type, CAST(amount AS REAL), note, isAutoProfit, profitKey FROM transactions
+                """.trimIndent())
+                // حذف جدول قدیمی و تغییر نام
+                db.execSQL("DROP TABLE transactions")
+                db.execSQL("ALTER TABLE transactions_new RENAME TO transactions")
+            }
+        }
+
         fun build(context: Context): AppDb {
             return Room.databaseBuilder(
                 context.applicationContext,
                 AppDb::class.java,
                 "finance.db"
             )
-                .addMigrations(MIGRATION_1_2)  // ✅ مهاجرت امن
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
         }
     }
