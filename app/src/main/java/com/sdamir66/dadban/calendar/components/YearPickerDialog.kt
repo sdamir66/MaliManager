@@ -1,6 +1,5 @@
 package com.sdamir66.dadban.calendar.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -28,7 +27,6 @@ fun YearPickerDialog(
 ) {
     var selectedYear by remember { mutableIntStateOf(currentYear) }
 
-    // لیست سال‌ها (۱۰ سال قبل و ۱۰ سال بعد)
     val years = remember(currentYear) {
         ((currentYear - 10)..(currentYear + 10)).toList()
     }
@@ -39,15 +37,10 @@ fun YearPickerDialog(
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
         title = {
-            Text(
-                "انتخاب سال",
-                fontWeight = FontWeight.Bold,
-                color = HeaderBlue
-            )
+            Text("انتخاب سال", fontWeight = FontWeight.Bold, color = HeaderBlue)
         },
         text = {
             Column {
-                // ═══ دکمه‌های + و − ═══
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
@@ -70,7 +63,6 @@ fun YearPickerDialog(
 
                 Spacer(Modifier.height(16.dp))
 
-                // ═══ لیست سال‌ها ═══
                 LazyColumn(
                     modifier = Modifier.heightIn(max = 300.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
