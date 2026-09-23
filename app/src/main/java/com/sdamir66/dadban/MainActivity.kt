@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
+import com.sdamir66.dadban.calendar.data.CalendarSettings
+import com.sdamir66.dadban.calendar.data.IranEvents
 import com.sdamir66.dadban.data.*
 import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.CreditGreen
@@ -52,8 +54,6 @@ import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.ui.theme.MaliManagerTheme
 import com.sdamir66.dadban.util.Jalali
-import com.sdamir66.dadban.calendar.data.CalendarSettings
-import com.sdamir66.dadban.calendar.data.IranEvents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
         window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
         window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
 
-        // ✅ insert رویدادهای آماده (فقط بار اول)
+        // insert رویدادهای آماده (فقط بار اول)
         backupScope.launch {
             delay(500L)
             if (db.eventDao().allNow().isEmpty()) {
@@ -143,7 +143,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // ✅ بکاپ خودکار
+        // بکاپ خودکار
         backupScope.launch {
             while (true) {
                 delay(5_000L)
@@ -151,22 +151,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        setContent {
-            MaliManagerTheme { FinanceApp(db) }
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        backupScope.launch { autoBackupToInternal(applicationContext, db) }
-    }
-
-    override fun onDestroy() {
-        backupScope.launch { autoBackupToInternal(applicationContext, db) }
-        super.onDestroy()
-    }
-}
-    
         setContent {
             MaliManagerTheme { FinanceApp(db) }
         }
@@ -302,7 +286,6 @@ fun PageHeader(
         }
     }
 }
-
 // ═══════════════════════════════════════════════════════
 // PersonsScreen
 // ═══════════════════════════════════════════════════════
@@ -1046,7 +1029,7 @@ fun SwipeableTransactionCard(
 }
 
 // ═══════════════════════════════════════════════════════
-// AutoTransactionCard  ← ✅ این تابع قبلاً گم شده بود
+// AutoTransactionCard
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1067,12 +1050,7 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
                     Text(transaction.type, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = CreditGreen)
                     Spacer(Modifier.width(6.dp))
                     Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = RoundedCornerShape(6.dp)) {
-                        Text(
-                            "خودکار",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                        Text("خودکار", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                     }
                 }
                 Spacer(Modifier.height(2.dp))
@@ -2131,6 +2109,26 @@ fun ProfitPeriodEditor(
 }
 
 // ═══════════════════════════════════════════════════════
+// ConfirmDeleteDialog
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun ConfirmDeleteDialog(title: String, message: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = { Text(title, fontWeight = FontWeight.Bold, color = HeaderBlue) },
+        text = { Text(message) },
+        confirmButton = {
+            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = DebitRed)) { Text("حذف") }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
+    )
+}
+
+// ═══════════════════════════════════════════════════════
 // SettingsScreen
 // ═══════════════════════════════════════════════════════
 
@@ -2298,7 +2296,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                             Spacer(Modifier.width(14.dp))
                             Column {
                                 Text("مدیریت مالی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("نسخه ۱.۰", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                Text("نسخه ۲.۰", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
                         }
                         Spacer(Modifier.height(12.dp))
@@ -2350,26 +2348,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { confirmRemoveFolder = false }) { Text("انصراف", color = HeaderBlue) } }
         )
     }
-}
-
-// ═══════════════════════════════════════════════════════
-// ConfirmDeleteDialog
-// ═══════════════════════════════════════════════════════
-
-@Composable
-fun ConfirmDeleteDialog(title: String, message: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        containerColor = Color.White,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
-        title = { Text(title, fontWeight = FontWeight.Bold, color = HeaderBlue) },
-        text = { Text(message) },
-        confirmButton = {
-            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = DebitRed)) { Text("حذف") }
-        },
-        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
-    )
 }
 
 @Composable
@@ -2667,9 +2645,6 @@ object ProfitEngine {
         db.tx().insertAll(out)
     }
 
-    /**
-     * کمترین مانده‌ی توی یه روز
-     */
     private fun calculateMinBalanceInDay(
         base: MutableList<Transaction>,
         dayStartMillis: Long,
