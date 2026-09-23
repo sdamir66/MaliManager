@@ -17,42 +17,32 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.prayer.PrayerTimesData
 import com.sdamir66.dadban.ui.theme.HeaderBlue
-import com.sdamir66.dadban.util.Jalali
-import java.util.Date
 
 @Composable
 fun PrayerTimesSection(
-    prayerTimes: PrayerTimesData,
-    selectedDate: Date
+    prayerTimes: PrayerTimesData
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
-        // ═══ عنوان ═══
+        // ═══ عنوان (با نام شهر) ═══
         Text(
-            "اوقات شرعی",
+            if (prayerTimes.cityName.isNotBlank())
+                "اوقات شرعی به وقت ${prayerTimes.cityName}"
+            else
+                "اوقات شرعی",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF1B1B1F),
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
         )
-        
+
         Card(
             Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(Modifier.padding(16.dp)) {
-                // ═══ تاریخ ═══
-                Text(
-                    Jalali.format(selectedDate.time).substringBefore(" "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
-                
-                Spacer(Modifier.height(12.dp))
-                
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+
                 // ═══ ردیف اول: طلوع و غروب ═══
                 Row(
                     Modifier.fillMaxWidth(),
@@ -61,9 +51,9 @@ fun PrayerTimesSection(
                     PrayerTimeItem("🌅 طلوع", prayerTimes.sunrise)
                     PrayerTimeItem("🌇 غروب", prayerTimes.maghrib)
                 }
-                
-                Spacer(Modifier.height(12.dp))
-                
+
+                Spacer(Modifier.height(8.dp))
+
                 // ═══ خط جداکننده ═══
                 Box(
                     Modifier
@@ -71,9 +61,9 @@ fun PrayerTimesSection(
                         .height(1.dp)
                         .background(Color(0xFFEEEEEE))
                 )
-                
-                Spacer(Modifier.height(12.dp))
-                
+
+                Spacer(Modifier.height(8.dp))
+
                 // ═══ ردیف دوم: اذان‌ها ═══
                 Row(
                     Modifier.fillMaxWidth(),
@@ -81,8 +71,39 @@ fun PrayerTimesSection(
                 ) {
                     PrayerTimeItem("☀️ صبح", prayerTimes.fajr)
                     PrayerTimeItem("🕛 ظهر", prayerTimes.dhuhr)
-                    PrayerTimeItem("🌆 مغرب", prayerTimes.maghrib)
+                    PrayerTimeItem("🌆 عصر", prayerTimes.asr)
                     PrayerTimeItem("🌙 عشا", prayerTimes.isha)
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // ═══ خط جداکننده ═══
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color(0xFFEEEEEE))
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // ═══ نیمه‌شب شرعی ═══
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "🌌 نیمه‌شب شرعی: ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                    Text(
+                        toPersianDigits(prayerTimes.midnight),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = HeaderBlue
+                    )
                 }
             }
         }
@@ -96,14 +117,16 @@ private fun PrayerTimeItem(label: String, time: String) {
             label,
             style = MaterialTheme.typography.bodySmall,
             color = Color.Gray,
+            fontSize = 11.sp,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
         Text(
             toPersianDigits(time),
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
-            color = HeaderBlue
+            color = HeaderBlue,
+            fontSize = 14.sp
         )
     }
 }
