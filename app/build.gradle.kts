@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.sdamir66.dadban"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 2
         versionName = "2.0"
