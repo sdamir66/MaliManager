@@ -25,7 +25,6 @@ android {
     }
 
     compileOptions {
-        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -68,17 +67,12 @@ dependencies {
     implementation("com.github.SeyyedAliTabatabaei.ZamanakCalendar:core:1.0.0")
     implementation("com.github.SeyyedAliTabatabaei.ZamanakCalendar:compose-ui-date-picker:1.0.0")
 
-    // ═══ اوقات شرعی (شیعه) ═══
-    implementation("com.batoulapps.adhan:adhan2:0.0.7")
-
     // ═══ موقعیت مکانی ═══
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
-    // ═══ WorkManager ═══
+    // ═══ WorkManager (یادآور رویدادها) ═══
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
-    // ═══ Desugaring ═══
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-
+    // ═══ Debug ═══
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
