@@ -31,6 +31,7 @@ fun PrayerTimesSection(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF1B1B1F),
+            fontSize = 16.sp,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
         )
 
@@ -40,7 +41,6 @@ fun PrayerTimesSection(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            // ✅ همه اوقات در یک خط
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -63,24 +63,22 @@ private fun PrayerTimeItem(label: String, time: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(horizontal = 2.dp)
     ) {
-        // ✅ برچسب (مثلاً "صبح")
         Text(
             label,
-            style = MaterialTheme.typography.labelMedium,  // ← از labelSmall بزرگ‌تر
+            style = MaterialTheme.typography.labelMedium,
             color = Color(0xFF5C5D72),
-            fontSize = 11.sp,                              // ← از 9 به 11
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1
         )
         Spacer(Modifier.height(3.dp))
-        // ✅ زمان (مثلاً "۰۴:۲۹")
         Text(
             toPersianDigits(time),
-            style = MaterialTheme.typography.bodyMedium,   // ← از bodySmall بزرگ‌تر
+            style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
             color = HeaderBlue,
-            fontSize = 14.sp,                              // ← از 10 به 14
+            fontSize = 15.sp,
             textAlign = TextAlign.Center,
             maxLines = 1
         )
