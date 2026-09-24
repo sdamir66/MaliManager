@@ -30,6 +30,7 @@ enum class DadbanTab(
 
 @Composable
 fun DadbanApp(db: AppDb) {
+    // ✅ تب پیش‌فرض: تقویم
     var currentTab by remember { mutableStateOf(DadbanTab.CALENDAR) }
 
     // ✅ RTL برای کل برنامه
