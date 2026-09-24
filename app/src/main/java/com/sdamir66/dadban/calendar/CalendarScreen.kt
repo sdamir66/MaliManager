@@ -15,25 +15,38 @@ import com.sdamir66.dadban.calendar.data.*
 import com.sdamir66.dadban.calendar.prayer.PrayerTimesCalculator
 import com.sdamir66.dadban.data.AppDb
 import com.sdamir66.dadban.ui.theme.BgLight
+import com.sdamir66.dadban.util.Jalali
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 
 @Composable
 fun CalendarScreen(db: AppDb) {
     var settings by remember { mutableStateOf<CalendarSettings?>(null) }
+    var hijriCacheMap by remember { mutableStateOf<Map<String, HijriCache>>(emptyMap()) }
+
     LaunchedEffect(Unit) {
         settings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
+    }
+
+    // ✅ بارگذاری cache تقویم قمری
+    LaunchedEffect(settings) {
+        if (settings != null) {
+            withContext(Dispatchers.IO) {
+                val year = Jalali.nowJalali()[0]
+                val items = db.hijriCacheDao().getAllForYear(year)
+                hijriCacheMap = items.associateBy { it.jalaliDate }
+            }
+        }
     }
 
     var currentDate by remember { mutableStateOf(Date()) }
     var primaryCalendar by remember { mutableStateOf(CalendarType.JALALI) }
     var selectedDay by remember { mutableStateOf<Date?>(null) }
 
-    // اعمال تقویم پیش‌فرض از تنظیمات
     LaunchedEffect(settings) {
-        if (settings != null) {
-            primaryCalendar = settings!!.defaultCalendar
-        }
+        if (settings != null) primaryCalendar = settings!!.defaultCalendar
     }
 
     val prayerTimes = remember(settings, currentDate, selectedDay) {
@@ -60,58 +73,46 @@ fun CalendarScreen(db: AppDb) {
         }
     }
 
-    val selectedDayEvents = remember(selectedDay, visibleEvents, settings) {
-        if (selectedDay == null) emptyList()
-        else filterEventsForDay(visibleEvents, selectedDay!!, settings)
-    }
-
     if (settings == null) {
-        Box(
-            Modifier.fillMaxSize().background(BgLight),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(Modifier.fillMaxSize().background(BgLight), contentAlignment = Alignment.Center) {
             Text("در حال بارگذاری...", color = Color.Gray)
         }
         return
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BgLight)
-    ) {
-        // ═══ هدر تقویم ═══
+    LazyColumn(Modifier.fillMaxSize().background(BgLight)) {
+        // هدر
         item {
             CalendarHeader(
                 currentDate = currentDate,
                 primaryCalendar = primaryCalendar,
                 settings = settings,
+                hijriCacheMap = hijriCacheMap,
                 onDateChange = { currentDate = it },
                 onCalendarTypeChange = { primaryCalendar = it }
             )
         }
 
-        // ═══ کارت تقویم (روی هدر) ═══
+        // تقویم ماهانه
         item {
             Box(Modifier.offset(y = (-30).dp)) {
                 MonthCalendarView(
                     currentDate = currentDate,
                     primaryCalendar = primaryCalendar,
                     settings = settings,
+                    hijriCacheMap = hijriCacheMap,
                     events = visibleEvents,
                     selectedDay = selectedDay,
                     onDayClick = { date ->
                         selectedDay = date
                         currentDate = date
                     },
-                    onDateChange = { newDate ->
-                        currentDate = newDate
-                    }
+                    onDateChange = { newDate -> currentDate = newDate }
                 )
             }
         }
 
-        // ═══ اوقات شرعی (نزدیک به کارت تقویم) ═══
+        // اوقات شرعی
         if (settings!!.showPrayerTimes && prayerTimes != null) {
             item {
                 Box(Modifier.offset(y = (-25).dp)) {
@@ -120,46 +121,19 @@ fun CalendarScreen(db: AppDb) {
             }
         }
 
-        // ═══ رویدادهای روز ═══
+        // رویدادهای روز
         item {
             Box(Modifier.offset(y = if (settings!!.showPrayerTimes) (-15).dp else 0.dp)) {
                 EventsSection(
-                    events = selectedDayEvents,
-                    date = selectedDay ?: currentDate,
+                    events = visibleEvents,
+                    selectedDate = selectedDay ?: currentDate,
                     primaryCalendar = primaryCalendar,
-                    settings = settings
+                    settings = settings,
+                    hijriCacheMap = hijriCacheMap
                 )
             }
         }
 
-        item {
-            Spacer(Modifier.height(24.dp))
-        }
-    }
-}
-
-// ═══════════════════════════════════════════════════════
-// کمک‌تابع‌ها
-// ═══════════════════════════════════════════════════════
-
-private fun filterEventsForDay(events: List<Event>, date: Date, settings: CalendarSettings?): List<Event> {
-    val cal = Calendar.getInstance().apply { time = date }
-    val gregorianMonth = cal.get(Calendar.MONTH) + 1
-    val gregorianDay = cal.get(Calendar.DAY_OF_MONTH)
-
-    val jalali = com.sdamir66.dadban.util.Jalali.toJalaliPublic(date.time)
-    val jalaliMonth = jalali[1]
-    val jalaliDay = jalali[2]
-
-    val hijri = getHijriDate(date, settings)
-    val hijriMonth = hijri[1]
-    val hijriDay = hijri[2]
-
-    return events.filter { event ->
-        when (event.calendarType) {
-            CalendarType.JALALI -> event.month == jalaliMonth && event.day == jalaliDay
-            CalendarType.GREGORIAN -> event.month == gregorianMonth && event.day == gregorianDay
-            CalendarType.HIJRI -> event.month == hijriMonth && event.day == hijriDay
-        }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
