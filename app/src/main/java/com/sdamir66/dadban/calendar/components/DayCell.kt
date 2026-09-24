@@ -14,10 +14,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
-import com.sdamir66.dadban.util.Jalali
 import java.util.Calendar
 import java.util.Date
 
@@ -30,6 +30,7 @@ fun DayCell(
     isFriday: Boolean,
     hasHoliday: Boolean,
     primaryCalendar: CalendarType,
+    settings: CalendarSettings?,
     showGregorianSmall: Boolean,
     showHijriSmall: Boolean,
     eidFitrOffset: Int,
@@ -37,7 +38,6 @@ fun DayCell(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // ═══ رنگ‌بندی ═══
     val backgroundColor = when {
         isSelected -> HeaderBlue
         isToday -> HeaderBlue.copy(alpha = 0.15f)
@@ -78,12 +78,12 @@ fun DayCell(
 
             Spacer(Modifier.height(2.dp))
 
-            // ═══ روزهای فرعی (فقط روز، چپ/راست) ═══
+            // ═══ روزهای فرعی (میلادی چپ، قمری راست) ═══
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // ✅ میلادی (سمت چپ)
+                // میلادی (سمت چپ)
                 Text(
                     if (primaryCalendar != CalendarType.GREGORIAN && showGregorianSmall) {
                         val cal = Calendar.getInstance().apply { time = date }
@@ -95,10 +95,10 @@ fun DayCell(
                     maxLines = 1
                 )
 
-                // ✅ قمری (سمت راست)
+                // قمری (سمت راست)
                 Text(
                     if (primaryCalendar != CalendarType.HIJRI && showHijriSmall) {
-                        val h = getHijriDate(date)
+                        val h = getHijriDate(date, settings)
                         toPersianDigits(h[2].toString())
                     } else "",
                     fontSize = 9.sp,
@@ -110,10 +110,6 @@ fun DayCell(
         }
     }
 }
-
-// ═══════════════════════════════════════════════════════
-// کمک‌تابع‌ها
-// ═══════════════════════════════════════════════════════
 
 private fun toPersianDigits(input: String): String {
     return input.map { c ->
