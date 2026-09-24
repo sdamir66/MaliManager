@@ -226,7 +226,7 @@ fun getHijriDate(date: Date): IntArray {
     var hDay = l - (709 * hMonth) / 24
     var hYear = 30 * n + j - 30
 
-    // ✅ اصلاح ۱ روز عقب بودن
+    // ✅ اصلاح: تقویم ایران ۱ روز جلوتر از تقویم محاسباتی است
     hDay += 1
     if (hDay > 30) {
         hDay = 1
