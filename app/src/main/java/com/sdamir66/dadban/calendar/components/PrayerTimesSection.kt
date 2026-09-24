@@ -41,68 +41,18 @@ fun PrayerTimesSection(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-
-                // ═══ ردیف اول: طلوع و غروب ═══
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    PrayerTimeItem("🌅 طلوع", prayerTimes.sunrise)
-                    PrayerTimeItem("🌇 غروب", prayerTimes.maghrib)
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(Color(0xFFEEEEEE))
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                // ═══ ردیف دوم: اذان‌ها ═══
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    PrayerTimeItem("☀️ صبح", prayerTimes.fajr)
-                    PrayerTimeItem("🕛 ظهر", prayerTimes.dhuhr)
-                    PrayerTimeItem("🌆 عصر", prayerTimes.asr)
-                    PrayerTimeItem("🌙 عشا", prayerTimes.isha)
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(Color(0xFFEEEEEE))
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                // ═══ نیمه‌شب شرعی ═══
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "🌌 نیمه‌شب شرعی: ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
-                    Text(
-                        toPersianDigits(prayerTimes.midnight),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = HeaderBlue
-                    )
-                }
+            // ✅ همه اوقات در یک خط به ترتیب خواسته شده
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PrayerTimeItem("صبح", prayerTimes.fajr)
+                PrayerTimeItem("طلوع", prayerTimes.sunrise)
+                PrayerTimeItem("ظهر", prayerTimes.dhuhr)
+                PrayerTimeItem("غروب", prayerTimes.maghrib)
+                PrayerTimeItem("مغرب", prayerTimes.maghrib)
+                PrayerTimeItem("نیمه‌شب", prayerTimes.midnight)
             }
         }
     }
@@ -110,21 +60,27 @@ fun PrayerTimesSection(
 
 @Composable
 private fun PrayerTimeItem(label: String, time: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 2.dp)
+    ) {
         Text(
             label,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.labelSmall,
             color = Color.Gray,
-            fontSize = 11.sp,
-            textAlign = TextAlign.Center
+            fontSize = 9.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 1
         )
         Spacer(Modifier.height(2.dp))
         Text(
             toPersianDigits(time),
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Bold,
             color = HeaderBlue,
-            fontSize = 14.sp
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 1
         )
     }
 }
