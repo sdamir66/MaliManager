@@ -68,7 +68,7 @@ dependencies {
     implementation("com.github.SeyyedAliTabatabaei.ZamanakCalendar:compose-ui-date-picker:1.0.0")
 
     // ═══ اوقات شرعی ═══
-implementation("com.github.cavitkeskin:Pray-Times:1.0.0")
+implementation("com.github.persian-calendar:praytimes:3.1.2")
 
     // ═══ موقعیت مکانی ═══
     implementation("com.google.android.gms:play-services-location:21.3.0")
