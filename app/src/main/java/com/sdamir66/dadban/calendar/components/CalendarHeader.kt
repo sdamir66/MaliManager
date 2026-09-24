@@ -184,7 +184,7 @@ private fun getHijriFromCache(date: Date, cache: Map<String, HijriCache>): IntAr
     return intArrayOf(item.hijriYear, hijriMonthNameToNumber(item.hijriMonth), item.hijriDay)
 }
 
-private fun hijriMonthNameToNumber(name: String): Int {
+fun hijriMonthNameToNumber(name: String): Int {
     return when (name.trim()) {
         "محرم" -> 1
         "صفر" -> 2
