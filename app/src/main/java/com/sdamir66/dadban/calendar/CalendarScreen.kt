@@ -82,15 +82,10 @@ fun CalendarScreen(db: AppDb) {
         // ═══ هدر تقویم ═══
         item {
             CalendarHeader(
-                currentDate = currentDate,
-                primaryCalendar = primaryCalendar,
-                onPrevYear = { currentDate = addYears(currentDate, -1) },
-                onNextYear = { currentDate = addYears(currentDate, 1) },
-                onPrevMonth = { currentDate = addMonths(currentDate, -1) },
-                onNextMonth = { currentDate = addMonths(currentDate, 1) },
-                onCalendarTypeChange = { primaryCalendar = it },
-                onDateChange = { currentDate = it }
-            )
+    currentDate = currentDate,
+    primaryCalendar = primaryCalendar,
+    onDateChange = { currentDate = it }
+)
         }
 
         // ═══ تقویم ماهانه ═══
