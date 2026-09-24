@@ -31,10 +31,6 @@ fun DayCell(
     hasHoliday: Boolean,
     primaryCalendar: CalendarType,
     settings: CalendarSettings?,
-    showGregorianSmall: Boolean,
-    showHijriSmall: Boolean,
-    eidFitrOffset: Int,
-    eidFitrHijriYear: Int?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -55,7 +51,6 @@ fun DayCell(
 
     Box(
         modifier = modifier
-            .aspectRatio(1f)
             .padding(2.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(backgroundColor)
@@ -70,7 +65,7 @@ fun DayCell(
             // ═══ روز اصلی (بزرگ) ═══
             Text(
                 toPersianDigits(day.toString()),
-                fontSize = 18.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor,
                 textAlign = TextAlign.Center
@@ -83,26 +78,26 @@ fun DayCell(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // میلادی (سمت چپ)
+                // میلادی (سمت چپ) — فقط اگه تقویم اصلی جلالی یا قمری باشه
                 Text(
-                    if (primaryCalendar != CalendarType.GREGORIAN && showGregorianSmall) {
+                    if (primaryCalendar != CalendarType.GREGORIAN && (settings?.showGregorianSmall ?: true)) {
                         val cal = Calendar.getInstance().apply { time = date }
                         toPersianDigits(cal.get(Calendar.DAY_OF_MONTH).toString())
                     } else "",
-                    fontSize = 9.sp,
-                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.Gray,
+                    fontSize = 8.sp,
+                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color(0xFF5C5D72),
                     textAlign = TextAlign.Start,
                     maxLines = 1
                 )
 
-                // قمری (سمت راست)
+                // قمری (سمت راست) — فقط اگه تقویم اصلی جلالی یا میلادی باشه
                 Text(
-                    if (primaryCalendar != CalendarType.HIJRI && showHijriSmall) {
+                    if (primaryCalendar != CalendarType.HIJRI && (settings?.showHijriSmall ?: true)) {
                         val h = getHijriDate(date, settings)
                         toPersianDigits(h[2].toString())
                     } else "",
-                    fontSize = 9.sp,
-                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.Gray,
+                    fontSize = 8.sp,
+                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color(0xFF5C5D72),
                     textAlign = TextAlign.End,
                     maxLines = 1
                 )
