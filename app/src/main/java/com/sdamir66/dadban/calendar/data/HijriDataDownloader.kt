@@ -55,18 +55,20 @@ object HijriDataDownloader {
         val monthsArray = root.getJSONArray(yearKey)
 
         val result = mutableListOf<HijriCache>()
-        var lastHijriMonth: String? = null
 
         for (monthIndex in 0 until monthsArray.length()) {
-            val monthData = monthsArray.getJSONObject(monthIndex)
-            val header = monthData.getJSONObject("header")
-            val qamariHeader = header.getString("qamari")
+    val monthData = monthsArray.getJSONObject(monthIndex)
+    val header = monthData.getJSONObject("header")
+    val qamariHeader = header.getString("qamari")
 
-            val parts = qamariHeader.split("-").map { it.trim() }
-            val hijriYear = parts.last().toIntOrNull() ?: 0
-            val hijriMonths = parts.dropLast(1)
+    val parts = qamariHeader.split("-").map { it.trim() }
+    val hijriYear = parts.last().toIntOrNull() ?: 0
+    val hijriMonths = parts.dropLast(1)
 
-            val jMonth = monthIndex + 1
+    val jMonth = monthIndex + 1
+
+    // ✅ متغیرهای محلی برای هر ماه
+    var lastHijriMonth: String? = null
 
             // Parse رویدادها
             val eventsArray = monthData.optJSONArray("events") ?: JSONArray()
