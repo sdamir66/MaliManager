@@ -185,19 +185,25 @@ private fun getHijriFromCache(date: Date, cache: Map<String, HijriCache>): IntAr
 }
 
 fun hijriMonthNameToNumber(name: String): Int {
-    return when (name.trim()) {
-        "محرم" -> 1
-        "صفر" -> 2
-        "ربیع‌الاول", "ربیع الاول" -> 3
-        "ربیع‌الثانی", "ربیع الثانی" -> 4
-        "جمادی‌الاول", "جمادی الاول", "جمادي الاولي" -> 5
-        "جمادی‌الثانی", "جمادی الثانی", "جمادي الثانيه" -> 6
-        "رجب" -> 7
-        "شعبان" -> 8
-        "رمضان" -> 9
-        "شوال" -> 10
-        "ذی‌القعده", "ذوالقعده" -> 11
-        "ذی‌الحجه", "ذوالحجه", "ذوالحجه" -> 12
+    val clean = name.trim()
+        .replace("‌", "")  // حذف نیم‌فاصله
+        .replace(" ", "")
+        .replace("ي", "ی")
+        .replace("ك", "ک")
+
+    return when {
+        clean.contains("محرم") -> 1
+        clean.contains("صفر") -> 2
+        clean.contains("ربیعالاول") || clean.contains("ربیعاول") -> 3
+        clean.contains("ربیعالثانی") || clean.contains("ربیعثانی") -> 4
+        clean.contains("جمادیالاول") || clean.contains("جمادیاول") || clean.contains("جماديالاولي") -> 5
+        clean.contains("جمادیالثانی") || clean.contains("جمادیثانی") || clean.contains("جماديالثانيه") -> 6
+        clean.contains("رجب") -> 7
+        clean.contains("شعبان") -> 8
+        clean.contains("رمضان") -> 9
+        clean.contains("شوال") -> 10
+        clean.contains("ذیالقعده") || clean.contains("ذوالقعده") || clean.contains("ذیقعده") -> 11
+        clean.contains("ذیالحجه") || clean.contains("ذوالحجه") || clean.contains("ذیحجه") -> 12
         else -> 0
     }
 }
