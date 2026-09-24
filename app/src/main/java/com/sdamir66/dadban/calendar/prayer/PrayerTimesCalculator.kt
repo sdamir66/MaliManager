@@ -1,19 +1,17 @@
 package com.sdamir66.dadban.calendar.prayer
 
-import com.batoulapps.adhan.Coordinates
-import com.batoulapps.adhan.data.DateComponents
-import java.text.SimpleDateFormat
-import java.util.*
-
-// ⚠️ این import رو بعد از اضافه کردن PrayTime اضافه کن:
-// import PrayTimes
+import com.github.persian.calendar.praytimes.PrayTime
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 object PrayerTimesCalculator {
 
     /**
      * محاسبه اوقات شرعی به روش رسمی مؤسسه ژئوفیزیک دانشگاه تهران
-     * 
-     * پارامترها:
+     *
+     * پارامترها (روش Tehran در PrayTime):
      * - Fajr Angle: 17.7 درجه
      * - Isha Angle: 14 درجه
      * - Maghrib Angle: 4.5 درجه (ذهاب حمره مشرقیه)
@@ -27,46 +25,56 @@ object PrayerTimesCalculator {
         cityName: String = ""
     ): PrayerTimesData {
 
-        // ═══ ۱. استفاده از PrayTime با روش Tehran ═══
-        val prayTime = PrayTimes()
-        
-        // ✅ تنظیم روش رسمی ژئوفیزیک تهران
-        prayTime.setMethod("Tehran")
-        
-        // ✅ تنظیم نیمه‌شب به روش جعفری
-        prayTime.adjust(mapOf(
-            "midnight" to "Jafari",
-            "asr" to "Standard"  // شافعی/جعفری (ضریب سایه = 1)
-        ))
+        // ═══ ۱. ساخت نمونه PrayTime ═══
+        val prayTime = PrayTime()
 
-        // ═══ ۲. محاسبه اوقات ═══
-        // آرایه مختصات: [عرض، طول، ارتفاع]
-        val coordinates = doubleArrayOf(latitude, longitude, 0.0)
-        
-        // منطقه زمانی: برای ایران +3.5
+        // ═══ ۲. تنظیم روش محاسبه به Tehran (مؤسسه ژئوفیزیک) ═══
+        prayTime.setCalcMethod(PrayTime.Tehran)
+
+        // ═══ ۳. تنظیم روش اسر به Standard (شافعی/جعفری) ═══
+        prayTime.setAsrJuristic(PrayTime.Standard)
+
+        // ═══ ۴. تنظیم نیمه‌شب به Jafari ═══
+        prayTime.setMidnight(PrayTime.Jafari)
+
+        // ═══ ۵. فرمت ۲۴ ساعته ═══
+        prayTime.setTimeFormat(PrayTime.Time24)
+
+        // ═══ ۶. تنظیم منطقه زمانی ایران (+3.5) ═══
         val timezone = 3.5
-        
-        // محاسبه (فرمت 24 ساعته)
-        val times = prayTime.getTimes(
-            date,
-            coordinates,
-            timezone,
-            0,      // DST (ساعت تابستانی)
-            "24h"   // فرمت
+
+        // ═══ ۷. تاریخ میلادی به Calendar ═══
+        val cal = Calendar.getInstance().apply {
+            time = date
+        }
+
+        // ═══ ۸. محاسبه اوقات ═══
+        val prayerTimes: ArrayList<String> = prayTime.getPrayerTimes(
+            cal,
+            latitude,
+            longitude,
+            timezone
         )
 
-        // ═══ ۳. استخراج اوقات ═══
-        // PrayTime مقادیر رو به صورت map برمی‌گردونه:
-        // "fajr", "sunrise", "dhuhr", "asr", "sunset", "maghrib", "isha", "midnight"
-        
+        // ═══ ۹. استخراج اوقات ═══
+        // ترتیب خروجی PrayTime:
+        // 0: Fajr, 1: Sunrise, 2: Dhuhr, 3: Asr, 4: Sunset, 5: Maghrib, 6: Isha, 7: Midnight
+        val fajr = prayerTimes.getOrNull(0) ?: "--:--"
+        val sunrise = prayerTimes.getOrNull(1) ?: "--:--"
+        val dhuhr = prayerTimes.getOrNull(2) ?: "--:--"
+        val asr = prayerTimes.getOrNull(3) ?: "--:--"
+        val maghrib = prayerTimes.getOrNull(5) ?: "--:--"  // ← اذان مغرب با زاویه 4.5
+        val isha = prayerTimes.getOrNull(6) ?: "--:--"
+        val midnight = prayerTimes.getOrNull(7) ?: "--:--"  // ← نیمه‌شب جعفری
+
         return PrayerTimesData(
-            fajr = times["fajr"] ?: "--:--",
-            sunrise = times["sunrise"] ?: "--:--",
-            dhuhr = times["dhuhr"] ?: "--:--",
-            asr = times["asr"] ?: "--:--",
-            maghrib = times["maghrib"] ?: "--:--",   // ← اذان مغرب با زاویه 4.5
-            isha = times["isha"] ?: "--:--",
-            midnight = times["midnight"] ?: "--:--", // ← نیمه‌شب جعفری
+            fajr = fajr,
+            sunrise = sunrise,
+            dhuhr = dhuhr,
+            asr = asr,
+            maghrib = maghrib,
+            isha = isha,
+            midnight = midnight,
             dateMillis = date.time,
             latitude = latitude,
             longitude = longitude,
