@@ -2,7 +2,6 @@ package com.sdamir66.dadban.calendar.prayer
 
 import java.util.Calendar
 import java.util.Date
-import java.util.Locale
 import java.util.TimeZone
 
 object PrayerTimesCalculator {
@@ -10,8 +9,8 @@ object PrayerTimesCalculator {
     /**
      * محاسبه اوقات شرعی به روش رسمی مؤسسه ژئوفیزیک دانشگاه تهران
      *
-     * پارامترهای روش Tehran:
-     * - Fajr Angle: 17.7 درجه
+     * پارامترها (تنظیم‌شده برای هماهنگی کامل با time.ir):
+     * - Fajr Angle: 18 درجه
      * - Isha Angle: 14 درجه
      * - Maghrib Angle: 4.5 درجه (ذهاب حمره مشرقیه)
      * - Midnight: Jafari
@@ -38,35 +37,43 @@ object PrayerTimesCalculator {
             cal.get(Calendar.DAY_OF_MONTH)
         )
 
-        // ═══ ۴. تنظیم روش محاسبه به تهران ═══
+        // ═══ ۴. روش محاسبه: Tehran ═══
         prayTimes.setMethod(Method.TEHRAN)
 
-        // ═══ ۵. تنظیم اسر به شافعی (مطابق فقه جعفری) ═══
+        // ═══ ۵. اسر شافعی (جعفری) ═══
         prayTimes.setAsrJuristic(Constants.JURISTIC_STANDARD)
 
-        // ═══ ۶. تنظیم نیمه‌شب جعفری ═══
+        // ═══ ۶. نیمه‌شب جعفری ═══
         prayTimes.setMidnightMode(Constants.MIDNIGHT_JAFARI)
 
-        // ═══ ۷. تنظیم منطقه زمانی ایران ═══
+        // ═══ ۷. منطقه زمانی ایران ═══
         prayTimes.setTimezone(TimeZone.getTimeZone("Asia/Tehran"))
 
         // ═══ ۸. تنظیم عرض‌های بالا ═══
         prayTimes.setHighLatsAdjustment(Constants.HIGHLAT_ANGLEBASED)
 
-        // ═══ ۹. استخراج اوقات ═══
+        // ═══ ۹. ✅ تنظیم زاویه فجر به 18 درجه (هماهنگ با time.ir) ═══
+        prayTimes.setFajrDegrees(18.0)
+
+        // ═══ ۱۰. ✅ تنظیم اذان مغرب به 4.5 درجه (ذهاب حمره مشرقیه) ═══
+        prayTimes.setMaghribTime(4.5, false)  // false = بر حسب درجه
+
+        // ═══ ۱۱. استخراج اوقات ═══
         val fajr = prayTimes.getTime(Constants.TIMES_FAJR)
         val sunrise = prayTimes.getTime(Constants.TIMES_SUNRISE)
         val dhuhr = prayTimes.getTime(Constants.TIMES_DHUHR)
         val asr = prayTimes.getTime(Constants.TIMES_ASR)
-        val maghrib = prayTimes.getTime(Constants.TIMES_MAGHRIB)  // ← اذان مغرب با زاویه 4.5
+        val sunset = prayTimes.getTime(Constants.TIMES_SUNSET)    // ← غروب واقعی آفتاب
+        val maghrib = prayTimes.getTime(Constants.TIMES_MAGHRIB)  // ← اذان مغرب
         val isha = prayTimes.getTime(Constants.TIMES_ISHA)
-        val midnight = prayTimes.getTime(Constants.TIMES_MIDNIGHT) // ← نیمه‌شب جعفری
+        val midnight = prayTimes.getTime(Constants.TIMES_MIDNIGHT)
 
         return PrayerTimesData(
             fajr = fajr,
             sunrise = sunrise,
             dhuhr = dhuhr,
             asr = asr,
+            sunset = sunset,
             maghrib = maghrib,
             isha = isha,
             midnight = midnight,
