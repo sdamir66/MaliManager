@@ -41,9 +41,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // ═══════════════════════════════════════════════
-    // ۱. اول state ها
-    // ═══════════════════════════════════════════════
+    // ═══ ۱. state ها ═══
     var autoBackupExists by remember { mutableStateOf(false) }
     var autoBackupInfo by remember { mutableStateOf("") }
     var confirmRestore by remember { mutableStateOf(false) }
@@ -52,9 +50,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     var calendarSettings by remember { mutableStateOf<CalendarSettings?>(null) }
     var showCityPicker by remember { mutableStateOf(false) }
 
-    // ═══════════════════════════════════════════════
-    // ۲. Launcher ها
-    // ═══════════════════════════════════════════════
+    // ═══ ۲. Launcher ها ═══
     val create = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
@@ -81,7 +77,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ✅ permissionLauncher بعد از تعریف calendarSettings
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -104,9 +99,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ═══════════════════════════════════════════════
-    // ۳. بارگذاری اولیه
-    // ═══════════════════════════════════════════════
+    // ═══ ۳. بارگذاری اولیه ═══
     LaunchedEffect(Unit) {
         calendarSettings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
         val file = java.io.File(context.filesDir, "auto_backup.json")
@@ -299,7 +292,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             }
 
             // ═══════════════════════════════════════════════
-            // نمایش رویدادها
+            // نمایش رویدادها (با رنگ‌ها ادغام‌شده)
             // ═══════════════════════════════════════════════
             item {
                 Text(
@@ -319,106 +312,88 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        SettingSwitch(
+
+                        // تعطیلات رسمی
+                        EventSettingRow(
                             title = "تعطیلات رسمی",
-                            checked = calendarSettings!!.showHolidays
-                        ) {
-                            scope.launch {
-                                calendarSettings = calendarSettings!!.copy(showHolidays = it)
-                                db.calendarSettingsDao().insert(calendarSettings!!)
+                            checked = calendarSettings!!.showHolidays,
+                            selectedColor = calendarSettings!!.colorHoliday,
+                            onCheckedChange = { checked ->
+                                scope.launch {
+                                    calendarSettings = calendarSettings!!.copy(showHolidays = checked)
+                                    db.calendarSettingsDao().insert(calendarSettings!!)
+                                }
+                            },
+                            onColorChange = { newColor ->
+                                scope.launch {
+                                    calendarSettings = calendarSettings!!.copy(colorHoliday = newColor)
+                                    db.calendarSettingsDao().insert(calendarSettings!!)
+                                }
                             }
-                        }
-                        SettingSwitch(
-                            title = "رویدادهای مذهبی غیرتعطیل",
-                            checked = calendarSettings!!.showReligiousNonHoliday
-                        ) {
-                            scope.launch {
-                                calendarSettings = calendarSettings!!.copy(showReligiousNonHoliday = it)
-                                db.calendarSettingsDao().insert(calendarSettings!!)
-                            }
-                        }
-                        SettingSwitch(
-                            title = "رویدادهای ملی غیرتعطیل",
-                            checked = calendarSettings!!.showNationalNonHoliday
-                        ) {
-                            scope.launch {
-                                calendarSettings = calendarSettings!!.copy(showNationalNonHoliday = it)
-                                db.calendarSettingsDao().insert(calendarSettings!!)
-                            }
-                        }
-                        SettingSwitch(
-                            title = "رویدادهای جهانی",
-                            checked = calendarSettings!!.showGlobalEvents
-                        ) {
-                            scope.launch {
-                                calendarSettings = calendarSettings!!.copy(showGlobalEvents = it)
-                                db.calendarSettingsDao().insert(calendarSettings!!)
-                            }
-                        }
-                    }
-                }
-            }
+                        )
 
-            // ═══════════════════════════════════════════════
-            // رنگ رویدادها
-            // ═══════════════════════════════════════════════
-            item {
-                Text(
-                    "رنگ رویدادها",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1B1B1F),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                )
-            }
+                        HorizontalDivider(color = Color(0xFFEEEEEE), modifier = Modifier.padding(vertical = 4.dp))
 
-            item {
-                Card(
-                    Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        ColorPickerRow(
-                            title = "تعطیلات رسمی",
-                            selectedColor = calendarSettings!!.colorHoliday
-                        ) { newColor ->
-                            scope.launch {
-                                calendarSettings = calendarSettings!!.copy(colorHoliday = newColor)
-                                db.calendarSettingsDao().insert(calendarSettings!!)
-                            }
-                        }
-
-                        ColorPickerRow(
+                        // مذهبی غیرتعطیل
+                        EventSettingRow(
                             title = "مذهبی غیرتعطیل",
-                            selectedColor = calendarSettings!!.colorReligious
-                        ) { newColor ->
-                            scope.launch {
-                                calendarSettings = calendarSettings!!.copy(colorReligious = newColor)
-                                db.calendarSettingsDao().insert(calendarSettings!!)
+                            checked = calendarSettings!!.showReligiousNonHoliday,
+                            selectedColor = calendarSettings!!.colorReligious,
+                            onCheckedChange = { checked ->
+                                scope.launch {
+                                    calendarSettings = calendarSettings!!.copy(showReligiousNonHoliday = checked)
+                                    db.calendarSettingsDao().insert(calendarSettings!!)
+                                }
+                            },
+                            onColorChange = { newColor ->
+                                scope.launch {
+                                    calendarSettings = calendarSettings!!.copy(colorReligious = newColor)
+                                    db.calendarSettingsDao().insert(calendarSettings!!)
+                                }
                             }
-                        }
+                        )
 
-                        ColorPickerRow(
+                        HorizontalDivider(color = Color(0xFFEEEEEE), modifier = Modifier.padding(vertical = 4.dp))
+
+                        // ملی غیرتعطیل
+                        EventSettingRow(
                             title = "ملی غیرتعطیل",
-                            selectedColor = calendarSettings!!.colorNational
-                        ) { newColor ->
-                            scope.launch {
-                                calendarSettings = calendarSettings!!.copy(colorNational = newColor)
-                                db.calendarSettingsDao().insert(calendarSettings!!)
+                            checked = calendarSettings!!.showNationalNonHoliday,
+                            selectedColor = calendarSettings!!.colorNational,
+                            onCheckedChange = { checked ->
+                                scope.launch {
+                                    calendarSettings = calendarSettings!!.copy(showNationalNonHoliday = checked)
+                                    db.calendarSettingsDao().insert(calendarSettings!!)
+                                }
+                            },
+                            onColorChange = { newColor ->
+                                scope.launch {
+                                    calendarSettings = calendarSettings!!.copy(colorNational = newColor)
+                                    db.calendarSettingsDao().insert(calendarSettings!!)
+                                }
                             }
-                        }
+                        )
 
-                        ColorPickerRow(
+                        HorizontalDivider(color = Color(0xFFEEEEEE), modifier = Modifier.padding(vertical = 4.dp))
+
+                        // جهانی
+                        EventSettingRow(
                             title = "جهانی",
-                            selectedColor = calendarSettings!!.colorGlobal
-                        ) { newColor ->
-                            scope.launch {
-                                calendarSettings = calendarSettings!!.copy(colorGlobal = newColor)
-                                db.calendarSettingsDao().insert(calendarSettings!!)
+                            checked = calendarSettings!!.showGlobalEvents,
+                            selectedColor = calendarSettings!!.colorGlobal,
+                            onCheckedChange = { checked ->
+                                scope.launch {
+                                    calendarSettings = calendarSettings!!.copy(showGlobalEvents = checked)
+                                    db.calendarSettingsDao().insert(calendarSettings!!)
+                                }
+                            },
+                            onColorChange = { newColor ->
+                                scope.launch {
+                                    calendarSettings = calendarSettings!!.copy(colorGlobal = newColor)
+                                    db.calendarSettingsDao().insert(calendarSettings!!)
+                                }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -799,46 +774,76 @@ private fun SettingSwitch(
     }
 }
 
+/**
+ * ردیف تنظیم رویداد: toggle + انتخاب رنگ (ادغام‌شده)
+ */
 @Composable
-private fun ColorPickerRow(
+private fun EventSettingRow(
     title: String,
+    checked: Boolean,
     selectedColor: String,
+    onCheckedChange: (Boolean) -> Unit,
     onColorChange: (String) -> Unit
 ) {
-    val colors = listOf(
-        "#E53935" to Color(0xFFE53935),
-        "#4CAF50" to Color(0xFF4CAF50),
-        "#2196F3" to Color(0xFF2196F3),
-        "#FF9800" to Color(0xFFFF9800),
-        "#9C27B0" to Color(0xFF9C27B0),
-        "#9E9E9E" to Color(0xFF9E9E9E)
-    )
-
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF1B1B1F),
-            modifier = Modifier.weight(1f)
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            colors.forEach { (hex, color) ->
-                Box(
-                    Modifier
-                        .size(24.dp)
-                        .background(color, CircleShape)
-                        .border(
-                            width = if (hex == selectedColor) 3.dp else 0.dp,
-                            color = if (hex == selectedColor) HeaderBlue else Color.Transparent,
-                            shape = CircleShape
-                        )
-                        .clickable { onColorChange(hex) }
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        // ═══ ردیف اول: toggle + عنوان ═══
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFF1B1B1F),
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = HeaderBlue
                 )
+            )
+        }
+
+        // ═══ ردیف دوم: انتخاب رنگ (فقط اگه روشن باشه) ═══
+        if (checked) {
+            Spacer(Modifier.height(6.dp))
+            Row(
+                Modifier.fillMaxWidth().padding(start = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val colors = listOf(
+                    "#E53935", "#4CAF50", "#2196F3",
+                    "#FF9800", "#9C27B0", "#9E9E9E"
+                )
+
+                colors.forEach { hex ->
+                    val color = parseColor(hex)
+                    Box(
+                        Modifier
+                            .size(24.dp)
+                            .background(color, CircleShape)
+                            .border(
+                                width = if (hex == selectedColor) 3.dp else 0.dp,
+                                color = if (hex == selectedColor) HeaderBlue else Color.Transparent,
+                                shape = CircleShape
+                            )
+                            .clickable { onColorChange(hex) }
+                    )
+                }
             }
         }
+    }
+}
+
+private fun parseColor(hex: String): Color {
+    return try {
+        Color(android.graphics.Color.parseColor(hex))
+    } catch (e: Exception) {
+        Color(0xFF9E9E9E)
     }
 }
 
