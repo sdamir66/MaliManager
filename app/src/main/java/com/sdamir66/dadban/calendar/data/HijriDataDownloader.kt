@@ -1,5 +1,7 @@
 package com.sdamir66.dadban.calendar.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
@@ -14,6 +16,25 @@ object HijriDataDownloader {
     // ═══ آدرس‌های دانلود ═══
     private const val BASE_URL = "https://pipe2time.ir/api/calendar"
     private const val TIMEOUT_MS = 15_000
+
+    // ═══════════════════════════════════════════════════════════
+    //  دانلود + ذخیره در دیتابیس
+    //  (همون تابعی که SettingsScreen صداش می‌زنه)
+    // ═══════════════════════════════════════════════════════════
+    suspend fun downloadAndSave(
+        jalaliYear: Int,
+        dao: HijriCacheDao
+    ): Int {
+        val list = withContext(Dispatchers.IO) {
+            downloadYear(jalaliYear)
+        }
+        if (list.isNotEmpty()) {
+            withContext(Dispatchers.IO) {
+                dao.insertAll(list)
+            }
+        }
+        return list.size
+    }
 
     // ═══════════════════════════════════════════════════════════
     //  دانلود داده‌ی یک سال جلالی و تبدیل به لیست HijriCache
