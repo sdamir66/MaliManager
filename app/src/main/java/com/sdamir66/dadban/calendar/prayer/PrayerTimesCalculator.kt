@@ -39,7 +39,7 @@ object PrayerTimesCalculator {
         )
 
         // ═══ ۴. تنظیم روش محاسبه به تهران ═══
-        prayTimes.setMethod(Parameters.Method.TEHRAN)
+        prayTimes.setMethod(Method.TEHRAN)
 
         // ═══ ۵. تنظیم اسر به شافعی (مطابق فقه جعفری) ═══
         prayTimes.setAsrJuristic(Constants.JURISTIC_STANDARD)
