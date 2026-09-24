@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.CalendarType
+import com.sdamir66.dadban.calendar.data.HijriCache
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.util.Jalali
 import java.util.Calendar
@@ -29,13 +30,13 @@ fun CalendarHeader(
     currentDate: Date,
     primaryCalendar: CalendarType,
     settings: CalendarSettings?,
+    hijriCacheMap: Map<String, HijriCache>,
     onDateChange: (Date) -> Unit,
     onCalendarTypeChange: (CalendarType) -> Unit
 ) {
     var showYearPicker by remember { mutableStateOf(false) }
 
-    // ═══ Pager برای سواپ سال ═══
-    val baseYear = remember { getYear(currentDate, primaryCalendar, settings) }
+    val baseYear = remember { getYear(currentDate, primaryCalendar, hijriCacheMap) }
     val pageCount = 200
     val startPage = pageCount / 2
 
@@ -48,14 +49,14 @@ fun CalendarHeader(
 
     LaunchedEffect(pagerState.currentPage) {
         val newYear = pageToYear(pagerState.currentPage)
-        val currentYear = getYear(currentDate, primaryCalendar, settings)
+        val currentYear = getYear(currentDate, primaryCalendar, hijriCacheMap)
         if (newYear != currentYear) {
             onDateChange(setYear(currentDate, newYear, primaryCalendar))
         }
     }
 
     LaunchedEffect(currentDate) {
-        val year = getYear(currentDate, primaryCalendar, settings)
+        val year = getYear(currentDate, primaryCalendar, hijriCacheMap)
         val targetPage = startPage + (year - baseYear)
         if (targetPage != pagerState.currentPage && targetPage in 0 until pageCount) {
             pagerState.scrollToPage(targetPage)
@@ -73,7 +74,6 @@ fun CalendarHeader(
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp)
     ) {
         Column {
-            // ═══ ردیف اول: ماه + سال (با سواپ) ═══
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxWidth(),
@@ -86,7 +86,7 @@ fun CalendarHeader(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        getMonthName(currentDate, primaryCalendar, settings),
+                        getMonthName(currentDate, primaryCalendar, hijriCacheMap),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -106,28 +106,27 @@ fun CalendarHeader(
 
             Spacer(Modifier.height(10.dp))
 
-            // ═══ ردیف دوم: سه تقویم (با فاصله‌ی مساوی) ═══
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.JALALI, settings, primaryCalendar),
+                    label = getChipLabel(currentDate, CalendarType.JALALI, hijriCacheMap, primaryCalendar),
                     isSelected = primaryCalendar == CalendarType.JALALI,
                     onClick = { onCalendarTypeChange(CalendarType.JALALI) },
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))
                 CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.HIJRI, settings, primaryCalendar),
+                    label = getChipLabel(currentDate, CalendarType.HIJRI, hijriCacheMap, primaryCalendar),
                     isSelected = primaryCalendar == CalendarType.HIJRI,
                     onClick = { onCalendarTypeChange(CalendarType.HIJRI) },
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))
                 CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.GREGORIAN, settings, primaryCalendar),
+                    label = getChipLabel(currentDate, CalendarType.GREGORIAN, hijriCacheMap, primaryCalendar),
                     isSelected = primaryCalendar == CalendarType.GREGORIAN,
                     onClick = { onCalendarTypeChange(CalendarType.GREGORIAN) },
                     modifier = Modifier.weight(1f)
@@ -138,7 +137,7 @@ fun CalendarHeader(
 
     if (showYearPicker) {
         YearPickerDialog(
-            currentYear = getYear(currentDate, primaryCalendar, settings),
+            currentYear = getYear(currentDate, primaryCalendar, hijriCacheMap),
             primaryCalendar = primaryCalendar,
             onYearSelected = { year ->
                 onDateChange(setYear(currentDate, year, primaryCalendar))
@@ -178,7 +177,32 @@ private fun CalendarTypeChip(
 // توابع کمکی
 // ═══════════════════════════════════════════════════════
 
-private fun getMonthName(date: Date, type: CalendarType, settings: CalendarSettings?): String {
+private fun getHijriFromCache(date: Date, cache: Map<String, HijriCache>): IntArray? {
+    val j = Jalali.toJalaliPublic(date.time)
+    val key = "%04d/%02d/%02d".format(j[0], j[1], j[2])
+    val item = cache[key] ?: return null
+    return intArrayOf(item.hijriYear, hijriMonthNameToNumber(item.hijriMonth), item.hijriDay)
+}
+
+private fun hijriMonthNameToNumber(name: String): Int {
+    return when (name.trim()) {
+        "محرم" -> 1
+        "صفر" -> 2
+        "ربیع‌الاول", "ربیع الاول" -> 3
+        "ربیع‌الثانی", "ربیع الثانی" -> 4
+        "جمادی‌الاول", "جمادی الاول", "جمادي الاولي" -> 5
+        "جمادی‌الثانی", "جمادی الثانی", "جمادي الثانيه" -> 6
+        "رجب" -> 7
+        "شعبان" -> 8
+        "رمضان" -> 9
+        "شوال" -> 10
+        "ذی‌القعده", "ذوالقعده" -> 11
+        "ذی‌الحجه", "ذوالحجه", "ذوالحجه" -> 12
+        else -> 0
+    }
+}
+
+private fun getMonthName(date: Date, type: CalendarType, cache: Map<String, HijriCache>): String {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
@@ -189,69 +213,53 @@ private fun getMonthName(date: Date, type: CalendarType, settings: CalendarSetti
             gregorianMonthName(cal.get(Calendar.MONTH) + 1)
         }
         CalendarType.HIJRI -> {
-            val h = getHijriDate(date, settings)
+            val h = getHijriFromCache(date, cache) ?: getHijriDate(date, null)
             hijriMonthName(h[1])
         }
     }
 }
 
-private fun getYear(date: Date, type: CalendarType, settings: CalendarSettings?): Int {
+private fun getYear(date: Date, type: CalendarType, cache: Map<String, HijriCache>): Int {
     return when (type) {
         CalendarType.JALALI -> Jalali.toJalaliPublic(date.time)[0]
         CalendarType.GREGORIAN -> Calendar.getInstance().apply { time = date }.get(Calendar.YEAR)
-        CalendarType.HIJRI -> getHijriDate(date, settings)[0]
+        CalendarType.HIJRI -> (getHijriFromCache(date, cache) ?: getHijriDate(date, null))[0]
     }
 }
 
-/**
- * فرمت دو خطی:
- * - خط اول: تاریخ عددی کامل (سال/ماه/روز)
- * - خط دوم: فقط نام ماه(ها) — بدون سال
- *
- * ⚠️ اول و آخر ماه از **تقویم اصلی (primaryCalendar)** حساب میشه،
- * و بعد توی تقویم هدف (type) نمایش داده میشه.
- */
 private fun getChipLabel(
     date: Date,
     type: CalendarType,
-    settings: CalendarSettings?,
+    cache: Map<String, HijriCache>,
     primaryCalendar: CalendarType
 ): String {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
             "${j[0]}/${j[1].toString().padStart(2, '0')}/${j[2].toString().padStart(2, '0')}\n" +
-            getMonthRangeForPrimary(date, primaryCalendar, CalendarType.JALALI, settings)
+            getMonthRangeForPrimary(date, primaryCalendar, CalendarType.JALALI, cache)
         }
         CalendarType.GREGORIAN -> {
             val cal = Calendar.getInstance().apply { time = date }
             "${cal.get(Calendar.YEAR)}/${(cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')}/${cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')}\n" +
-            getMonthRangeForPrimary(date, primaryCalendar, CalendarType.GREGORIAN, settings)
+            getMonthRangeForPrimary(date, primaryCalendar, CalendarType.GREGORIAN, cache)
         }
         CalendarType.HIJRI -> {
-            val h = getHijriDate(date, settings)
+            val h = getHijriFromCache(date, cache) ?: getHijriDate(date, null)
             "${h[0]}/${h[1].toString().padStart(2, '0')}/${h[2].toString().padStart(2, '0')}\n" +
-            getMonthRangeForPrimary(date, primaryCalendar, CalendarType.HIJRI, settings)
+            getMonthRangeForPrimary(date, primaryCalendar, CalendarType.HIJRI, cache)
         }
     }
 }
 
-/**
- * محدوده‌ی ماه تقویم هدف (targetCalendar) رو بر اساس ماه اصلی (primaryCalendar) برمی‌گردونه.
- *
- * مثلاً اگه ماه اصلی جلالی باشه، می‌خوایم ببینیم اون ماه جلالی
- * توی چه ماه‌هایی از تقویم میلادی/قمری قرار می‌گیره.
- */
 private fun getMonthRangeForPrimary(
     date: Date,
     primaryCalendar: CalendarType,
     targetCalendar: CalendarType,
-    settings: CalendarSettings?
+    cache: Map<String, HijriCache>
 ): String {
-    // ═══ ۱. اول و آخر ماه اصلی رو حساب کن ═══
-    val (firstDay, lastDay) = getFirstAndLastDayOfMonth(date, primaryCalendar, settings)
+    val (firstDay, lastDay) = getFirstAndLastDayOfMonth(date, primaryCalendar)
 
-    // ═══ ۲. تبدیل به تقویم هدف و نمایش محدوده ═══
     return when (targetCalendar) {
         CalendarType.JALALI -> {
             val firstJ = Jalali.toJalaliPublic(firstDay.time)
@@ -274,8 +282,8 @@ private fun getMonthRangeForPrimary(
             }
         }
         CalendarType.HIJRI -> {
-            val firstH = getHijriDate(firstDay, settings)
-            val lastH = getHijriDate(lastDay, settings)
+            val firstH = getHijriFromCache(firstDay, cache) ?: getHijriDate(firstDay, null)
+            val lastH = getHijriFromCache(lastDay, cache) ?: getHijriDate(lastDay, null)
             if (firstH[1] == lastH[1]) {
                 hijriMonthName(firstH[1])
             } else {
@@ -285,21 +293,13 @@ private fun getMonthRangeForPrimary(
     }
 }
 
-/**
- * اول و آخر ماه تقویم مورد نظر رو برمی‌گردونه.
- */
-private fun getFirstAndLastDayOfMonth(
-    date: Date,
-    calendarType: CalendarType,
-    settings: CalendarSettings?
-): Pair<Date, Date> {
+private fun getFirstAndLastDayOfMonth(date: Date, calendarType: CalendarType): Pair<Date, Date> {
     return when (calendarType) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
             val firstMillis = Jalali.parse("%04d/%02d/%02d".format(j[0], j[1], 1)) ?: 0L
             val lastMillis = Jalali.parse("%04d/%02d/%02d".format(
-                j[0], j[1],
-                Jalali.daysInMonth(j[0], j[1])
+                j[0], j[1], Jalali.daysInMonth(j[0], j[1])
             )) ?: 0L
             Date(firstMillis) to Date(lastMillis)
         }
@@ -308,8 +308,7 @@ private fun getFirstAndLastDayOfMonth(
             val year = cal.get(Calendar.YEAR)
             val month = cal.get(Calendar.MONTH)
             val firstCal = Calendar.getInstance().apply {
-                set(year, month, 1, 0, 0, 0)
-                set(Calendar.MILLISECOND, 0)
+                set(year, month, 1, 0, 0, 0); set(Calendar.MILLISECOND, 0)
             }
             val lastCal = Calendar.getInstance().apply {
                 set(year, month, cal.getActualMaximum(Calendar.DAY_OF_MONTH), 0, 0, 0)
@@ -318,16 +317,13 @@ private fun getFirstAndLastDayOfMonth(
             firstCal.time to lastCal.time
         }
         CalendarType.HIJRI -> {
-            val h = getHijriDate(date, settings)
-            // برای قمری، ماه‌های فرد ۳۰ روز و زوج ۲۹ روز
+            val h = getHijriDate(date, null)
             val daysInHijriMonth = if (h[1] % 2 == 1) 30 else 29
             val firstCal = Calendar.getInstance().apply {
-                time = date
-                add(Calendar.DAY_OF_MONTH, -(h[2] - 1))
+                time = date; add(Calendar.DAY_OF_MONTH, -(h[2] - 1))
             }
             val lastCal = Calendar.getInstance().apply {
-                time = date
-                add(Calendar.DAY_OF_MONTH, daysInHijriMonth - h[2])
+                time = date; add(Calendar.DAY_OF_MONTH, daysInHijriMonth - h[2])
             }
             firstCal.time to lastCal.time
         }
@@ -338,37 +334,28 @@ private fun setYear(date: Date, year: Int, type: CalendarType): Date {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
-            val millis = Jalali.parse("%04d/%02d/%02d".format(year, j[1], j[2]))
-            Date(millis ?: date.time)
+            Date(Jalali.parse("%04d/%02d/%02d".format(year, j[1], j[2])) ?: date.time)
         }
         CalendarType.GREGORIAN -> {
-            Calendar.getInstance().apply {
-                time = date
-                set(Calendar.YEAR, year)
-            }.time
+            Calendar.getInstance().apply { time = date; set(Calendar.YEAR, year) }.time
         }
         CalendarType.HIJRI -> {
             val diff = year - getHijriDate(date, null)[0]
-            Calendar.getInstance().apply {
-                time = date
-                add(Calendar.YEAR, diff)
-            }.time
+            Calendar.getInstance().apply { time = date; add(Calendar.YEAR, diff) }.time
         }
     }
 }
 
 // ═══════════════════════════════════════════════════════
-// تبدیل قمری
+// تبدیل قمری (fallback)
 // ═══════════════════════════════════════════════════════
 
 fun getHijriDate(date: Date, settings: CalendarSettings?): IntArray {
     val cal = com.github.msarhan.ummalqura.calendar.UmmalquraCalendar()
     cal.time = date
-
     var year = cal.get(Calendar.YEAR)
     var month = cal.get(Calendar.MONTH) + 1
     var day = cal.get(Calendar.DAY_OF_MONTH)
-
     if (settings != null && settings.eidFitrOffset != 0) {
         if (month >= 10) {
             if (settings.eidFitrHijriYear == null || year == settings.eidFitrHijriYear) {
@@ -379,7 +366,6 @@ fun getHijriDate(date: Date, settings: CalendarSettings?): IntArray {
             }
         }
     }
-
     return intArrayOf(year, month, day)
 }
 
