@@ -68,17 +68,18 @@ fun MonthCalendarView(
     ) { page ->
         val monthDate = pageToDate(page)
 
+        // ✅ ارتفاع ثابت برای همه ماه‌ها (مناسب ۶ هفته)
         Card(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .height(340.dp),  // ✅ ارتفاع ثابت
+                .height(380.dp),  // ← از 340 به 380
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
-            Column(Modifier.padding(10.dp).fillMaxHeight()) {
-                // ═══ نام روزهای هفته (فونت بزرگ‌تر) ═══
+            Column(Modifier.padding(8.dp).fillMaxHeight()) {
+                // ═══ نام روزهای هفته ═══
                 Row(Modifier.fillMaxWidth()) {
                     listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
                         Text(
@@ -93,13 +94,13 @@ fun MonthCalendarView(
                     }
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
 
-                // ═══ گرید روزها (با وزن مساوی) ═══
+                // ═══ گرید روزها (همیشه ۶ ردیف) ═══
                 val daysInMonth = getDaysInMonth(monthDate, primaryCalendar)
                 val firstDayOfWeek = getFirstDayOfWeek(monthDate, primaryCalendar)
                 val totalCells = firstDayOfWeek + daysInMonth
-                val rows = ((totalCells + 6) / 7).coerceAtLeast(5)
+                val rows = 6  // ← همیشه ۶ ردیف (حتی اگه ۵ ردیف کافیه)
 
                 for (row in 0 until rows) {
                     Row(Modifier.fillMaxWidth().weight(1f)) {
