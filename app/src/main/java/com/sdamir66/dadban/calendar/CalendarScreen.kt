@@ -15,28 +15,20 @@ import com.sdamir66.dadban.calendar.data.*
 import com.sdamir66.dadban.calendar.prayer.PrayerTimesCalculator
 import com.sdamir66.dadban.data.AppDb
 import com.sdamir66.dadban.ui.theme.BgLight
-import com.sdamir66.dadban.util.Jalali
 import java.util.Calendar
 import java.util.Date
 
 @Composable
 fun CalendarScreen(db: AppDb) {
-    // ═══ تنظیمات ═══
     var settings by remember { mutableStateOf<CalendarSettings?>(null) }
     LaunchedEffect(Unit) {
         settings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
     }
 
-    // ═══ ماه جاری ═══
     var currentDate by remember { mutableStateOf(Date()) }
-
-    // ═══ تقویم اصلی ═══
     var primaryCalendar by remember { mutableStateOf(CalendarType.JALALI) }
-
-    // ═══ روز انتخاب‌شده ═══
     var selectedDay by remember { mutableStateOf<Date?>(null) }
 
-    // ═══ اوقات شرعی ═══
     val prayerTimes = remember(settings, currentDate, selectedDay) {
         if (settings != null) {
             PrayerTimesCalculator.calculate(
@@ -48,30 +40,22 @@ fun CalendarScreen(db: AppDb) {
         } else null
     }
 
-    // ═══ رویدادها ═══
     val allEvents by db.eventDao().all().collectAsState(emptyList())
 
-    // ✅ همه‌ی رویدادها قابل نمایش (فیلتر فقط با تنظیمات)
     val visibleEvents = allEvents.filter { event ->
         when {
-            // تعطیلات رسمی
             event.isHoliday -> settings?.showHolidays ?: true
-            // مذهبی غیرتعطیل
             event.category == EventCategory.RELIGIOUS -> settings?.showReligiousNonHoliday ?: true
-            // ملی غیرتعطیل
             event.category == EventCategory.NATIONAL -> settings?.showNationalNonHoliday ?: true
-            // جهانی
             event.category == EventCategory.GLOBAL -> settings?.showGlobalEvents ?: false
-            // کاربر
             event.isUserCreated -> settings?.showUserEvents ?: true
             else -> false
         }
     }
 
-    // ═══ رویدادهای روز انتخاب‌شده ═══
-    val selectedDayEvents = remember(selectedDay, visibleEvents) {
+    val selectedDayEvents = remember(selectedDay, visibleEvents, settings) {
         if (selectedDay == null) emptyList()
-        else filterEventsForDay(visibleEvents, selectedDay!!)
+        else filterEventsForDay(visibleEvents, selectedDay!!, settings)
     }
 
     if (settings == null) {
@@ -89,21 +73,21 @@ fun CalendarScreen(db: AppDb) {
             .fillMaxSize()
             .background(BgLight)
     ) {
-        // ═══ هدر تقویم ═══
         item {
             CalendarHeader(
                 currentDate = currentDate,
                 primaryCalendar = primaryCalendar,
+                settings = settings,
                 onDateChange = { currentDate = it }
             )
         }
 
-        // ═══ تقویم ماهانه (روی هدر) ═══
         item {
             Box(Modifier.offset(y = (-30).dp)) {
                 MonthCalendarView(
                     currentDate = currentDate,
                     primaryCalendar = primaryCalendar,
+                    settings = settings,
                     events = visibleEvents,
                     selectedDay = selectedDay,
                     onDayClick = { date ->
@@ -112,16 +96,11 @@ fun CalendarScreen(db: AppDb) {
                     },
                     onDateChange = { newDate ->
                         currentDate = newDate
-                    },
-                    showGregorianSmall = settings!!.showGregorianSmall,
-                    showHijriSmall = settings!!.showHijriSmall,
-                    eidFitrOffset = settings!!.eidFitrOffset,
-                    eidFitrHijriYear = settings!!.eidFitrHijriYear
+                    }
                 )
             }
         }
 
-        // ═══ اوقات شرعی ═══
         if (settings!!.showPrayerTimes && prayerTimes != null) {
             item {
                 Spacer(Modifier.height(4.dp))
@@ -129,7 +108,6 @@ fun CalendarScreen(db: AppDb) {
             }
         }
 
-        // ═══ رویدادهای روز ═══
         item {
             Spacer(Modifier.height(16.dp))
             EventsSection(
@@ -149,24 +127,4 @@ fun CalendarScreen(db: AppDb) {
 // کمک‌تابع‌ها
 // ═══════════════════════════════════════════════════════
 
-private fun filterEventsForDay(events: List<Event>, date: Date): List<Event> {
-    val cal = Calendar.getInstance().apply { time = date }
-    val gregorianMonth = cal.get(Calendar.MONTH) + 1
-    val gregorianDay = cal.get(Calendar.DAY_OF_MONTH)
-
-    val jalali = Jalali.toJalaliPublic(date.time)
-    val jalaliMonth = jalali[1]
-    val jalaliDay = jalali[2]
-
-    val hijri = getHijriDate(date)
-    val hijriMonth = hijri[1]
-    val hijriDay = hijri[2]
-
-    return events.filter { event ->
-        when (event.calendarType) {
-            CalendarType.JALALI -> event.month == jalaliMonth && event.day == jalaliDay
-            CalendarType.GREGORIAN -> event.month == gregorianMonth && event.day == gregorianDay
-            CalendarType.HIJRI -> event.month == hijriMonth && event.day == hijriDay
-        }
-    }
-}
+private fun filterEventsForDay(events: List<Event>, date: Date, settings:
