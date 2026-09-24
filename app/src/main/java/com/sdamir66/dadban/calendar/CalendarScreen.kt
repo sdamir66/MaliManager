@@ -80,6 +80,7 @@ fun CalendarScreen(db: AppDb) {
             .fillMaxSize()
             .background(BgLight)
     ) {
+        // ═══ هدر تقویم ═══
         item {
             CalendarHeader(
                 currentDate = currentDate,
@@ -90,6 +91,7 @@ fun CalendarScreen(db: AppDb) {
             )
         }
 
+        // ═══ کارت تقویم (روی هدر) ═══
         item {
             Box(Modifier.offset(y = (-30).dp)) {
                 MonthCalendarView(
@@ -109,20 +111,26 @@ fun CalendarScreen(db: AppDb) {
             }
         }
 
+        // ═══ اوقات شرعی (نزدیک به کارت تقویم) ═══
         if (settings!!.showPrayerTimes && prayerTimes != null) {
             item {
-                Spacer(Modifier.height(4.dp))
-                PrayerTimesSection(prayerTimes = prayerTimes)
+                // کارت تقویم با offset -30dp بالاتر رفته،
+                // پس برای نزدیک شدن باید 30dp از فاصله‌ی پایینش کم کنیم
+                Box(Modifier.offset(y = (-25).dp)) {
+                    PrayerTimesSection(prayerTimes = prayerTimes)
+                }
             }
         }
 
+        // ═══ رویدادهای روز ═══
         item {
-            Spacer(Modifier.height(16.dp))
-            EventsSection(
-                events = selectedDayEvents,
-                date = selectedDay ?: currentDate,
-                primaryCalendar = primaryCalendar
-            )
+            Box(Modifier.offset(y = if (settings!!.showPrayerTimes) (-15).dp else 0.dp)) {
+                EventsSection(
+                    events = selectedDayEvents,
+                    date = selectedDay ?: currentDate,
+                    primaryCalendar = primaryCalendar
+                )
+            }
         }
 
         item {
@@ -130,6 +138,10 @@ fun CalendarScreen(db: AppDb) {
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════
+// کمک‌تابع‌ها
+// ═══════════════════════════════════════════════════════
 
 private fun filterEventsForDay(events: List<Event>, date: Date, settings: CalendarSettings?): List<Event> {
     val cal = Calendar.getInstance().apply { time = date }
