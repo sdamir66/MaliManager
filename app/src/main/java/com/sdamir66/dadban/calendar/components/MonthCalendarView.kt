@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.calendar.data.Event
@@ -47,7 +48,7 @@ fun MonthCalendarView(
 
     LaunchedEffect(pagerState.currentPage) {
         val newDate = pageToDate(pagerState.currentPage)
-        if (!isSameMonth(newDate, currentDate, primaryCalendar)) {
+        if (!isSameMonth(newDate, currentDate, primaryCalendar, settings)) {
             onDateChange(newDate)
         }
     }
@@ -70,34 +71,38 @@ fun MonthCalendarView(
         Card(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .height(340.dp),  // ✅ ارتفاع ثابت
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
-            Column(Modifier.padding(10.dp)) {
+            Column(Modifier.padding(10.dp).fillMaxHeight()) {
+                // ═══ نام روزهای هفته (فونت بزرگ‌تر) ═══
                 Row(Modifier.fillMaxWidth()) {
                     listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
                         Text(
                             day,
                             modifier = Modifier.weight(1f),
                             textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72)
+                            color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72),
+                            fontSize = 13.sp
                         )
                     }
                 }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
 
+                // ═══ گرید روزها (با وزن مساوی) ═══
                 val daysInMonth = getDaysInMonth(monthDate, primaryCalendar)
                 val firstDayOfWeek = getFirstDayOfWeek(monthDate, primaryCalendar)
                 val totalCells = firstDayOfWeek + daysInMonth
-                val rows = (totalCells + 6) / 7
+                val rows = ((totalCells + 6) / 7).coerceAtLeast(5)
 
                 for (row in 0 until rows) {
-                    Row(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth().weight(1f)) {
                         for (col in 0 until 7) {
                             val cellIndex = row * 7 + col
                             val dayNumber = cellIndex - firstDayOfWeek + 1
@@ -120,15 +125,11 @@ fun MonthCalendarView(
                                     hasHoliday = hasHoliday,
                                     primaryCalendar = primaryCalendar,
                                     settings = settings,
-                                    showGregorianSmall = settings?.showGregorianSmall ?: true,
-                                    showHijriSmall = settings?.showHijriSmall ?: true,
-                                    eidFitrOffset = settings?.eidFitrOffset ?: 0,
-                                    eidFitrHijriYear = settings?.eidFitrHijriYear,
                                     onClick = { onDayClick(date) },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f).fillMaxHeight()
                                 )
                             } else {
-                                Box(Modifier.weight(1f).aspectRatio(1f))
+                                Box(Modifier.weight(1f).fillMaxHeight())
                             }
                         }
                     }
@@ -176,7 +177,7 @@ private fun monthsBetween(from: Date, to: Date): Int {
             (c2.get(Calendar.MONTH) - c1.get(Calendar.MONTH))
 }
 
-private fun isSameMonth(d1: Date, d2: Date, type: CalendarType): Boolean {
+private fun isSameMonth(d1: Date, d2: Date, type: CalendarType, settings: CalendarSettings?): Boolean {
     return when (type) {
         CalendarType.JALALI -> {
             val j1 = Jalali.toJalaliPublic(d1.time)
