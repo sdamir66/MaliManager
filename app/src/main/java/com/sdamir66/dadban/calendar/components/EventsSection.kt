@@ -70,13 +70,8 @@ fun EventsSection(
 
 @Composable
 private fun EventCard(event: Event) {
-    val color = when {
-        event.isHoliday -> DebitRed
-        event.category == EventCategory.RELIGIOUS -> Color(0xFF4CAF50)
-        event.category == EventCategory.NATIONAL -> HeaderBlue
-        event.category == EventCategory.GLOBAL -> Color(0xFF9C27B0)
-        else -> HeaderBlue
-    }
+    // ✅ فقط تعطیلات رسمی قرمز، بقیه بی‌رنگ
+    val color = if (event.isHoliday) DebitRed else Color(0xFF9E9E9E)
 
     Card(
         Modifier.fillMaxWidth(),
@@ -90,7 +85,7 @@ private fun EventCard(event: Event) {
         ) {
             Box(
                 Modifier
-                    .size(12.dp)
+                    .size(10.dp)
                     .background(color, shape = CircleShape)
             )
             Spacer(Modifier.width(12.dp))
@@ -106,7 +101,7 @@ private fun EventCard(event: Event) {
                     Text(
                         event.description,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
+                        color = Color(0xFF5C5D72)
                     )
                 }
             }
