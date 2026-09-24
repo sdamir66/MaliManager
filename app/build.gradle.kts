@@ -51,7 +51,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.5")
-    implementation("com.github.msarhan:ummalqura-calendar:1.1.9")
 
     // ═══ Room ═══
     implementation("androidx.room:room-runtime:2.8.4")
@@ -68,7 +67,8 @@ dependencies {
     implementation("com.github.SeyyedAliTabatabaei.ZamanakCalendar:core:1.0.0")
     implementation("com.github.SeyyedAliTabatabaei.ZamanakCalendar:compose-ui-date-picker:1.0.0")
 
-    // ═══ اوقات شرعی ═══
+    // ═══ تقویم قمری دقیق ═══
+    implementation("com.github.msarhan:ummalqura-calendar:1.1.9")
 
     // ═══ موقعیت مکانی ═══
     implementation("com.google.android.gms:play-services-location:21.3.0")
