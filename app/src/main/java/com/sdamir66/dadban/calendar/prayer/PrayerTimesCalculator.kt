@@ -1,17 +1,21 @@
 package com.sdamir66.dadban.calendar.prayer
 
-import io.saeid.oghat.PrayTime
+import net.alhazmy13.PrayerTimes.PrayerTime
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 
 object PrayerTimesCalculator {
 
     /**
      * محاسبه اوقات شرعی به روش رسمی مؤسسه ژئوفیزیک دانشگاه تهران
-     * 
-     * کتابخانه Oghat به طور پیش‌فرض از روش Tehran استفاده می‌کند.
+     *
+     * پارامترهای روش Tehran در این کتابخانه:
+     * - Fajr Angle: 17.7 درجه
+     * - Isha Angle: 14 درجه
+     * - Maghrib Angle: 4.5 درجه (ذهاب حمره مشرقیه)
+     * - Midnight: Jafari (وسط مغرب تا فجر)
+     * - Asr: Shafii (ضریب سایه = 1، مطابق فقه جعفری)
      */
     fun calculate(
         latitude: Double,
@@ -20,42 +24,99 @@ object PrayerTimesCalculator {
         cityName: String = ""
     ): PrayerTimesData {
 
-        // ═══ ۱. ساخت نمونه PrayTime ═══
-        val prayerTime = PrayTime.getInstance()
+        // ═══ ۱. ساخت نمونه PrayerTime ═══
+        val prayers = PrayerTime()
 
-        // ═══ ۲. تنظیم تاریخ ═══
-        val cal = Calendar.getInstance().apply { time = date }
-        prayerTime.setDate(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
+        // ═══ ۲. تنظیم روش محاسبه به Tehran (مؤسسه ژئوفیزیک) ═══
+        prayers.setCalcMethod(PrayerTime.Calculation.Tehran)
 
-        // ═══ ۳. تنظیم مختصات جغرافیایی ═══
-        prayerTime.setLatLong(latitude, longitude)
+        // ═══ ۳. تنظیم روش اسر به Shafii (مطابق فقه جعفری) ═══
+        prayers.setAsrJuristic(PrayerTime.Juristic.Shafii)
 
-        // ═══ ۴. تنظیم منطقه زمانی ایران (+3.5) ═══
+        // ═══ ۴. تنظیم روش عرض‌های بالا ═══
+        prayers.setAdjustHighLats(PrayerTime.Adjusting.AngleBased)
+
+        // ═══ ۵. آفست‌ها (همه صفر) ═══
+        prayers.setOffsets(intArrayOf(0, 0, 0, 0, 0, 0, 0))
+
+        // ═══ ۶. فرمت ۲۴ ساعته ═══
+        prayers.setTimeFormat(PrayerTime.TimeFormat.Time24)
+
+        // ═══ ۷. منطقه زمانی ایران (+3.5) ═══
         val timezone = 3.5
-        prayerTime.setTimeZone(timezone)
 
-        // ═══ ۵. تنظیم روش محاسبه (به طور پیش‌فرض Tehran است) ═══
-        prayerTime.setCalculationType(PrayTime.CalculationType.TEHRAN)
+        // ═══ ۸. تاریخ میلادی به Calendar ═══
+        val cal = Calendar.getInstance().apply {
+            time = date
+        }
 
-        // ═══ ۶. تنظیم روش اسر به Standard (شافعی/جعفری) ═══
-        prayerTime.setJuristicType(PrayTime.JuristicType.SHAFII)
+        // ═══ ۹. محاسبه اوقات ═══
+        val prayerTimes: ArrayList<String> = prayers.getPrayerTimes(
+            cal,
+            latitude,
+            longitude,
+            timezone
+        )
 
-        // ═══ ۷. دریافت اوقات ═══
-        val times = prayerTime.getPrayerTimes()
+        // ═══ ۱۰. استخراج اوقات ═══
+        // ترتیب خروجی: Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha
+        val fajr = prayerTimes.getOrNull(0) ?: "--:--"
+        val sunrise = prayerTimes.getOrNull(1) ?: "--:--"
+        val dhuhr = prayerTimes.getOrNull(2) ?: "--:--"
+        val asr = prayerTimes.getOrNull(3) ?: "--:--"
+        val maghrib = prayerTimes.getOrNull(5) ?: "--:--"  // ← اذان مغرب با زاویه 4.5
+        val isha = prayerTimes.getOrNull(6) ?: "--:--"
 
-        // ═══ ۸. استخراج اوقات ═══
+        // ═══ ۱۱. محاسبه نیمه‌شب شرعی (جعفری) ═══
+        // نیمه‌شب = وسط بین اذان مغرب و اذان صبح
+        val midnight = calculateMidnight(maghrib, fajr)
+
         return PrayerTimesData(
-            fajr = times.fajr,
-            sunrise = times.sunrise,
-            dhuhr = times.dhuhr,
-            asr = times.asr,
-            maghrib = times.maghrib,     // ← اذان مغرب با زاویه 4.5
-            isha = times.isha,
-            midnight = times.midnight,    // ← نیمه‌شب جعفری
+            fajr = fajr,
+            sunrise = sunrise,
+            dhuhr = dhuhr,
+            asr = asr,
+            maghrib = maghrib,
+            isha = isha,
+            midnight = midnight,
             dateMillis = date.time,
             latitude = latitude,
             longitude = longitude,
             cityName = cityName
         )
+    }
+
+    /**
+     * محاسبه نیمه‌شب شرعی (جعفری)
+     * نیمه‌شب = وسط بین اذان مغرب و اذان صبح
+     */
+    private fun calculateMidnight(maghrib: String, fajr: String): String {
+        return try {
+            val maghribMinutes = timeToMinutes(maghrib)
+            var fajrMinutes = timeToMinutes(fajr)
+
+            // اگر اذان صبح فردا بعد از مغرب امروز است
+            if (fajrMinutes < maghribMinutes) {
+                fajrMinutes += 24 * 60
+            }
+
+            val midnightMinutes = (maghribMinutes + fajrMinutes) / 2
+            minutesToTime(midnightMinutes % (24 * 60))
+        } catch (e: Exception) {
+            "--:--"
+        }
+    }
+
+    private fun timeToMinutes(time: String): Int {
+        val parts = time.split(":")
+        val hours = parts.getOrNull(0)?.toIntOrNull() ?: 0
+        val minutes = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        return hours * 60 + minutes
+    }
+
+    private fun minutesToTime(totalMinutes: Int): String {
+        val hours = (totalMinutes / 60) % 24
+        val minutes = totalMinutes % 60
+        return String.format(Locale.US, "%02d:%02d", hours, minutes)
     }
 }
