@@ -21,19 +21,19 @@ data class CalendarSettings(
     val showGregorianSmall: Boolean = true,
     val showHijriSmall: Boolean = true,
 
-    // ═══ نمایش رویدادها ═══
+    // ═══ نمایش رویدادها (پیش‌فرض همه روشن) ═══
     val showHolidays: Boolean = true,
-    val showReligiousNonHoliday: Boolean = false,
-    val showNationalNonHoliday: Boolean = false,
-    val showGlobalEvents: Boolean = false,
+    val showReligiousNonHoliday: Boolean = true,      // ← روشن
+    val showNationalNonHoliday: Boolean = true,       // ← روشن
+    val showGlobalEvents: Boolean = true,             // ← روشن
     val showUserEvents: Boolean = true,
 
-    // ═══ رنگ رویدادها (قابل تنظیم) ═══
-    val colorHoliday: String = "#E53935",      // قرمز (تعطیلات رسمی)
-    val colorReligious: String = "#9E9E9E",    // خاکستری (مذهبی غیرتعطیل)
-    val colorNational: String = "#9E9E9E",     // خاکستری (ملی غیرتعطیل)
-    val colorGlobal: String = "#9E9E9E",       // خاکستری (جهانی)
-    val colorUser: String = "#9E9E9E",         // خاکستری (کاربر)
+    // ═══ رنگ رویدادها ═══
+    val colorHoliday: String = "#E53935",
+    val colorReligious: String = "#4CAF50",
+    val colorNational: String = "#2196F3",
+    val colorGlobal: String = "#9C27B0",
+    val colorUser: String = "#9E9E9E",
 
     // ═══ موقعیت مکانی ═══
     val locationMode: LocationMode = LocationMode.MANUAL,
