@@ -135,14 +135,32 @@ class MainActivity : ComponentActivity() {
         window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
         window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
 
-        // insert رویدادهای آماده (فقط بار اول)
+        // ✅ insert رویدادهای آماده + به‌روزرسانی تنظیمات قدیمی
         backupScope.launch {
             delay(500L)
+
+            // رویدادهای آماده (فقط بار اول)
             if (db.eventDao().allNow().isEmpty()) {
                 db.eventDao().insertAll(IranEvents.events)
             }
-            if (db.calendarSettingsDao().getNow() == null) {
+
+            // تنظیمات پیش‌فرض
+            val current = db.calendarSettingsDao().getNow()
+            if (current == null) {
                 db.calendarSettingsDao().insert(CalendarSettings())
+            } else {
+                // ✅ به‌روزرسانی تنظیمات قدیمی (اگه همه false بودن → true)
+                if (!current.showReligiousNonHoliday &&
+                    !current.showNationalNonHoliday &&
+                    !current.showGlobalEvents) {
+                    db.calendarSettingsDao().insert(
+                        current.copy(
+                            showReligiousNonHoliday = true,
+                            showNationalNonHoliday = true,
+                            showGlobalEvents = true
+                        )
+                    )
+                }
             }
         }
 
