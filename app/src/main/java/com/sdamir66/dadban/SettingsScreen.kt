@@ -612,4 +612,312 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                         Button(
                             onClick = { pickFolder.launch(null) },
                             modifier = Modifier.fillMaxWidth(),
-                            shape =
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
+                        ) { Text(if (customFolderName != null) "تغییر پوشه" else "انتخاب پوشه") }
+                        if (customFolderName != null) {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = { confirmRemoveFolder = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = DebitRed)
+                            ) { Text("حذف پوشه و برگشت به پیش‌فرض") }
+                        }
+                    }
+                }
+            }
+
+            // ═══════════════════════════════════════════════
+            // درباره
+            // ═══════════════════════════════════════════════
+            item {
+                Text(
+                    "درباره",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
+            }
+
+            item {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(48.dp).background(HeaderBlue, shape = RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("📅", fontSize = 24.sp)
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column {
+                                Text("دادبان", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
+                                Text("نسخه ۲.۰", style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        HorizontalDivider(color = Color(0xFFEEEEEE))
+                        Spacer(Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("👤", fontSize = 20.sp)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text("سازنده", style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
+                                Text("sdamir66", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color(0xFF1B1B1F))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ═══ دیالوگ انتخاب شهر ═══
+    if (showCityPicker && calendarSettings != null) {
+        CityPickerDialog(
+            currentCity = calendarSettings!!.cityName,
+            onCitySelected = { city ->
+                scope.launch {
+                    calendarSettings = calendarSettings!!.copy(
+                        cityName = city.name,
+                        latitude = city.latitude,
+                        longitude = city.longitude
+                    )
+                    db.calendarSettingsDao().insert(calendarSettings!!)
+                }
+                showCityPicker = false
+            },
+            onDismiss = { showCityPicker = false }
+        )
+    }
+
+    if (confirmRestore) {
+        ConfirmDeleteDialog(
+            title = "بازیابی از بکاپ خودکار",
+            message = "تمام داده‌های فعلی با بکاپ جایگزین می‌شوند. مطمئنی؟",
+            onConfirm = {
+                scope.launch {
+                    val file = java.io.File(context.filesDir, "auto_backup.json")
+                    if (file.exists()) Backup.restoreOrExport(context, db, Uri.fromFile(file), true)
+                    confirmRestore = false
+                }
+            },
+            onCancel = { confirmRestore = false }
+        )
+    }
+
+    if (confirmRemoveFolder) {
+        AlertDialog(
+            onDismissRequest = { confirmRemoveFolder = false },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+            title = { Text("حذف پوشه بکاپ", fontWeight = FontWeight.Bold, color = HeaderBlue) },
+            text = { Text("بکاپ‌های بعدی در حافظه داخلی برنامه ذخیره می‌شوند.") },
+            confirmButton = {
+                Button(
+                    onClick = { clearBackupFolderUri(context); customFolderName = null; confirmRemoveFolder = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = DebitRed)
+                ) { Text("حذف") }
+            },
+            dismissButton = { TextButton(onClick = { confirmRemoveFolder = false }) { Text("انصراف", color = HeaderBlue) } }
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// کامپوننت‌های کمکی
+// ═══════════════════════════════════════════════════════
+
+@Composable
+private fun CalendarTypeOption(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (isSelected) HeaderBlue else Color(0xFFF0F1F7),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) Color.White else Color(0xFF5C5D72)
+        )
+    }
+}
+
+@Composable
+private fun SettingSwitch(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF1B1B1F),
+            modifier = Modifier.weight(1f)
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = HeaderBlue
+            )
+        )
+    }
+}
+
+@Composable
+private fun ColorPickerRow(
+    title: String,
+    selectedColor: String,
+    onColorChange: (String) -> Unit
+) {
+    val colors = listOf(
+        "#E53935" to Color(0xFFE53935),
+        "#4CAF50" to Color(0xFF4CAF50),
+        "#2196F3" to Color(0xFF2196F3),
+        "#FF9800" to Color(0xFFFF9800),
+        "#9C27B0" to Color(0xFF9C27B0),
+        "#9E9E9E" to Color(0xFF9E9E9E)
+    )
+
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF1B1B1F),
+            modifier = Modifier.weight(1f)
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            colors.forEach { (hex, color) ->
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .background(color, CircleShape)
+                        .border(
+                            width = if (hex == selectedColor) 3.dp else 0.dp,
+                            color = if (hex == selectedColor) HeaderBlue else Color.Transparent,
+                            shape = CircleShape
+                        )
+                        .clickable { onColorChange(hex) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingRow(title: String, subtitle: String, icon: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(icon, fontSize = 18.sp, color = HeaderBlue)
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color(0xFF1B1B1F))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
+        }
+        Text("‹", fontSize = 20.sp, color = Color(0xFF5C5D72))
+    }
+}
+
+@Composable
+private fun CityPickerDialog(
+    currentCity: String,
+    onCitySelected: (com.sdamir66.dadban.calendar.prayer.CityLocation) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    val allCities = LocationHelper.iranianCities
+    val filteredCities = remember(searchQuery) {
+        if (searchQuery.isBlank()) allCities
+        else allCities.filter { it.name.contains(searchQuery) }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = { Text("انتخاب شهر", fontWeight = FontWeight.Bold, color = HeaderBlue) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("جستجو...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color(0xFF1B1B1F),
+                        unfocusedTextColor = Color(0xFF1B1B1F),
+                        focusedBorderColor = HeaderBlue,
+                        unfocusedBorderColor = Color(0xFFCCCCCC),
+                        focusedLabelColor = HeaderBlue,
+                        unfocusedLabelColor = Color(0xFF5C5D72),
+                        cursorColor = HeaderBlue
+                    )
+                )
+                Spacer(Modifier.height(8.dp))
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 350.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(filteredCities.size) { index ->
+                        val city = filteredCities[index]
+                        Card(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onCitySelected(city) },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (city.name == currentCity)
+                                    HeaderBlue.copy(alpha = 0.15f) else Color(0xFFF8F9FC)
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                city.name,
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (city.name == currentCity) FontWeight.Bold else FontWeight.Normal,
+                                color = if (city.name == currentCity) HeaderBlue else Color(0xFF1B1B1F)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("بستن", color = HeaderBlue, fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
