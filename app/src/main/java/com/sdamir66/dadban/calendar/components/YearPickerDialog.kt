@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,9 +27,20 @@ fun YearPickerDialog(
     onDismiss: () -> Unit
 ) {
     var selectedYear by remember { mutableIntStateOf(currentYear) }
+    val listState = rememberLazyListState()
 
-    val years = remember(currentYear) {
-        ((currentYear - 10)..(currentYear + 10)).toList()
+    // ✅ همه‌ی سال‌ها (بر اساس نوع تقویم)
+    val years = remember(currentYear, primaryCalendar) {
+        when (primaryCalendar) {
+            CalendarType.JALALI -> (1300..1500).toList()
+            CalendarType.GREGORIAN -> (1900..2200).toList()
+            CalendarType.HIJRI -> (1400..1600).toList()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val index = years.indexOf(selectedYear)
+        if (index >= 0) listState.scrollToItem(maxOf(0, index - 5))
     }
 
     AlertDialog(
@@ -41,6 +53,7 @@ fun YearPickerDialog(
         },
         text = {
             Column {
+                // ═══ دکمه‌های + و − ═══
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
@@ -63,8 +76,10 @@ fun YearPickerDialog(
 
                 Spacer(Modifier.height(16.dp))
 
+                // ═══ لیست کامل سال‌ها با اسکرول ═══
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 300.dp),
+                    state = listState,
+                    modifier = Modifier.heightIn(max = 350.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(years) { year ->
@@ -83,14 +98,10 @@ fun YearPickerDialog(
                         ) {
                             Text(
                                 year.toString(),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
                                 textAlign = TextAlign.Center,
-                                color = if (year == selectedYear)
-                                    Color.White else HeaderBlue,
-                                fontWeight = if (year == selectedYear)
-                                    FontWeight.Bold else FontWeight.Normal
+                                color = if (year == selectedYear) Color.White else HeaderBlue,
+                                fontWeight = if (year == selectedYear) FontWeight.Bold else FontWeight.Normal
                             )
                         }
                     }
