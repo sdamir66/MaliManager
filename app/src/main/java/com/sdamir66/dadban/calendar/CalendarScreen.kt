@@ -51,13 +51,19 @@ fun CalendarScreen(db: AppDb) {
     // ═══ رویدادها ═══
     val allEvents by db.eventDao().all().collectAsState(emptyList())
 
+    // ✅ همه‌ی رویدادها قابل نمایش (فیلتر فقط با تنظیمات)
     val visibleEvents = allEvents.filter { event ->
         when {
-            event.isHoliday && (settings?.showHolidays ?: true) -> true
-            event.category == EventCategory.RELIGIOUS && !event.isHoliday && (settings?.showReligiousNonHoliday ?: false) -> true
-            event.category == EventCategory.NATIONAL && !event.isHoliday && (settings?.showNationalNonHoliday ?: false) -> true
-            event.category == EventCategory.GLOBAL && (settings?.showGlobalEvents ?: false) -> true
-            event.isUserCreated && (settings?.showUserEvents ?: true) -> true
+            // تعطیلات رسمی
+            event.isHoliday -> settings?.showHolidays ?: true
+            // مذهبی غیرتعطیل
+            event.category == EventCategory.RELIGIOUS -> settings?.showReligiousNonHoliday ?: true
+            // ملی غیرتعطیل
+            event.category == EventCategory.NATIONAL -> settings?.showNationalNonHoliday ?: true
+            // جهانی
+            event.category == EventCategory.GLOBAL -> settings?.showGlobalEvents ?: false
+            // کاربر
+            event.isUserCreated -> settings?.showUserEvents ?: true
             else -> false
         }
     }
