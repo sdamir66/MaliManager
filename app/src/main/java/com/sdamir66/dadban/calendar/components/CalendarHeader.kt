@@ -3,6 +3,8 @@ package com.sdamir66.dadban.calendar.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.github.msarhan.ummalqura.calendar.UmmalquraCalendar
 import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.ui.theme.HeaderBlue
@@ -28,9 +29,40 @@ fun CalendarHeader(
     currentDate: Date,
     primaryCalendar: CalendarType,
     settings: CalendarSettings?,
-    onDateChange: (Date) -> Unit
+    onDateChange: (Date) -> Unit,
+    onCalendarTypeChange: (CalendarType) -> Unit
 ) {
     var showYearPicker by remember { mutableStateOf(false) }
+
+    // ═══ Pager برای سواپ سال ═══
+    val baseYear = remember { getYear(currentDate, primaryCalendar, settings) }
+    val pageCount = 200
+    val startPage = pageCount / 2
+
+    val pagerState = rememberPagerState(
+        initialPage = startPage,
+        pageCount = { pageCount }
+    )
+
+    fun pageToYear(page: Int): Int = baseYear + (page - startPage)
+
+    // تغییر سال با سواپ
+    LaunchedEffect(pagerState.currentPage) {
+        val newYear = pageToYear(pagerState.currentPage)
+        val currentYear = getYear(currentDate, primaryCalendar, settings)
+        if (newYear != currentYear) {
+            onDateChange(setYear(currentDate, newYear, primaryCalendar))
+        }
+    }
+
+    // همگام‌سازی با تغییر از بیرون
+    LaunchedEffect(currentDate) {
+        val year = getYear(currentDate, primaryCalendar, settings)
+        val targetPage = startPage + (year - baseYear)
+        if (targetPage != pagerState.currentPage && targetPage in 0 until pageCount) {
+            pagerState.scrollToPage(targetPage)
+        }
+    }
 
     Box(
         Modifier
@@ -43,29 +75,38 @@ fun CalendarHeader(
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp)
     ) {
         Column {
-            // ═══ ردیف اول: ماه + سال (کلیک روی سال) ═══
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    getMonthName(currentDate, primaryCalendar, settings),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    getYear(currentDate, primaryCalendar, settings).toString(),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.clickable { showYearPicker = true }
-                )
+            // ═══ ردیف اول: ماه + سال (با سواپ) ═══
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxWidth(),
+                pageSpacing = 0.dp
+            ) { page ->
+                val year = pageToYear(page)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        getMonthName(currentDate, primaryCalendar, settings),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 24.sp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        year.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 24.sp,
+                        modifier = Modifier.clickable { showYearPicker = true }
+                    )
+                }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
 
             // ═══ ردیف دوم: سه تقویم (قابل کلیک) ═══
             Row(
@@ -76,25 +117,24 @@ fun CalendarHeader(
                 CalendarTypeChip(
                     label = getChipLabel(currentDate, CalendarType.JALALI, settings),
                     isSelected = primaryCalendar == CalendarType.JALALI,
-                    onClick = { onDateChange(currentDate) }
+                    onClick = { onCalendarTypeChange(CalendarType.JALALI) }
                 )
                 Spacer(Modifier.width(6.dp))
                 CalendarTypeChip(
                     label = getChipLabel(currentDate, CalendarType.HIJRI, settings),
                     isSelected = primaryCalendar == CalendarType.HIJRI,
-                    onClick = { onDateChange(currentDate) }
+                    onClick = { onCalendarTypeChange(CalendarType.HIJRI) }
                 )
                 Spacer(Modifier.width(6.dp))
                 CalendarTypeChip(
                     label = getChipLabel(currentDate, CalendarType.GREGORIAN, settings),
                     isSelected = primaryCalendar == CalendarType.GREGORIAN,
-                    onClick = { onDateChange(currentDate) }
+                    onClick = { onCalendarTypeChange(CalendarType.GREGORIAN) }
                 )
             }
         }
     }
 
-    // ═══ Dialog انتخاب سال ═══
     if (showYearPicker) {
         YearPickerDialog(
             currentYear = getYear(currentDate, primaryCalendar, settings),
@@ -121,13 +161,13 @@ private fun CalendarTypeChip(
     ) {
         Text(
             label,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             color = if (isSelected) HeaderBlue else Color.White,
             textAlign = TextAlign.Center,
-            lineHeight = 14.sp,
-            fontSize = 10.sp
+            lineHeight = 16.sp,
+            fontSize = 11.sp
         )
     }
 }
@@ -161,25 +201,25 @@ private fun getYear(date: Date, type: CalendarType, settings: CalendarSettings?)
     }
 }
 
+/**
+ * فرمت دو خطی: تاریخ کامل + فقط نام ماه جاری (نه دو ماه)
+ */
 private fun getChipLabel(date: Date, type: CalendarType, settings: CalendarSettings?): String {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
-            val nextM = if (j[1] == 12) 1 else j[1] + 1
             "${j[0]}/${j[1].toString().padStart(2, '0')}/${j[2].toString().padStart(2, '0')}\n" +
-            "${Jalali.monthName(j[1])} - ${Jalali.monthName(nextM)}"
+            "${Jalali.monthName(j[1])} ${j[0]}"
         }
         CalendarType.GREGORIAN -> {
             val cal = Calendar.getInstance().apply { time = date }
-            val nextMonth = (cal.get(Calendar.MONTH) + 1) % 12
             "${cal.get(Calendar.YEAR)}/${(cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')}/${cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')}\n" +
-            "${gregorianMonthName(cal.get(Calendar.MONTH) + 1)} - ${gregorianMonthName(nextMonth + 1)} ${cal.get(Calendar.YEAR)}"
+            "${gregorianMonthName(cal.get(Calendar.MONTH) + 1)} ${cal.get(Calendar.YEAR)}"
         }
         CalendarType.HIJRI -> {
             val h = getHijriDate(date, settings)
-            val nextM = if (h[1] == 12) 1 else h[1] + 1
             "${h[0]}/${h[1].toString().padStart(2, '0')}/${h[2].toString().padStart(2, '0')}\n" +
-            "${hijriMonthName(h[1])} - ${hijriMonthName(nextM)} ${h[0]}"
+            "${hijriMonthName(h[1])} ${h[0]}"
         }
     }
 }
@@ -197,35 +237,40 @@ private fun setYear(date: Date, year: Int, type: CalendarType): Date {
                 set(Calendar.YEAR, year)
             }.time
         }
-        CalendarType.HIJRI -> date
+        CalendarType.HIJRI -> {
+            // برای قمری، سال رو با اضافه کردن اختلاف تغییر بده
+            val diff = year - getHijriDate(date, null)[0]
+            Calendar.getInstance().apply {
+                time = date
+                add(Calendar.YEAR, diff)
+            }.time
+        }
     }
 }
 
 // ═══════════════════════════════════════════════════════
-// تبدیل قمری (با UmmalquraCalendar + اصلاح eidFitrOffset)
+// تبدیل قمری (با UmmalquraCalendar + اصلاح -1 روز)
 // ═══════════════════════════════════════════════════════
 
 fun getHijriDate(date: Date, settings: CalendarSettings?): IntArray {
-    // ═══ ۱. محاسبه‌ی قمری پایه با UmmalquraCalendar ═══
-    val cal = UmmalquraCalendar()
+    val cal = com.github.msarhan.ummalqura.calendar.UmmalquraCalendar()
     cal.time = date
 
-    var year = cal.get(UmmalquraCalendar.YEAR)
-    var month = cal.get(UmmalquraCalendar.MONTH) + 1
-    var day = cal.get(UmmalquraCalendar.DAY_OF_MONTH)
+    // ✅ اصلاح ۱ روز جلو بودن (کم کردن ۱ روز)
+    cal.add(Calendar.DAY_OF_MONTH, -1)
 
-    // ═══ ۲. اعمال اصلاح eidFitrOffset (اگه تنظیم شده) ═══
+    var year = cal.get(Calendar.YEAR)
+    var month = cal.get(Calendar.MONTH) + 1
+    var day = cal.get(Calendar.DAY_OF_MONTH)
+
+    // اعمال اصلاح eidFitrOffset
     if (settings != null && settings.eidFitrOffset != 0) {
-        // فقط برای ماه‌های بعد از شوال (۱۰) اعمال کن
         if (month >= 10) {
-            // اگه سال قمری با سال اصلاح فرق داره، اصلاح نکن
             if (settings.eidFitrHijriYear == null || year == settings.eidFitrHijriYear) {
-                val adjusted = UmmalquraCalendar()
-                adjusted.time = date
-                adjusted.add(UmmalquraCalendar.DAY_OF_MONTH, settings.eidFitrOffset)
-                year = adjusted.get(UmmalquraCalendar.YEAR)
-                month = adjusted.get(UmmalquraCalendar.MONTH) + 1
-                day = adjusted.get(UmmalquraCalendar.DAY_OF_MONTH)
+                cal.add(Calendar.DAY_OF_MONTH, settings.eidFitrOffset)
+                year = cal.get(Calendar.YEAR)
+                month = cal.get(Calendar.MONTH) + 1
+                day = cal.get(Calendar.DAY_OF_MONTH)
             }
         }
     }
