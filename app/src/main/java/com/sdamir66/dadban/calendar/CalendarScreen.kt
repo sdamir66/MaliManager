@@ -127,4 +127,24 @@ fun CalendarScreen(db: AppDb) {
 // کمک‌تابع‌ها
 // ═══════════════════════════════════════════════════════
 
-private fun filterEventsForDay(events: List<Event>, date: Date, settings:
+private fun filterEventsForDay(events: List<Event>, date: Date, settings: CalendarSettings?): List<Event> {
+    val cal = Calendar.getInstance().apply { time = date }
+    val gregorianMonth = cal.get(Calendar.MONTH) + 1
+    val gregorianDay = cal.get(Calendar.DAY_OF_MONTH)
+
+    val jalali = com.sdamir66.dadban.util.Jalali.toJalaliPublic(date.time)
+    val jalaliMonth = jalali[1]
+    val jalaliDay = jalali[2]
+
+    val hijri = getHijriDate(date, settings)
+    val hijriMonth = hijri[1]
+    val hijriDay = hijri[2]
+
+    return events.filter { event ->
+        when (event.calendarType) {
+            CalendarType.JALALI -> event.month == jalaliMonth && event.day == jalaliDay
+            CalendarType.GREGORIAN -> event.month == gregorianMonth && event.day == gregorianDay
+            CalendarType.HIJRI -> event.month == hijriMonth && event.day == hijriDay
+        }
+    }
+}
