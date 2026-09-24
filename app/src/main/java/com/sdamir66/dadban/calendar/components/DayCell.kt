@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.CalendarType
+import com.sdamir66.dadban.calendar.data.HijriCache
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import java.util.Calendar
@@ -31,6 +32,7 @@ fun DayCell(
     hasHoliday: Boolean,
     primaryCalendar: CalendarType,
     settings: CalendarSettings?,
+    hijriCacheMap: Map<String, HijriCache>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -62,7 +64,6 @@ fun DayCell(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize().padding(1.dp)
         ) {
-            // ═══ روز اصلی (بزرگ‌تر) ═══
             Text(
                 toPersianDigits(day.toString()),
                 fontSize = 16.sp,
@@ -70,19 +71,13 @@ fun DayCell(
                 color = textColor,
                 textAlign = TextAlign.Center
             )
-
             Spacer(Modifier.height(1.dp))
 
-            // ═══ روزهای فرعی: میلادی (چپ، لاتین) + قمری (راست، فارسی) ═══
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // میلادی (سمت چپ، اعداد لاتین)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                // میلادی (چپ، لاتین)
                 Text(
                     if (primaryCalendar != CalendarType.GREGORIAN && (settings?.showGregorianSmall ?: true)) {
-                        val cal = Calendar.getInstance().apply { time = date }
-                        cal.get(Calendar.DAY_OF_MONTH).toString()  // ← لاتین (بدون toPersianDigits)
+                        Calendar.getInstance().apply { time = date }.get(Calendar.DAY_OF_MONTH).toString()
                     } else "",
                     fontSize = 10.sp,
                     color = if (isSelected) Color.White.copy(alpha = 0.9f) else Color(0xFF5C5D72),
@@ -90,11 +85,10 @@ fun DayCell(
                     textAlign = TextAlign.Start,
                     maxLines = 1
                 )
-
-                // قمری (سمت راست، فارسی)
+                // قمری (راست، فارسی)
                 Text(
                     if (primaryCalendar != CalendarType.HIJRI && (settings?.showHijriSmall ?: true)) {
-                        val h = getHijriDate(date, settings)
+                        val h = getHijriFromCacheOrFallback(date, settings, hijriCacheMap)
                         toPersianDigits(h[2].toString())
                     } else "",
                     fontSize = 10.sp,
@@ -109,7 +103,5 @@ fun DayCell(
 }
 
 private fun toPersianDigits(input: String): String {
-    return input.map { c ->
-        if (c.isDigit()) ('۰' + (c - '0')) else c
-    }.joinToString("")
+    return input.map { c -> if (c.isDigit()) ('۰' + (c - '0')) else c }.joinToString("")
 }
