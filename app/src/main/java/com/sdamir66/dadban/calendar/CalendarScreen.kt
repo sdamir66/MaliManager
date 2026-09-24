@@ -114,8 +114,6 @@ fun CalendarScreen(db: AppDb) {
         // ═══ اوقات شرعی (نزدیک به کارت تقویم) ═══
         if (settings!!.showPrayerTimes && prayerTimes != null) {
             item {
-                // کارت تقویم با offset -30dp بالاتر رفته،
-                // پس برای نزدیک شدن باید 30dp از فاصله‌ی پایینش کم کنیم
                 Box(Modifier.offset(y = (-25).dp)) {
                     PrayerTimesSection(prayerTimes = prayerTimes)
                 }
@@ -128,7 +126,8 @@ fun CalendarScreen(db: AppDb) {
                 EventsSection(
                     events = selectedDayEvents,
                     date = selectedDay ?: currentDate,
-                    primaryCalendar = primaryCalendar
+                    primaryCalendar = primaryCalendar,
+                    settings = settings
                 )
             }
         }
