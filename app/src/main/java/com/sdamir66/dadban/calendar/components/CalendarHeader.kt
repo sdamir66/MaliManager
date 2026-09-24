@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,7 +18,6 @@ import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.util.Jalali
-import com.sdamir66.dadban.calendar.components.getHijriDate
 import java.util.Calendar
 import java.util.Date
 
@@ -24,11 +25,6 @@ import java.util.Date
 fun CalendarHeader(
     currentDate: Date,
     primaryCalendar: CalendarType,
-    onPrevYear: () -> Unit,
-    onNextYear: () -> Unit,
-    onPrevMonth: () -> Unit,
-    onNextMonth: () -> Unit,
-    onCalendarTypeChange: (CalendarType) -> Unit,
     onDateChange: (Date) -> Unit
 ) {
     var showYearPicker by remember { mutableStateOf(false) }
@@ -44,41 +40,26 @@ fun CalendarHeader(
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp)
     ) {
         Column {
-            // ═══ ردیف اول: فلش‌های سال + ماه/سال ═══
+            // ═══ ردیف اول: ماه + سال (کلیک روی سال) ═══
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.Center
             ) {
-                // ◄◄ سال قبل
-                IconButton(onClick = onPrevYear) {
-                    Text("◄◄", color = Color.White, fontSize = 14.sp)
-                }
-
-                // نام ماه + سال (کلیک روی سال)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                Text(
+                    getMonthName(currentDate, primaryCalendar),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    getYear(currentDate, primaryCalendar).toString(),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.clickable { showYearPicker = true }
-                ) {
-                    Text(
-                        getMonthName(currentDate, primaryCalendar),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        getYear(currentDate, primaryCalendar).toString(),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.9f)
-                    )
-                }
-
-                // ►► سال بعد
-                IconButton(onClick = onNextYear) {
-                    Text("►►", color = Color.White, fontSize = 14.sp)
-                }
+                )
             }
 
             Spacer(Modifier.height(8.dp))
@@ -92,19 +73,19 @@ fun CalendarHeader(
                 CalendarTypeChip(
                     label = getChipLabel(currentDate, CalendarType.JALALI),
                     isSelected = primaryCalendar == CalendarType.JALALI,
-                    onClick = { onCalendarTypeChange(CalendarType.JALALI) }
+                    onClick = { onDateChange(currentDate) }
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
                 CalendarTypeChip(
                     label = getChipLabel(currentDate, CalendarType.HIJRI),
                     isSelected = primaryCalendar == CalendarType.HIJRI,
-                    onClick = { onCalendarTypeChange(CalendarType.HIJRI) }
+                    onClick = { onDateChange(currentDate) }
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
                 CalendarTypeChip(
                     label = getChipLabel(currentDate, CalendarType.GREGORIAN),
                     isSelected = primaryCalendar == CalendarType.GREGORIAN,
-                    onClick = { onCalendarTypeChange(CalendarType.GREGORIAN) }
+                    onClick = { onDateChange(currentDate) }
                 )
             }
         }
@@ -132,16 +113,18 @@ private fun CalendarTypeChip(
 ) {
     Surface(
         color = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(12.dp),
         modifier = Modifier.clickable { onClick() }
     ) {
         Text(
             label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             color = if (isSelected) HeaderBlue else Color.White,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            lineHeight = 14.sp,
+            fontSize = 10.sp
         )
     }
 }
@@ -176,21 +159,27 @@ private fun getYear(date: Date, type: CalendarType): Int {
 }
 
 /**
- * فرمت کوتاه برچسب: مثلاً 2026/10/29
+ * فرمت دو خطی: مثلاً "2026/10/29\nاکتبر - نوامبر 2026"
  */
 private fun getChipLabel(date: Date, type: CalendarType): String {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
-            "${j[0]}/${j[1].toString().padStart(2, '0')}/${j[2].toString().padStart(2, '0')}"
+            val nextM = if (j[1] == 12) 1 else j[1] + 1
+            "${j[0]}/${j[1].toString().padStart(2, '0')}/${j[2].toString().padStart(2, '0')}\n" +
+            "${Jalali.monthName(j[1])} - ${Jalali.monthName(nextM)}"
         }
         CalendarType.GREGORIAN -> {
             val cal = Calendar.getInstance().apply { time = date }
-            "${cal.get(Calendar.YEAR)}/${(cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')}/${cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')}"
+            val nextMonth = (cal.get(Calendar.MONTH) + 1) % 12
+            "${cal.get(Calendar.YEAR)}/${(cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')}/${cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')}\n" +
+            "${gregorianMonthName(cal.get(Calendar.MONTH) + 1)} - ${gregorianMonthName(nextMonth + 1)} ${cal.get(Calendar.YEAR)}"
         }
         CalendarType.HIJRI -> {
             val h = getHijriDate(date)
-            "${h[0]}/${h[1].toString().padStart(2, '0')}/${h[2].toString().padStart(2, '0')}"
+            val nextM = if (h[1] == 12) 1 else h[1] + 1
+            "${h[0]}/${h[1].toString().padStart(2, '0')}/${h[2].toString().padStart(2, '0')}\n" +
+            "${hijriMonthName(h[1])} - ${hijriMonthName(nextM)} ${h[0]}"
         }
     }
 }
@@ -208,7 +197,7 @@ private fun setYear(date: Date, year: Int, type: CalendarType): Date {
                 set(Calendar.YEAR, year)
             }.time
         }
-        CalendarType.HIJRI -> date  // TODO
+        CalendarType.HIJRI -> date
     }
 }
 
@@ -216,31 +205,37 @@ private fun setYear(date: Date, year: Int, type: CalendarType): Date {
 // تبدیل قمری
 // ═══════════════════════════════════════════════════════
 
-/**
- * تبدیل میلادی به قمری (محاسباتی)
- */
 fun getHijriDate(date: Date): IntArray {
     val cal = Calendar.getInstance().apply { time = date }
     val gy = cal.get(Calendar.YEAR)
     val gm = cal.get(Calendar.MONTH) + 1
     val gd = cal.get(Calendar.DAY_OF_MONTH)
 
-    // تبدیل میلادی به Julian Day
-    var a = (14 - gm) / 12
-    var y = gy + 4800 - a
-    var m = gm + 12 * a - 3
-    var jdn = gd + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045
+    val a = (14 - gm) / 12
+    val y = gy + 4800 - a
+    val m = gm + 12 * a - 3
+    val jdn = gd + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045
 
-    // تبدیل Julian Day به قمری
     var l = jdn - 1948440 + 10632
     val n = (l - 1) / 10631
     l = l - 10631 * n + 354
     val j = ((10985 - l) / 5316) * ((50 * l) / 17719) + (l / 5670) * ((43 * l) / 15238)
     l = l - ((30 - j) / 15) * ((17719 * j) / 50) - (j / 16) * ((15238 * j) / 43) + 29
 
-    val hMonth = (24 * l) / 709
-    val hDay = l - (709 * hMonth) / 24
-    val hYear = 30 * n + j - 30
+    var hMonth = (24 * l) / 709
+    var hDay = l - (709 * hMonth) / 24
+    var hYear = 30 * n + j - 30
+
+    // ✅ اصلاح ۱ روز عقب بودن
+    hDay += 1
+    if (hDay > 30) {
+        hDay = 1
+        hMonth++
+        if (hMonth > 12) {
+            hMonth = 1
+            hYear++
+        }
+    }
 
     return intArrayOf(hYear, hMonth, hDay)
 }
