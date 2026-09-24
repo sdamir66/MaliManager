@@ -41,13 +41,35 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val create = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    // ═══════════════════════════════════════════════
+    // ۱. اول state ها
+    // ═══════════════════════════════════════════════
+    var autoBackupExists by remember { mutableStateOf(false) }
+    var autoBackupInfo by remember { mutableStateOf("") }
+    var confirmRestore by remember { mutableStateOf(false) }
+    var confirmRemoveFolder by remember { mutableStateOf(false) }
+    var customFolderName by remember { mutableStateOf<String?>(null) }
+    var calendarSettings by remember { mutableStateOf<CalendarSettings?>(null) }
+    var showCityPicker by remember { mutableStateOf(false) }
+
+    // ═══════════════════════════════════════════════
+    // ۲. Launcher ها
+    // ═══════════════════════════════════════════════
+    val create = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
         if (uri != null) scope.launch { Backup.restoreOrExport(context, db, uri, false) }
     }
-    val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+
+    val open = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
         if (uri != null) scope.launch { Backup.restoreOrExport(context, db, uri, true) }
     }
-    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+
+    val pickFolder = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
         if (uri != null) {
             try {
                 context.contentResolver.takePersistableUriPermission(
@@ -59,38 +81,32 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ✅ Launcher برای مجوز GPS
+    // ✅ permissionLauncher بعد از تعریف calendarSettings
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val granted = permissions.values.all { it }
         if (granted) {
             scope.launch {
-                calendarSettings?.let { current ->
-                    calendarSettings = current.copy(locationMode = LocationMode.GPS)
+                val current = calendarSettings ?: return@launch
+                calendarSettings = current.copy(locationMode = LocationMode.GPS)
+                db.calendarSettingsDao().insert(calendarSettings!!)
+                val loc = LocationHelper.getCurrentLocation(context)
+                if (loc != null) {
+                    calendarSettings = calendarSettings!!.copy(
+                        latitude = loc.first,
+                        longitude = loc.second,
+                        cityName = "موقعیت فعلی"
+                    )
                     db.calendarSettingsDao().insert(calendarSettings!!)
-                    val loc = LocationHelper.getCurrentLocation(context)
-                    if (loc != null) {
-                        calendarSettings = calendarSettings!!.copy(
-                            latitude = loc.first,
-                            longitude = loc.second,
-                            cityName = "موقعیت فعلی"
-                        )
-                        db.calendarSettingsDao().insert(calendarSettings!!)
-                    }
                 }
             }
         }
     }
 
-    var autoBackupExists by remember { mutableStateOf(false) }
-    var autoBackupInfo by remember { mutableStateOf("") }
-    var confirmRestore by remember { mutableStateOf(false) }
-    var confirmRemoveFolder by remember { mutableStateOf(false) }
-    var customFolderName by remember { mutableStateOf<String?>(null) }
-    var calendarSettings by remember { mutableStateOf<CalendarSettings?>(null) }
-    var showCityPicker by remember { mutableStateOf(false) }
-
+    // ═══════════════════════════════════════════════
+    // ۳. بارگذاری اولیه
+    // ═══════════════════════════════════════════════
     LaunchedEffect(Unit) {
         calendarSettings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
         val file = java.io.File(context.filesDir, "auto_backup.json")
@@ -457,7 +473,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                                 "GPS",
                                 calendarSettings!!.locationMode == LocationMode.GPS
                             ) {
-                                // ✅ درخواست مجوز GPS
                                 if (!LocationHelper.hasLocationPermission(context)) {
                                     permissionLauncher.launch(
                                         arrayOf(
