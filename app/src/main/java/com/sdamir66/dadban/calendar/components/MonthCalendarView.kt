@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.calendar.data.Event
+import com.sdamir66.dadban.calendar.data.HijriCache
 import com.sdamir66.dadban.util.Jalali
 import java.util.Calendar
 import java.util.Date
@@ -27,6 +28,7 @@ fun MonthCalendarView(
     currentDate: Date,
     primaryCalendar: CalendarType,
     settings: CalendarSettings?,
+    hijriCacheMap: Map<String, HijriCache>,
     events: List<Event>,
     selectedDay: Date?,
     onDayClick: (Date) -> Unit,
@@ -41,10 +43,7 @@ fun MonthCalendarView(
         pageCount = { pageCount }
     )
 
-    fun pageToDate(page: Int): Date {
-        val offset = page - startPage
-        return addMonths(baseMonth, offset)
-    }
+    fun pageToDate(page: Int): Date = addMonths(baseMonth, page - startPage)
 
     LaunchedEffect(pagerState.currentPage) {
         val newDate = pageToDate(pagerState.currentPage)
@@ -61,71 +60,51 @@ fun MonthCalendarView(
         }
     }
 
-    HorizontalPager(
-        state = pagerState,
-        modifier = Modifier.fillMaxWidth(),
-        pageSpacing = 0.dp
-    ) { page ->
+    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth(), pageSpacing = 0.dp) { page ->
         val monthDate = pageToDate(page)
 
-        // ✅ ارتفاع ثابت برای همه ماه‌ها (مناسب ۶ هفته)
         Card(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(380.dp),  // ← از 340 به 380
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(380.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             Column(Modifier.padding(8.dp).fillMaxHeight()) {
-                // ═══ نام روزهای هفته ═══
                 Row(Modifier.fillMaxWidth()) {
                     listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
-                        Text(
-                            day,
-                            modifier = Modifier.weight(1f),
-                            textAlign = TextAlign.Center,
+                        Text(day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72),
-                            fontSize = 13.sp
-                        )
+                            fontSize = 13.sp)
                     }
                 }
 
                 Spacer(Modifier.height(4.dp))
 
-                // ═══ گرید روزها (همیشه ۶ ردیف) ═══
                 val daysInMonth = getDaysInMonth(monthDate, primaryCalendar)
                 val firstDayOfWeek = getFirstDayOfWeek(monthDate, primaryCalendar)
-                val totalCells = firstDayOfWeek + daysInMonth
-                val rows = 6  // ← همیشه ۶ ردیف (حتی اگه ۵ ردیف کافیه)
+                val rows = 6
 
                 for (row in 0 until rows) {
                     Row(Modifier.fillMaxWidth().weight(1f)) {
                         for (col in 0 until 7) {
                             val cellIndex = row * 7 + col
                             val dayNumber = cellIndex - firstDayOfWeek + 1
-
                             if (dayNumber in 1..daysInMonth) {
                                 val date = getDateForDay(monthDate, dayNumber, primaryCalendar)
                                 val isSelected = selectedDay?.let { isSameDay(it, date) } ?: false
                                 val isToday = isSameDay(Date(), date)
                                 val isFriday = col == 6
-
-                                val dayEvents = getEventsForDay(events, date, settings)
+                                val dayEvents = getEventsForDay(events, date, settings, hijriCacheMap)
                                 val hasHoliday = dayEvents.any { it.isHoliday }
 
                                 DayCell(
-                                    day = dayNumber,
-                                    date = date,
-                                    isSelected = isSelected,
-                                    isToday = isToday,
-                                    isFriday = isFriday,
-                                    hasHoliday = hasHoliday,
-                                    primaryCalendar = primaryCalendar,
-                                    settings = settings,
+                                    day = dayNumber, date = date,
+                                    isSelected = isSelected, isToday = isToday,
+                                    isFriday = isFriday, hasHoliday = hasHoliday,
+                                    primaryCalendar = primaryCalendar, settings = settings,
+                                    hijriCacheMap = hijriCacheMap,
                                     onClick = { onDayClick(date) },
                                     modifier = Modifier.weight(1f).fillMaxHeight()
                                 )
@@ -140,36 +119,24 @@ fun MonthCalendarView(
     }
 }
 
-// ═══════════════════════════════════════════════════════
-// توابع کمکی
-// ═══════════════════════════════════════════════════════
-
+// ═══ کمک‌تابع‌ها ═══
 private fun normalizeToMonthStart(date: Date, type: CalendarType): Date {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
             Date(Jalali.parse("%04d/%02d/%02d".format(j[0], j[1], 1)) ?: date.time)
         }
-        CalendarType.GREGORIAN -> {
-            Calendar.getInstance().apply {
-                time = date
-                set(Calendar.DAY_OF_MONTH, 1)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.time
-        }
+        CalendarType.GREGORIAN -> Calendar.getInstance().apply {
+            time = date; set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.time
         CalendarType.HIJRI -> date
     }
 }
 
-private fun addMonths(date: Date, months: Int): Date {
-    return Calendar.getInstance().apply {
-        time = date
-        add(Calendar.MONTH, months)
-    }.time
-}
+private fun addMonths(date: Date, months: Int): Date =
+    Calendar.getInstance().apply { time = date; add(Calendar.MONTH, months) }.time
 
 private fun monthsBetween(from: Date, to: Date): Int {
     val c1 = Calendar.getInstance().apply { time = from }
@@ -181,31 +148,24 @@ private fun monthsBetween(from: Date, to: Date): Int {
 private fun isSameMonth(d1: Date, d2: Date, type: CalendarType, settings: CalendarSettings?): Boolean {
     return when (type) {
         CalendarType.JALALI -> {
-            val j1 = Jalali.toJalaliPublic(d1.time)
-            val j2 = Jalali.toJalaliPublic(d2.time)
+            val j1 = Jalali.toJalaliPublic(d1.time); val j2 = Jalali.toJalaliPublic(d2.time)
             j1[0] == j2[0] && j1[1] == j2[1]
         }
         CalendarType.GREGORIAN -> {
             val c1 = Calendar.getInstance().apply { time = d1 }
             val c2 = Calendar.getInstance().apply { time = d2 }
-            c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) &&
-                    c1.get(Calendar.MONTH) == c2.get(Calendar.MONTH)
+            c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) && c1.get(Calendar.MONTH) == c2.get(Calendar.MONTH)
         }
         CalendarType.HIJRI -> true
     }
 }
 
-private fun getDaysInMonth(date: Date, type: CalendarType): Int {
-    return when (type) {
-        CalendarType.JALALI -> {
-            val j = Jalali.toJalaliPublic(date.time)
-            Jalali.daysInMonth(j[0], j[1])
-        }
-        CalendarType.GREGORIAN -> {
-            Calendar.getInstance().apply { time = date }.getActualMaximum(Calendar.DAY_OF_MONTH)
-        }
-        CalendarType.HIJRI -> 30
+private fun getDaysInMonth(date: Date, type: CalendarType): Int = when (type) {
+    CalendarType.JALALI -> {
+        val j = Jalali.toJalaliPublic(date.time); Jalali.daysInMonth(j[0], j[1])
     }
+    CalendarType.GREGORIAN -> Calendar.getInstance().apply { time = date }.getActualMaximum(Calendar.DAY_OF_MONTH)
+    CalendarType.HIJRI -> 30
 }
 
 private fun getFirstDayOfWeek(date: Date, type: CalendarType): Int {
@@ -214,25 +174,16 @@ private fun getFirstDayOfWeek(date: Date, type: CalendarType): Int {
             val j = Jalali.toJalaliPublic(date.time)
             Date(Jalali.parse("%04d/%02d/%02d".format(j[0], j[1], 1)) ?: 0L)
         }
-        CalendarType.GREGORIAN -> {
-            Calendar.getInstance().apply {
-                time = date
-                set(Calendar.DAY_OF_MONTH, 1)
-            }.time
-        }
+        CalendarType.GREGORIAN -> Calendar.getInstance().apply {
+            time = date; set(Calendar.DAY_OF_MONTH, 1)
+        }.time
         CalendarType.HIJRI -> date
     }
-
     val cal = Calendar.getInstance().apply { time = firstOfMonth }
     return when (cal.get(Calendar.DAY_OF_WEEK)) {
-        Calendar.SATURDAY -> 0
-        Calendar.SUNDAY -> 1
-        Calendar.MONDAY -> 2
-        Calendar.TUESDAY -> 3
-        Calendar.WEDNESDAY -> 4
-        Calendar.THURSDAY -> 5
-        Calendar.FRIDAY -> 6
-        else -> 0
+        Calendar.SATURDAY -> 0; Calendar.SUNDAY -> 1; Calendar.MONDAY -> 2
+        Calendar.TUESDAY -> 3; Calendar.WEDNESDAY -> 4; Calendar.THURSDAY -> 5
+        Calendar.FRIDAY -> 6; else -> 0
     }
 }
 
@@ -240,21 +191,14 @@ private fun getDateForDay(currentDate: Date, dayNumber: Int, type: CalendarType)
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(currentDate.time)
-            val millis = Jalali.parse("%04d/%02d/%02d".format(j[0], j[1], dayNumber)) ?: 0L
-            Date(millis)
+            Date(Jalali.parse("%04d/%02d/%02d".format(j[0], j[1], dayNumber)) ?: 0L)
         }
-        CalendarType.GREGORIAN -> {
-            Calendar.getInstance().apply {
-                time = currentDate
-                set(Calendar.DAY_OF_MONTH, dayNumber)
-            }.time
-        }
-        CalendarType.HIJRI -> {
-            Calendar.getInstance().apply {
-                time = currentDate
-                set(Calendar.DAY_OF_MONTH, dayNumber)
-            }.time
-        }
+        CalendarType.GREGORIAN -> Calendar.getInstance().apply {
+            time = currentDate; set(Calendar.DAY_OF_MONTH, dayNumber)
+        }.time
+        CalendarType.HIJRI -> Calendar.getInstance().apply {
+            time = currentDate; set(Calendar.DAY_OF_MONTH, dayNumber)
+        }.time
     }
 }
 
@@ -265,27 +209,36 @@ private fun isSameDay(d1: Date, d2: Date): Boolean {
             c1.get(Calendar.DAY_OF_YEAR) == c2.get(Calendar.DAY_OF_YEAR)
 }
 
-private fun getEventsForDay(events: List<Event>, date: Date, settings: CalendarSettings?): List<Event> {
+private fun getEventsForDay(
+    events: List<Event>, date: Date, settings: CalendarSettings?,
+    hijriCacheMap: Map<String, HijriCache>
+): List<Event> {
     val cal = Calendar.getInstance().apply { time = date }
-    val gregorianMonth = cal.get(Calendar.MONTH) + 1
-    val gregorianDay = cal.get(Calendar.DAY_OF_MONTH)
+    val gM = cal.get(Calendar.MONTH) + 1
+    val gD = cal.get(Calendar.DAY_OF_MONTH)
+    val j = Jalali.toJalaliPublic(date.time)
+    val jM = j[1]; val jD = j[2]
 
-    val jalali = Jalali.toJalaliPublic(date.time)
-    val jalaliMonth = jalali[1]
-    val jalaliDay = jalali[2]
-
-    val hijri = getHijriDate(date, settings)
-    val hijriMonth = hijri[1]
-    val hijriDay = hijri[2]
+    // ✅ استفاده از cache
+    val hijri = getHijriFromCacheOrFallback(date, settings, hijriCacheMap)
 
     return events.filter { event ->
         when (event.calendarType) {
-            CalendarType.JALALI ->
-                event.month == jalaliMonth && event.day == jalaliDay
-            CalendarType.GREGORIAN ->
-                event.month == gregorianMonth && event.day == gregorianDay
-            CalendarType.HIJRI ->
-                event.month == hijriMonth && event.day == hijriDay
+            CalendarType.JALALI -> event.month == jM && event.day == jD
+            CalendarType.GREGORIAN -> event.month == gM && event.day == gD
+            CalendarType.HIJRI -> event.month == hijri[1] && event.day == hijri[2]
         }
     }
+}
+
+fun getHijriFromCacheOrFallback(
+    date: Date, settings: CalendarSettings?, cache: Map<String, HijriCache>
+): IntArray {
+    val j = Jalali.toJalaliPublic(date.time)
+    val key = "%04d/%02d/%02d".format(j[0], j[1], j[2])
+    val cached = cache[key]
+    if (cached != null) {
+        return intArrayOf(cached.hijriYear, hijriMonthNameToNumber(cached.hijriMonth), cached.hijriDay)
+    }
+    return getHijriDate(date, settings)
 }
