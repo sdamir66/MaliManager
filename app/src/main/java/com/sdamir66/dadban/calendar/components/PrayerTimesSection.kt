@@ -42,15 +42,15 @@ fun PrayerTimesSection(
         ) {
             // ✅ همه اوقات در یک خط
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 PrayerTimeItem("صبح", prayerTimes.fajr)
                 PrayerTimeItem("طلوع", prayerTimes.sunrise)
                 PrayerTimeItem("ظهر", prayerTimes.dhuhr)
-                PrayerTimeItem("غروب", prayerTimes.sunset)     // ← غروب واقعی
-                PrayerTimeItem("مغرب", prayerTimes.maghrib)    // ← اذان مغرب
+                PrayerTimeItem("غروب", prayerTimes.sunset)
+                PrayerTimeItem("مغرب", prayerTimes.maghrib)
                 PrayerTimeItem("نیمه‌شب", prayerTimes.midnight)
             }
         }
@@ -61,23 +61,26 @@ fun PrayerTimesSection(
 private fun PrayerTimeItem(label: String, time: String) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(horizontal = 1.dp)
+        modifier = Modifier.padding(horizontal = 2.dp)
     ) {
+        // ✅ برچسب (مثلاً "صبح")
         Text(
             label,
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.Gray,
-            fontSize = 9.sp,
+            style = MaterialTheme.typography.labelMedium,  // ← از labelSmall بزرگ‌تر
+            color = Color(0xFF5C5D72),
+            fontSize = 11.sp,                              // ← از 9 به 11
+            fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1
         )
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(3.dp))
+        // ✅ زمان (مثلاً "۰۴:۲۹")
         Text(
             toPersianDigits(time),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,   // ← از bodySmall بزرگ‌تر
             fontWeight = FontWeight.Bold,
             color = HeaderBlue,
-            fontSize = 10.sp,
+            fontSize = 14.sp,                              // ← از 10 به 14
             textAlign = TextAlign.Center,
             maxLines = 1
         )
