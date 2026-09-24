@@ -64,49 +64,47 @@ fun DayCell(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize().padding(2.dp)
         ) {
             // ═══ روز اصلی (بزرگ) ═══
             Text(
                 toPersianDigits(day.toString()),
-                fontSize = 16.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor,
                 textAlign = TextAlign.Center
             )
 
-            // ═══ روزهای کوچیک (میلادی / قمری) ═══
-            val subTexts = mutableListOf<String>()
+            Spacer(Modifier.height(2.dp))
 
-            // میلادی (اگه تقویم اصلی جلالی یا قمری باشه)
-            if (primaryCalendar != CalendarType.GREGORIAN && showGregorianSmall) {
-                val cal = Calendar.getInstance().apply { time = date }
-                val gDay = cal.get(Calendar.DAY_OF_MONTH)
-                val gMonth = cal.get(Calendar.MONTH) + 1
-                subTexts.add("$gMonth.$gDay")
-            }
-
-            // جلالی (اگه تقویم اصلی میلادی یا قمری باشه)
-            if (primaryCalendar != CalendarType.JALALI && showGregorianSmall) {
-                val j = Jalali.toJalaliPublic(date.time)
-                subTexts.add("${j[1]}.${j[2]}")
-            }
-
-            // قمری (اگه تقویم اصلی جلالی یا میلادی باشه)
-            if (primaryCalendar != CalendarType.HIJRI && showHijriSmall) {
-                val h = getHijriDate(date)
-                subTexts.add(toPersianDigits("${h[2]}"))
-            }
-
-            if (subTexts.isNotEmpty()) {
-                Spacer(Modifier.height(2.dp))
+            // ═══ روزهای فرعی (فقط روز، چپ/راست) ═══
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // ✅ میلادی (سمت چپ)
                 Text(
-                    subTexts.joinToString(" • "),
-                    fontSize = 8.sp,
+                    if (primaryCalendar != CalendarType.GREGORIAN && showGregorianSmall) {
+                        val cal = Calendar.getInstance().apply { time = date }
+                        toPersianDigits(cal.get(Calendar.DAY_OF_MONTH).toString())
+                    } else "",
+                    fontSize = 9.sp,
                     color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.Gray,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    lineHeight = 9.sp
+                    textAlign = TextAlign.Start,
+                    maxLines = 1
+                )
+
+                // ✅ قمری (سمت راست)
+                Text(
+                    if (primaryCalendar != CalendarType.HIJRI && showHijriSmall) {
+                        val h = getHijriDate(date)
+                        toPersianDigits(h[2].toString())
+                    } else "",
+                    fontSize = 9.sp,
+                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.Gray,
+                    textAlign = TextAlign.End,
+                    maxLines = 1
                 )
             }
         }
