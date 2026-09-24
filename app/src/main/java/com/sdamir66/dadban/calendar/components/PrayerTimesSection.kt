@@ -49,8 +49,8 @@ fun PrayerTimesSection(
                 PrayerTimeItem("صبح", prayerTimes.fajr)
                 PrayerTimeItem("طلوع", prayerTimes.sunrise)
                 PrayerTimeItem("ظهر", prayerTimes.dhuhr)
-                PrayerTimeItem("غروب", prayerTimes.maghrib)
-                PrayerTimeItem("مغرب", prayerTimes.maghrib)
+                PrayerTimeItem("غروب", prayerTimes.sunset)     // ← غروب واقعی
+                PrayerTimeItem("مغرب", prayerTimes.maghrib)    // ← اذان مغرب
                 PrayerTimeItem("نیمه‌شب", prayerTimes.midnight)
             }
         }
