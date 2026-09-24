@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.github.msarhan.ummalqura.calendar.UmmalquraCalendar
+import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.util.Jalali
@@ -25,6 +27,7 @@ import java.util.Date
 fun CalendarHeader(
     currentDate: Date,
     primaryCalendar: CalendarType,
+    settings: CalendarSettings?,
     onDateChange: (Date) -> Unit
 ) {
     var showYearPicker by remember { mutableStateOf(false) }
@@ -47,14 +50,14 @@ fun CalendarHeader(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Text(
-                    getMonthName(currentDate, primaryCalendar),
+                    getMonthName(currentDate, primaryCalendar, settings),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    getYear(currentDate, primaryCalendar).toString(),
+                    getYear(currentDate, primaryCalendar, settings).toString(),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = Color.White.copy(alpha = 0.9f),
@@ -71,19 +74,19 @@ fun CalendarHeader(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.JALALI),
+                    label = getChipLabel(currentDate, CalendarType.JALALI, settings),
                     isSelected = primaryCalendar == CalendarType.JALALI,
                     onClick = { onDateChange(currentDate) }
                 )
                 Spacer(Modifier.width(6.dp))
                 CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.HIJRI),
+                    label = getChipLabel(currentDate, CalendarType.HIJRI, settings),
                     isSelected = primaryCalendar == CalendarType.HIJRI,
                     onClick = { onDateChange(currentDate) }
                 )
                 Spacer(Modifier.width(6.dp))
                 CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.GREGORIAN),
+                    label = getChipLabel(currentDate, CalendarType.GREGORIAN, settings),
                     isSelected = primaryCalendar == CalendarType.GREGORIAN,
                     onClick = { onDateChange(currentDate) }
                 )
@@ -94,7 +97,7 @@ fun CalendarHeader(
     // ═══ Dialog انتخاب سال ═══
     if (showYearPicker) {
         YearPickerDialog(
-            currentYear = getYear(currentDate, primaryCalendar),
+            currentYear = getYear(currentDate, primaryCalendar, settings),
             primaryCalendar = primaryCalendar,
             onYearSelected = { year ->
                 onDateChange(setYear(currentDate, year, primaryCalendar))
@@ -133,7 +136,7 @@ private fun CalendarTypeChip(
 // توابع کمکی
 // ═══════════════════════════════════════════════════════
 
-private fun getMonthName(date: Date, type: CalendarType): String {
+private fun getMonthName(date: Date, type: CalendarType, settings: CalendarSettings?): String {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
@@ -144,24 +147,21 @@ private fun getMonthName(date: Date, type: CalendarType): String {
             gregorianMonthName(cal.get(Calendar.MONTH) + 1)
         }
         CalendarType.HIJRI -> {
-            val h = getHijriDate(date)
+            val h = getHijriDate(date, settings)
             hijriMonthName(h[1])
         }
     }
 }
 
-private fun getYear(date: Date, type: CalendarType): Int {
+private fun getYear(date: Date, type: CalendarType, settings: CalendarSettings?): Int {
     return when (type) {
         CalendarType.JALALI -> Jalali.toJalaliPublic(date.time)[0]
         CalendarType.GREGORIAN -> Calendar.getInstance().apply { time = date }.get(Calendar.YEAR)
-        CalendarType.HIJRI -> getHijriDate(date)[0]
+        CalendarType.HIJRI -> getHijriDate(date, settings)[0]
     }
 }
 
-/**
- * فرمت دو خطی: مثلاً "2026/10/29\nاکتبر - نوامبر 2026"
- */
-private fun getChipLabel(date: Date, type: CalendarType): String {
+private fun getChipLabel(date: Date, type: CalendarType, settings: CalendarSettings?): String {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
@@ -176,7 +176,7 @@ private fun getChipLabel(date: Date, type: CalendarType): String {
             "${gregorianMonthName(cal.get(Calendar.MONTH) + 1)} - ${gregorianMonthName(nextMonth + 1)} ${cal.get(Calendar.YEAR)}"
         }
         CalendarType.HIJRI -> {
-            val h = getHijriDate(date)
+            val h = getHijriDate(date, settings)
             val nextM = if (h[1] == 12) 1 else h[1] + 1
             "${h[0]}/${h[1].toString().padStart(2, '0')}/${h[2].toString().padStart(2, '0')}\n" +
             "${hijriMonthName(h[1])} - ${hijriMonthName(nextM)} ${h[0]}"
@@ -202,42 +202,35 @@ private fun setYear(date: Date, year: Int, type: CalendarType): Date {
 }
 
 // ═══════════════════════════════════════════════════════
-// تبدیل قمری
+// تبدیل قمری (با UmmalquraCalendar + اصلاح eidFitrOffset)
 // ═══════════════════════════════════════════════════════
 
-fun getHijriDate(date: Date): IntArray {
-    val cal = Calendar.getInstance().apply { time = date }
-    val gy = cal.get(Calendar.YEAR)
-    val gm = cal.get(Calendar.MONTH) + 1
-    val gd = cal.get(Calendar.DAY_OF_MONTH)
+fun getHijriDate(date: Date, settings: CalendarSettings?): IntArray {
+    // ═══ ۱. محاسبه‌ی قمری پایه با UmmalquraCalendar ═══
+    val cal = UmmalquraCalendar()
+    cal.time = date
 
-    val a = (14 - gm) / 12
-    val y = gy + 4800 - a
-    val m = gm + 12 * a - 3
-    val jdn = gd + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045
+    var year = cal.get(UmmalquraCalendar.YEAR)
+    var month = cal.get(UmmalquraCalendar.MONTH) + 1
+    var day = cal.get(UmmalquraCalendar.DAY_OF_MONTH)
 
-    var l = jdn - 1948440 + 10632
-    val n = (l - 1) / 10631
-    l = l - 10631 * n + 354
-    val j = ((10985 - l) / 5316) * ((50 * l) / 17719) + (l / 5670) * ((43 * l) / 15238)
-    l = l - ((30 - j) / 15) * ((17719 * j) / 50) - (j / 16) * ((15238 * j) / 43) + 29
-
-    var hMonth = (24 * l) / 709
-    var hDay = l - (709 * hMonth) / 24
-    var hYear = 30 * n + j - 30
-
-    // ✅ اصلاح: تقویم ایران ۱ روز جلوتر از تقویم محاسباتی است
-    hDay += 1
-    if (hDay > 30) {
-        hDay = 1
-        hMonth++
-        if (hMonth > 12) {
-            hMonth = 1
-            hYear++
+    // ═══ ۲. اعمال اصلاح eidFitrOffset (اگه تنظیم شده) ═══
+    if (settings != null && settings.eidFitrOffset != 0) {
+        // فقط برای ماه‌های بعد از شوال (۱۰) اعمال کن
+        if (month >= 10) {
+            // اگه سال قمری با سال اصلاح فرق داره، اصلاح نکن
+            if (settings.eidFitrHijriYear == null || year == settings.eidFitrHijriYear) {
+                val adjusted = UmmalquraCalendar()
+                adjusted.time = date
+                adjusted.add(UmmalquraCalendar.DAY_OF_MONTH, settings.eidFitrOffset)
+                year = adjusted.get(UmmalquraCalendar.YEAR)
+                month = adjusted.get(UmmalquraCalendar.MONTH) + 1
+                day = adjusted.get(UmmalquraCalendar.DAY_OF_MONTH)
+            }
         }
     }
 
-    return intArrayOf(hYear, hMonth, hDay)
+    return intArrayOf(year, month, day)
 }
 
 fun hijriMonthName(m: Int): String {
