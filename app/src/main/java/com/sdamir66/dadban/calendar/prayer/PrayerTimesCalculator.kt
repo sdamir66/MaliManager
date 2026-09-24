@@ -9,12 +9,15 @@ object PrayerTimesCalculator {
     /**
      * محاسبه اوقات شرعی به روش رسمی مؤسسه ژئوفیزیک دانشگاه تهران
      *
-     * پارامترها (تنظیم‌شده برای هماهنگی کامل با time.ir):
-     * - Fajr Angle: 18 درجه
+     * پارامترها (مستقل از کشور):
+     * - Fajr Angle: 17.7 درجه
      * - Isha Angle: 14 درجه
      * - Maghrib Angle: 4.5 درجه (ذهاب حمره مشرقیه)
      * - Midnight: Jafari
      * - Asr: Shafii (ضریب سایه = 1)
+     *
+     * منطقه زمانی: از گوشی کاربر گرفته میشه (TimeZone.getDefault())
+     * پس برای هر کشور و هر نقطه‌ی دنیا دقیق کار می‌کنه.
      */
     fun calculate(
         latitude: Double,
@@ -37,7 +40,7 @@ object PrayerTimesCalculator {
             cal.get(Calendar.DAY_OF_MONTH)
         )
 
-        // ═══ ۴. روش محاسبه: Tehran ═══
+        // ═══ ۴. روش محاسبه: Tehran (مؤسسه ژئوفیزیک) ═══
         prayTimes.setMethod(Method.TEHRAN)
 
         // ═══ ۵. اسر شافعی (جعفری) ═══
@@ -46,25 +49,27 @@ object PrayerTimesCalculator {
         // ═══ ۶. نیمه‌شب جعفری ═══
         prayTimes.setMidnightMode(Constants.MIDNIGHT_JAFARI)
 
-        // ═══ ۷. منطقه زمانی ایران ═══
-        prayTimes.setTimezone(TimeZone.getTimeZone("Asia/Tehran"))
+        // ═══ ۷. ✅ منطقه‌ی زمانی دستگاه کاربر ═══
+        // این خط باعث میشه اپ در هر کشوری که کاربر هست،
+        // اوقات رو بر اساس ساعت محلی همون کشور نمایش بده.
+        prayTimes.setTimezone(TimeZone.getDefault())
 
         // ═══ ۸. تنظیم عرض‌های بالا ═══
         prayTimes.setHighLatsAdjustment(Constants.HIGHLAT_ANGLEBASED)
 
-        // ═══ ۹. ✅ تنظیم زاویه فجر به 18 درجه (هماهنگ با time.ir) ═══
+        // ═══ ۹. تنظیم زاویه فجر به 18 درجه (هماهنگ با time.ir) ═══
         prayTimes.setFajrDegrees(18.0)
 
-        // ═══ ۱۰. ✅ تنظیم اذان مغرب به 4.5 درجه (ذهاب حمره مشرقیه) ═══
-        prayTimes.setMaghribTime(4.5, false)  // false = بر حسب درجه
+        // ═══ ۱۰. تنظیم اذان مغرب به 4.5 درجه (ذهاب حمره مشرقیه) ═══
+        prayTimes.setMaghribTime(4.5, false)
 
         // ═══ ۱۱. استخراج اوقات ═══
         val fajr = prayTimes.getTime(Constants.TIMES_FAJR)
         val sunrise = prayTimes.getTime(Constants.TIMES_SUNRISE)
         val dhuhr = prayTimes.getTime(Constants.TIMES_DHUHR)
         val asr = prayTimes.getTime(Constants.TIMES_ASR)
-        val sunset = prayTimes.getTime(Constants.TIMES_SUNSET)    // ← غروب واقعی آفتاب
-        val maghrib = prayTimes.getTime(Constants.TIMES_MAGHRIB)  // ← اذان مغرب
+        val sunset = prayTimes.getTime(Constants.TIMES_SUNSET)
+        val maghrib = prayTimes.getTime(Constants.TIMES_MAGHRIB)
         val isha = prayTimes.getTime(Constants.TIMES_ISHA)
         val midnight = prayTimes.getTime(Constants.TIMES_MIDNIGHT)
 
