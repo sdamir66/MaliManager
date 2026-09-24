@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.calendar.data.Event
 import com.sdamir66.dadban.util.Jalali
@@ -24,16 +25,12 @@ import java.util.Date
 fun MonthCalendarView(
     currentDate: Date,
     primaryCalendar: CalendarType,
+    settings: CalendarSettings?,
     events: List<Event>,
     selectedDay: Date?,
     onDayClick: (Date) -> Unit,
-    onDateChange: (Date) -> Unit,
-    showGregorianSmall: Boolean,
-    showHijriSmall: Boolean,
-    eidFitrOffset: Int,
-    eidFitrHijriYear: Int?
+    onDateChange: (Date) -> Unit
 ) {
-    // ═══ Pager برای سواپ ═══
     val baseMonth = remember { normalizeToMonthStart(currentDate, primaryCalendar) }
     val pageCount = 2400
     val startPage = pageCount / 2
@@ -79,7 +76,6 @@ fun MonthCalendarView(
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             Column(Modifier.padding(10.dp)) {
-                // ═══ نام روزهای هفته ═══
                 Row(Modifier.fillMaxWidth()) {
                     listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
                         Text(
@@ -95,7 +91,6 @@ fun MonthCalendarView(
 
                 Spacer(Modifier.height(4.dp))
 
-                // ═══ گرید روزها ═══
                 val daysInMonth = getDaysInMonth(monthDate, primaryCalendar)
                 val firstDayOfWeek = getFirstDayOfWeek(monthDate, primaryCalendar)
                 val totalCells = firstDayOfWeek + daysInMonth
@@ -113,7 +108,7 @@ fun MonthCalendarView(
                                 val isToday = isSameDay(Date(), date)
                                 val isFriday = col == 6
 
-                                val dayEvents = getEventsForDay(events, date)
+                                val dayEvents = getEventsForDay(events, date, settings)
                                 val hasHoliday = dayEvents.any { it.isHoliday }
 
                                 DayCell(
@@ -124,10 +119,11 @@ fun MonthCalendarView(
                                     isFriday = isFriday,
                                     hasHoliday = hasHoliday,
                                     primaryCalendar = primaryCalendar,
-                                    showGregorianSmall = showGregorianSmall,
-                                    showHijriSmall = showHijriSmall,
-                                    eidFitrOffset = eidFitrOffset,
-                                    eidFitrHijriYear = eidFitrHijriYear,
+                                    settings = settings,
+                                    showGregorianSmall = settings?.showGregorianSmall ?: true,
+                                    showHijriSmall = settings?.showHijriSmall ?: true,
+                                    eidFitrOffset = settings?.eidFitrOffset ?: 0,
+                                    eidFitrHijriYear = settings?.eidFitrHijriYear,
                                     onClick = { onDayClick(date) },
                                     modifier = Modifier.weight(1f)
                                 )
@@ -193,11 +189,7 @@ private fun isSameMonth(d1: Date, d2: Date, type: CalendarType): Boolean {
             c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) &&
                     c1.get(Calendar.MONTH) == c2.get(Calendar.MONTH)
         }
-        CalendarType.HIJRI -> {
-            val h1 = getHijriDate(d1)
-            val h2 = getHijriDate(d2)
-            h1[0] == h2[0] && h1[1] == h2[1]
-        }
+        CalendarType.HIJRI -> true
     }
 }
 
@@ -210,10 +202,7 @@ private fun getDaysInMonth(date: Date, type: CalendarType): Int {
         CalendarType.GREGORIAN -> {
             Calendar.getInstance().apply { time = date }.getActualMaximum(Calendar.DAY_OF_MONTH)
         }
-        CalendarType.HIJRI -> {
-            val h = getHijriDate(date)
-            if (h[1] % 2 == 1) 30 else 29
-        }
+        CalendarType.HIJRI -> 30
     }
 }
 
@@ -274,7 +263,7 @@ private fun isSameDay(d1: Date, d2: Date): Boolean {
             c1.get(Calendar.DAY_OF_YEAR) == c2.get(Calendar.DAY_OF_YEAR)
 }
 
-private fun getEventsForDay(events: List<Event>, date: Date): List<Event> {
+private fun getEventsForDay(events: List<Event>, date: Date, settings: CalendarSettings?): List<Event> {
     val cal = Calendar.getInstance().apply { time = date }
     val gregorianMonth = cal.get(Calendar.MONTH) + 1
     val gregorianDay = cal.get(Calendar.DAY_OF_MONTH)
@@ -283,7 +272,7 @@ private fun getEventsForDay(events: List<Event>, date: Date): List<Event> {
     val jalaliMonth = jalali[1]
     val jalaliDay = jalali[2]
 
-    val hijri = getHijriDate(date)
+    val hijri = getHijriDate(date, settings)
     val hijriMonth = hijri[1]
     val hijriDay = hijri[2]
 
