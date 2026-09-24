@@ -29,6 +29,13 @@ fun CalendarScreen(db: AppDb) {
     var primaryCalendar by remember { mutableStateOf(CalendarType.JALALI) }
     var selectedDay by remember { mutableStateOf<Date?>(null) }
 
+    // اعمال تقویم پیش‌فرض از تنظیمات
+    LaunchedEffect(settings) {
+        if (settings != null) {
+            primaryCalendar = settings!!.defaultCalendar
+        }
+    }
+
     val prayerTimes = remember(settings, currentDate, selectedDay) {
         if (settings != null) {
             PrayerTimesCalculator.calculate(
@@ -78,7 +85,8 @@ fun CalendarScreen(db: AppDb) {
                 currentDate = currentDate,
                 primaryCalendar = primaryCalendar,
                 settings = settings,
-                onDateChange = { currentDate = it }
+                onDateChange = { currentDate = it },
+                onCalendarTypeChange = { primaryCalendar = it }
             )
         }
 
@@ -122,10 +130,6 @@ fun CalendarScreen(db: AppDb) {
         }
     }
 }
-
-// ═══════════════════════════════════════════════════════
-// کمک‌تابع‌ها
-// ═══════════════════════════════════════════════════════
 
 private fun filterEventsForDay(events: List<Event>, date: Date, settings: CalendarSettings?): List<Event> {
     val cal = Calendar.getInstance().apply { time = date }
