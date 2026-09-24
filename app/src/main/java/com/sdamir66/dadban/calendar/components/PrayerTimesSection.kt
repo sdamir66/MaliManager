@@ -1,6 +1,5 @@
 package com.sdamir66.dadban.calendar.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -41,9 +40,9 @@ fun PrayerTimesSection(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            // ✅ همه اوقات در یک خط به ترتیب خواسته شده
+            // ✅ همه اوقات در یک خط
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -62,7 +61,7 @@ fun PrayerTimesSection(
 private fun PrayerTimeItem(label: String, time: String) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(horizontal = 2.dp)
+        modifier = Modifier.padding(horizontal = 1.dp)
     ) {
         Text(
             label,
@@ -78,7 +77,7 @@ private fun PrayerTimeItem(label: String, time: String) {
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Bold,
             color = HeaderBlue,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             textAlign = TextAlign.Center,
             maxLines = 1
         )
