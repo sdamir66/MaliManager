@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -39,6 +40,7 @@ import java.util.Locale
 fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
     val create = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) scope.launch { Backup.restoreOrExport(context, db, uri, false) }
     }
@@ -48,19 +50,21 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
             } catch (e: Exception) { e.printStackTrace() }
             saveBackupFolderUri(context, uri)
         }
     }
 
+    // ═══ State ها ═══
     var autoBackupExists by remember { mutableStateOf(false) }
     var autoBackupInfo by remember { mutableStateOf("") }
     var confirmRestore by remember { mutableStateOf(false) }
     var confirmRemoveFolder by remember { mutableStateOf(false) }
     var customFolderName by remember { mutableStateOf<String?>(null) }
-
-    // ═══ تنظیمات تقویم ═══
     var calendarSettings by remember { mutableStateOf<CalendarSettings?>(null) }
     var showCityPicker by remember { mutableStateOf(false) }
 
@@ -88,14 +92,20 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 16.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // ═══════════════════════════════════════════════
             // تنظیمات تقویم
             // ═══════════════════════════════════════════════
             item {
-                Text("تنظیمات تقویم", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                Text(
+                    "تنظیمات تقویم",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
             }
 
             item {
@@ -107,7 +117,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         // تقویم پیش‌فرض
-                        Text("تقویم پیش‌فرض", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                        Text("تقویم پیش‌فرض", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
                         Spacer(Modifier.height(8.dp))
                         Row {
                             CalendarTypeOption(
@@ -141,11 +151,11 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                             }
                         }
 
-                        Spacer(Modifier.height(16.dp))
+                        HorizontalDivider(color = Color(0xFFEEEEEE), modifier = Modifier.padding(vertical = 12.dp))
 
                         // نمایش میلادی کوچیک
                         SettingSwitch(
-                            title = "نمایش تاریخ میلادی کوچیک",
+                            title = "نمایش تاریخ میلادی زیر روز",
                             checked = calendarSettings!!.showGregorianSmall
                         ) {
                             scope.launch {
@@ -156,7 +166,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 
                         // نمایش قمری کوچیک
                         SettingSwitch(
-                            title = "نمایش تاریخ قمری کوچیک",
+                            title = "نمایش تاریخ قمری زیر روز",
                             checked = calendarSettings!!.showHijriSmall
                         ) {
                             scope.launch {
@@ -172,7 +182,13 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             // اصلاح عید فطر
             // ═══════════════════════════════════════════════
             item {
-                Text("اصلاح عید فطر", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                Text(
+                    "اصلاح عید فطر",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
             }
 
             item {
@@ -184,10 +200,10 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            "اگه عید فطر طبق اعلام رسمی با تقویم ما فرق داره، اینجا تنظیم کن. " +
-                            "رویدادهای بعدی خودکار جابه‌جا می‌شن.",
+                            "اگه تقویم قمری با اعلام رسمی فرق داره، اینجا تنظیم کن. " +
+                            "رویدادهای بعد از عید فطر خودکار جابه‌جا می‌شن.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
+                            color = Color(0xFF5C5D72)
                         )
                         Spacer(Modifier.height(12.dp))
 
@@ -198,8 +214,11 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                         ) {
                             IconButton(onClick = {
                                 scope.launch {
-                                    val newOffset = (calendarSettings!!.eidFitrOffset - 1).coerceAtLeast(-2)
-                                    calendarSettings = calendarSettings!!.copy(eidFitrOffset = newOffset)
+                                    val newOffset = (calendarSettings!!.eidFitrOffset - 1).coerceAtLeast(-3)
+                                    calendarSettings = calendarSettings!!.copy(
+                                        eidFitrOffset = newOffset,
+                                        eidFitrHijriYear = 1447
+                                    )
                                     db.calendarSettingsDao().insert(calendarSettings!!)
                                 }
                             }) {
@@ -213,8 +232,11 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                             )
                             IconButton(onClick = {
                                 scope.launch {
-                                    val newOffset = (calendarSettings!!.eidFitrOffset + 1).coerceAtMost(2)
-                                    calendarSettings = calendarSettings!!.copy(eidFitrOffset = newOffset)
+                                    val newOffset = (calendarSettings!!.eidFitrOffset + 1).coerceAtMost(3)
+                                    calendarSettings = calendarSettings!!.copy(
+                                        eidFitrOffset = newOffset,
+                                        eidFitrHijriYear = 1447
+                                    )
                                     db.calendarSettingsDao().insert(calendarSettings!!)
                                 }
                             }) {
@@ -233,7 +255,68 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("برگشت به تقویم محاسباتی", color = HeaderBlue)
+                                Text("برگشت به تقویم پیش‌فرض", color = HeaderBlue)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ═══════════════════════════════════════════════
+            // نمایش رویدادها
+            // ═══════════════════════════════════════════════
+            item {
+                Text(
+                    "نمایش رویدادها",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
+            }
+
+            item {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        SettingSwitch(
+                            title = "تعطیلات رسمی",
+                            checked = calendarSettings!!.showHolidays
+                        ) {
+                            scope.launch {
+                                calendarSettings = calendarSettings!!.copy(showHolidays = it)
+                                db.calendarSettingsDao().insert(calendarSettings!!)
+                            }
+                        }
+                        SettingSwitch(
+                            title = "رویدادهای مذهبی غیرتعطیل",
+                            checked = calendarSettings!!.showReligiousNonHoliday
+                        ) {
+                            scope.launch {
+                                calendarSettings = calendarSettings!!.copy(showReligiousNonHoliday = it)
+                                db.calendarSettingsDao().insert(calendarSettings!!)
+                            }
+                        }
+                        SettingSwitch(
+                            title = "رویدادهای ملی غیرتعطیل",
+                            checked = calendarSettings!!.showNationalNonHoliday
+                        ) {
+                            scope.launch {
+                                calendarSettings = calendarSettings!!.copy(showNationalNonHoliday = it)
+                                db.calendarSettingsDao().insert(calendarSettings!!)
+                            }
+                        }
+                        SettingSwitch(
+                            title = "رویدادهای جهانی",
+                            checked = calendarSettings!!.showGlobalEvents
+                        ) {
+                            scope.launch {
+                                calendarSettings = calendarSettings!!.copy(showGlobalEvents = it)
+                                db.calendarSettingsDao().insert(calendarSettings!!)
                             }
                         }
                     }
@@ -244,7 +327,13 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             // اوقات شرعی
             // ═══════════════════════════════════════════════
             item {
-                Text("اوقات شرعی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                Text(
+                    "اوقات شرعی",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
             }
 
             item {
@@ -265,10 +354,9 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                             }
                         }
 
-                        HorizontalDivider(color = Color(0xFFEEEEEE), modifier = Modifier.padding(vertical = 8.dp))
+                        HorizontalDivider(color = Color(0xFFEEEEEE), modifier = Modifier.padding(vertical = 12.dp))
 
-                        // موقعیت مکانی
-                        Text("موقعیت مکانی", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                        Text("موقعیت مکانی", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
                         Spacer(Modifier.height(8.dp))
                         Row {
                             CalendarTypeOption(
@@ -303,7 +391,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 
                         Spacer(Modifier.height(12.dp))
 
-                        // انتخاب شهر
                         if (calendarSettings!!.locationMode == LocationMode.MANUAL) {
                             OutlinedButton(
                                 onClick = { showCityPicker = true },
@@ -322,7 +409,13 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             // پشتیبان و بازیابی
             // ═══════════════════════════════════════════════
             item {
-                Text("پشتیبان و بازیابی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                Text(
+                    "پشتیبان و بازیابی",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
             }
 
             item {
@@ -344,8 +437,13 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             // بکاپ خودکار
             // ═══════════════════════════════════════════════
             item {
-                Spacer(Modifier.height(8.dp))
-                Text("بکاپ خودکار", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                Text(
+                    "بکاپ خودکار",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
             }
 
             item {
@@ -358,28 +456,40 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                     Column(Modifier.padding(16.dp)) {
                         if (autoBackupExists) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(36.dp).background(CreditGreen.copy(alpha = 0.15f), CircleShape), contentAlignment = Alignment.Center) {
+                                Box(
+                                    Modifier.size(36.dp).background(CreditGreen.copy(alpha = 0.15f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Text("✓", color = CreditGreen, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text("بکاپ خودکار فعال", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                                    Text("آخرین: $autoBackupInfo", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    Text("بکاپ خودکار فعال", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
+                                    Text("آخرین: $autoBackupInfo", style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
                                 }
                             }
                             Spacer(Modifier.height(12.dp))
-                            OutlinedButton(onClick = { confirmRestore = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = HeaderBlue)) {
+                            OutlinedButton(
+                                onClick = { confirmRestore = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = HeaderBlue)
+                            ) {
                                 Text("بازیابی از بکاپ خودکار")
                             }
                         } else {
-                            Text("هنوز بکاپ خودکاری ذخیره نشده", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                            Text(
+                                "هنوز بکاپ خودکاری ذخیره نشده",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFF5C5D72)
+                            )
                         }
                     }
                 }
             }
 
             // ═══════════════════════════════════════════════
-            // محل ذخیره
+            // محل ذخیره بکاپ
             // ═══════════════════════════════════════════════
             item {
                 Card(
@@ -389,12 +499,12 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("محل ذخیره بکاپ خودکار", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                        Text("محل ذخیره بکاپ خودکار", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
                         Spacer(Modifier.height(4.dp))
                         Text(
                             if (customFolderName != null) "پوشه فعلی: $customFolderName" else "پیش‌فرض: حافظه داخلی برنامه",
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (customFolderName != null) CreditGreen else Color.Gray
+                            color = if (customFolderName != null) CreditGreen else Color(0xFF5C5D72)
                         )
                         Spacer(Modifier.height(12.dp))
                         Button(
@@ -420,8 +530,13 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             // درباره
             // ═══════════════════════════════════════════════
             item {
-                Spacer(Modifier.height(8.dp))
-                Text("درباره", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                Text(
+                    "درباره",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
             }
 
             item {
@@ -433,13 +548,16 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(48.dp).background(HeaderBlue, shape = RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                            Box(
+                                Modifier.size(48.dp).background(HeaderBlue, shape = RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text("📅", fontSize = 24.sp)
                             }
                             Spacer(Modifier.width(14.dp))
                             Column {
-                                Text("دادبان", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("نسخه ۲.۰", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                Text("دادبان", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
+                                Text("نسخه ۲.۰", style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
                             }
                         }
                         Spacer(Modifier.height(12.dp))
@@ -449,8 +567,8 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                             Text("👤", fontSize = 20.sp)
                             Spacer(Modifier.width(12.dp))
                             Column {
-                                Text("سازنده", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                                Text("sdamir66", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                Text("سازنده", style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
+                                Text("sdamir66", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color(0xFF1B1B1F))
                             }
                         }
                     }
@@ -547,7 +665,12 @@ private fun SettingSwitch(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF1B1B1F),
+            modifier = Modifier.weight(1f)
+        )
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
@@ -561,16 +684,22 @@ private fun SettingSwitch(
 
 @Composable
 private fun SettingRow(title: String, subtitle: String, icon: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
             Text(icon, fontSize = 18.sp, color = HeaderBlue)
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color(0xFF1B1B1F))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
         }
-        Text("‹", fontSize = 20.sp, color = Color.Gray)
+        Text("‹", fontSize = 20.sp, color = Color(0xFF5C5D72))
     }
 }
 
@@ -602,8 +731,12 @@ private fun CityPickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color(0xFF1B1B1F),
+                        unfocusedTextColor = Color(0xFF1B1B1F),
                         focusedBorderColor = HeaderBlue,
+                        unfocusedBorderColor = Color(0xFFCCCCCC),
                         focusedLabelColor = HeaderBlue,
+                        unfocusedLabelColor = Color(0xFF5C5D72),
                         cursorColor = HeaderBlue
                     )
                 )
