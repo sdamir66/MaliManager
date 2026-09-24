@@ -1,5 +1,6 @@
 package com.sdamir66.dadban.calendar.data
 
+import com.sdamir66.dadban.data.AppDb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -19,21 +20,22 @@ object HijriDataDownloader {
 
     // ═══════════════════════════════════════════════════════════
     //  دانلود + ذخیره در دیتابیس
-    //  (همون تابعی که SettingsScreen صداش می‌زنه)
+    //  امضا: (AppDb, Int) → Result<Int>
     // ═══════════════════════════════════════════════════════════
     suspend fun downloadAndSave(
-        jalaliYear: Int,
-        dao: HijriCacheDao
-    ): Int {
-        val list = withContext(Dispatchers.IO) {
-            downloadYear(jalaliYear)
-        }
-        if (list.isNotEmpty()) {
-            withContext(Dispatchers.IO) {
+        db: AppDb,
+        jalaliYear: Int
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            val dao: HijriCacheDao = db.hijriCacheDao()
+            val list = downloadYear(jalaliYear)
+            if (list.isNotEmpty()) {
                 dao.insertAll(list)
             }
+            Result.success(list.size)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        return list.size
     }
 
     // ═══════════════════════════════════════════════════════════
