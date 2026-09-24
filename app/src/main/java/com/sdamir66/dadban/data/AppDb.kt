@@ -20,7 +20,7 @@ import com.sdamir66.dadban.calendar.data.EventDao
         Event::class,
         CalendarSettings::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDb : RoomDatabase() {
@@ -74,10 +74,8 @@ abstract class AppDb : RoomDatabase() {
             }
         }
 
-        // ✅ migration نسخه ۳: تغییر amount از Long به Double
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // ساخت جدول جدید با amount به صورت REAL
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS transactions_new (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -90,14 +88,23 @@ abstract class AppDb : RoomDatabase() {
                         profitKey TEXT
                     )
                 """.trimIndent())
-                // کپی دیتا از جدول قدیمی
                 db.execSQL("""
                     INSERT INTO transactions_new (id, accountId, dateMillis, type, amount, note, isAutoProfit, profitKey)
                     SELECT id, accountId, dateMillis, type, CAST(amount AS REAL), note, isAutoProfit, profitKey FROM transactions
                 """.trimIndent())
-                // حذف جدول قدیمی و تغییر نام
                 db.execSQL("DROP TABLE transactions")
                 db.execSQL("ALTER TABLE transactions_new RENAME TO transactions")
+            }
+        }
+
+        // ✅ migration نسخه ۴: اضافه کردن ستون‌های رنگ
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE calendar_settings ADD COLUMN colorHoliday TEXT NOT NULL DEFAULT '#E53935'")
+                db.execSQL("ALTER TABLE calendar_settings ADD COLUMN colorReligious TEXT NOT NULL DEFAULT '#9E9E9E'")
+                db.execSQL("ALTER TABLE calendar_settings ADD COLUMN colorNational TEXT NOT NULL DEFAULT '#9E9E9E'")
+                db.execSQL("ALTER TABLE calendar_settings ADD COLUMN colorGlobal TEXT NOT NULL DEFAULT '#9E9E9E'")
+                db.execSQL("ALTER TABLE calendar_settings ADD COLUMN colorUser TEXT NOT NULL DEFAULT '#9E9E9E'")
             }
         }
 
@@ -107,7 +114,7 @@ abstract class AppDb : RoomDatabase() {
                 AppDb::class.java,
                 "finance.db"
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
         }
     }
