@@ -46,7 +46,6 @@ fun CalendarHeader(
 
     fun pageToYear(page: Int): Int = baseYear + (page - startPage)
 
-    // تغییر سال با سواپ
     LaunchedEffect(pagerState.currentPage) {
         val newYear = pageToYear(pagerState.currentPage)
         val currentYear = getYear(currentDate, primaryCalendar, settings)
@@ -55,7 +54,6 @@ fun CalendarHeader(
         }
     }
 
-    // همگام‌سازی با تغییر از بیرون
     LaunchedEffect(currentDate) {
         val year = getYear(currentDate, primaryCalendar, settings)
         val targetPage = startPage + (year - baseYear)
@@ -202,7 +200,7 @@ private fun getYear(date: Date, type: CalendarType, settings: CalendarSettings?)
 }
 
 /**
- * فرمت دو خطی: تاریخ کامل + فقط نام ماه جاری (نه دو ماه)
+ * فرمت دو خطی: تاریخ کامل + فقط نام ماه جاری
  */
 private fun getChipLabel(date: Date, type: CalendarType, settings: CalendarSettings?): String {
     return when (type) {
@@ -238,7 +236,6 @@ private fun setYear(date: Date, year: Int, type: CalendarType): Date {
             }.time
         }
         CalendarType.HIJRI -> {
-            // برای قمری، سال رو با اضافه کردن اختلاف تغییر بده
             val diff = year - getHijriDate(date, null)[0]
             Calendar.getInstance().apply {
                 time = date
@@ -249,21 +246,22 @@ private fun setYear(date: Date, year: Int, type: CalendarType): Date {
 }
 
 // ═══════════════════════════════════════════════════════
-// تبدیل قمری (با UmmalquraCalendar + اصلاح -1 روز)
+// تبدیل قمری (بدون -1 روز)
 // ═══════════════════════════════════════════════════════
 
 fun getHijriDate(date: Date, settings: CalendarSettings?): IntArray {
+    // ═══ ۱. محاسبه‌ی قمری با UmmalquraCalendar ═══
     val cal = com.github.msarhan.ummalqura.calendar.UmmalquraCalendar()
     cal.time = date
 
-    // ✅ اصلاح ۱ روز جلو بودن (کم کردن ۱ روز)
-    cal.add(Calendar.DAY_OF_MONTH, -1)
+    // ✅ حذف شد: cal.add(Calendar.DAY_OF_MONTH, -1)
+    // چون باعث ۱ روز عقب شدن می‌شد
 
     var year = cal.get(Calendar.YEAR)
     var month = cal.get(Calendar.MONTH) + 1
     var day = cal.get(Calendar.DAY_OF_MONTH)
 
-    // اعمال اصلاح eidFitrOffset
+    // ═══ ۲. اعمال اصلاح eidFitrOffset (اگه تنظیم شده) ═══
     if (settings != null && settings.eidFitrOffset != 0) {
         if (month >= 10) {
             if (settings.eidFitrHijriYear == null || year == settings.eidFitrHijriYear) {
