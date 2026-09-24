@@ -601,7 +601,6 @@ fun PersonScreen(
     var add by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<Account?>(null) }
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
-    var editPerson by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -649,20 +648,17 @@ fun PersonScreen(
                     }
 
                     if (!editMode) {
-                        IconButton(onClick = { editPerson = true }, modifier = Modifier.size(44.dp)) {
-                            Icon(Icons.Default.Edit, "ویرایش شخص", tint = Color.White, modifier = Modifier.size(22.dp))
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        Box(
-                            Modifier
-                                .size(44.dp)
-                                .background(Color.White, shape = CircleShape)
-                                .clickable { add = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("+", color = HeaderBlue, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
+    // ❌ دکمه ویرایش حذف شد
+    Box(
+        Modifier
+            .size(44.dp)
+            .background(Color.White, shape = CircleShape)
+            .clickable { add = true },
+        contentAlignment = Alignment.Center
+    ) {
+        Text("+", color = HeaderBlue, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+    }
+}
                 }
             }
 
@@ -762,12 +758,6 @@ fun PersonScreen(
             },
             onCancel = { deleteTarget = null }
         )
-    }
-
-    if (editPerson) {
-        PersonEditor(person, db, {
-            scope.launch { db.persons().update(it); editPerson = false }
-        }, { editPerson = false })
     }
 }
 
