@@ -1,6 +1,5 @@
 package com.sdamir66.dadban.calendar.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -44,22 +43,18 @@ fun MonthCalendarView(
         pageCount = { pageCount }
     )
 
-    // تبدیل صفحه به ماه
     fun pageToDate(page: Int): Date {
         val offset = page - startPage
         return addMonths(baseMonth, offset)
     }
 
-    // وقتی صفحه عوض میشه، currentDate رو آپدیت کن
     LaunchedEffect(pagerState.currentPage) {
         val newDate = pageToDate(pagerState.currentPage)
-        // اگه ماه عوض شده، onDateChange رو صدا بزن
         if (!isSameMonth(newDate, currentDate, primaryCalendar)) {
             onDateChange(newDate)
         }
     }
 
-    // وقتی currentDate از بیرون عوض میشه (مثلاً با فلش‌ها)، pager رو همگام کن
     LaunchedEffect(currentDate) {
         val offset = monthsBetween(baseMonth, normalizeToMonthStart(currentDate, primaryCalendar))
         val targetPage = startPage + offset
@@ -81,9 +76,9 @@ fun MonthCalendarView(
                 .padding(horizontal = 16.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
-            Column(Modifier.padding(12.dp)) {
+            Column(Modifier.padding(10.dp)) {
                 // ═══ نام روزهای هفته ═══
                 Row(Modifier.fillMaxWidth()) {
                     listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
@@ -91,14 +86,14 @@ fun MonthCalendarView(
                             day,
                             modifier = Modifier.weight(1f),
                             textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72)
                         )
                     }
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
 
                 // ═══ گرید روزها ═══
                 val daysInMonth = getDaysInMonth(monthDate, primaryCalendar)
@@ -216,7 +211,6 @@ private fun getDaysInMonth(date: Date, type: CalendarType): Int {
             Calendar.getInstance().apply { time = date }.getActualMaximum(Calendar.DAY_OF_MONTH)
         }
         CalendarType.HIJRI -> {
-            // تعداد روزهای ماه قمری: ۲۹ یا ۳۰
             val h = getHijriDate(date)
             if (h[1] % 2 == 1) 30 else 29
         }
@@ -265,7 +259,6 @@ private fun getDateForDay(currentDate: Date, dayNumber: Int, type: CalendarType)
             }.time
         }
         CalendarType.HIJRI -> {
-            // برای قمری، از میلادی محاسبه کن
             Calendar.getInstance().apply {
                 time = currentDate
                 set(Calendar.DAY_OF_MONTH, dayNumber)
