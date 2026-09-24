@@ -6,7 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Textب
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,10 +20,10 @@ import com.sdamir66.dadban.ui.theme.HeaderBlue
 
 @Composable
 fun PrayerTimesSection(
-    prayerTimes = prayerTimes
+    prayerTimes: PrayerTimesData
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
-        // ═══ عنوان (با نام شهر) ═══
+        // ═══ عنوان ═══
         Text(
             if (prayerTimes.cityName.isNotBlank())
                 "اوقات شرعی به وقت ${prayerTimes.cityName}"
@@ -54,7 +54,6 @@ fun PrayerTimesSection(
 
                 Spacer(Modifier.height(8.dp))
 
-                // ═══ خط جداکننده ═══
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -77,7 +76,6 @@ fun PrayerTimesSection(
 
                 Spacer(Modifier.height(8.dp))
 
-                // ═══ خط جداکننده ═══
                 Box(
                     Modifier
                         .fillMaxWidth()
