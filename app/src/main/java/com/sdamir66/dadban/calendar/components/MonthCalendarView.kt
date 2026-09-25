@@ -24,6 +24,7 @@ import com.sdamir66.dadban.calendar.data.HijriCache
 import com.sdamir66.dadban.util.Jalali
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 
 @Composable
 fun MonthCalendarView(
@@ -97,32 +98,30 @@ fun MonthCalendarView(
                 val rows = 6
 
                 for (row in 0 until rows) {
-                    // ═══ هر ردیف روزها (force LTR) ═══
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Row(Modifier.fillMaxWidth().weight(1f)) {
-                            for (col in 0 until 7) {
-                                val cellIndex = row * 7 + col
-                                val dayNumber = cellIndex - firstDayOfWeek + 1
-                                if (dayNumber in 1..daysInMonth) {
-                                    val date = getDateForDay(monthDate, dayNumber, primaryCalendar)
-                                    val isSelected = selectedDay?.let { isSameDay(it, date) } ?: false
-                                    val isToday = isSameDay(Date(), date)
-                                    val isFriday = col == 6
-                                    val dayEvents = getEventsForDay(events, date, settings, hijriCacheMap)
-                                    val hasHoliday = dayEvents.any { it.isHoliday }
+                    // ❌ CompositionLocalProvider حذف شد (نباید دور Row روزها باشه)
+                    Row(Modifier.fillMaxWidth().weight(1f)) {
+                        for (col in 0 until 7) {
+                            val cellIndex = row * 7 + col
+                            val dayNumber = cellIndex - firstDayOfWeek + 1
+                            if (dayNumber in 1..daysInMonth) {
+                                val date = getDateForDay(monthDate, dayNumber, primaryCalendar)
+                                val isSelected = selectedDay?.let { isSameDay(it, date) } ?: false
+                                val isToday = isSameDay(Date(), date)
+                                val isFriday = col == 6
+                                val dayEvents = getEventsForDay(events, date, settings, hijriCacheMap)
+                                val hasHoliday = dayEvents.any { it.isHoliday }
 
-                                    DayCell(
-                                        day = dayNumber, date = date,
-                                        isSelected = isSelected, isToday = isToday,
-                                        isFriday = isFriday, hasHoliday = hasHoliday,
-                                        primaryCalendar = primaryCalendar, settings = settings,
-                                        hijriCacheMap = hijriCacheMap,
-                                        onClick = { onDayClick(date) },
-                                        modifier = Modifier.weight(1f).fillMaxHeight()
-                                    )
-                                } else {
-                                    Box(Modifier.weight(1f).fillMaxHeight())
-                                }
+                                DayCell(
+                                    day = dayNumber, date = date,
+                                    isSelected = isSelected, isToday = isToday,
+                                    isFriday = isFriday, hasHoliday = hasHoliday,
+                                    primaryCalendar = primaryCalendar, settings = settings,
+                                    hijriCacheMap = hijriCacheMap,
+                                    onClick = { onDayClick(date) },
+                                    modifier = Modifier.weight(1f).fillMaxHeight()
+                                )
+                            } else {
+                                Box(Modifier.weight(1f).fillMaxHeight())
                             }
                         }
                     }
@@ -137,7 +136,7 @@ private fun normalizeToMonthStart(date: Date, type: CalendarType): Date {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
-            Date(Jalali.parse("%04d/%02d/%02d".format(j[0], j[1], 1)) ?: date.time)
+            Date(Jalali.parse(String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], 1)) ?: date.time)
         }
         CalendarType.GREGORIAN -> Calendar.getInstance().apply {
             time = date; set(Calendar.DAY_OF_MONTH, 1)
@@ -185,7 +184,7 @@ private fun getFirstDayOfWeek(date: Date, type: CalendarType): Int {
     val firstOfMonth = when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
-            Date(Jalali.parse("%04d/%02d/%02d".format(j[0], j[1], 1)) ?: 0L)
+            Date(Jalali.parse(String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], 1)) ?: 0L)
         }
         CalendarType.GREGORIAN -> Calendar.getInstance().apply {
             time = date; set(Calendar.DAY_OF_MONTH, 1)
@@ -204,7 +203,7 @@ private fun getDateForDay(currentDate: Date, dayNumber: Int, type: CalendarType)
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(currentDate.time)
-            Date(Jalali.parse("%04d/%02d/%02d".format(j[0], j[1], dayNumber)) ?: 0L)
+            Date(Jalali.parse(String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], dayNumber)) ?: 0L)
         }
         CalendarType.GREGORIAN -> Calendar.getInstance().apply {
             time = currentDate; set(Calendar.DAY_OF_MONTH, dayNumber)
@@ -247,7 +246,8 @@ fun getHijriFromCacheOrFallback(
     date: Date, settings: CalendarSettings?, cache: Map<String, HijriCache>
 ): IntArray {
     val j = Jalali.toJalaliPublic(date.time)
-    val key = "%04d/%02d/%02d".format(j[0], j[1], j[2])
+    // ✅ Locale.US برای اطمینان از اعداد لاتین
+    val key = String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], j[2])
     val cached = cache[key]
     if (cached != null) {
         return intArrayOf(cached.hijriYear, hijriMonthNameToNumber(cached.hijriMonth), cached.hijriDay)
