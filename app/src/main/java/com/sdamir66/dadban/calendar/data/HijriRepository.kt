@@ -7,20 +7,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-// ═══════════════════════════════════════════════════════════════
-//  HijriRepository
-//  لایه‌ی اصلی دسترسی به تاریخ قمری
-// ═══════════════════════════════════════════════════════════════
-
 object HijriRepository {
 
-    // ═══ حداقل سالی که API پشتیبانی می‌کنه ═══
     private const val MIN_API_YEAR = 1405
-
-    // ═══ تأخیر بین درخواست‌ها (میلی‌ثانیه) ═══
     private const val API_DELAY_MS = 2_000L
 
-    // ═══ نقطه‌ی شروع حالت قراردادی ═══
     @Volatile
     private var contractualStartJalaliMillis: Long? = null
     @Volatile
@@ -28,18 +19,12 @@ object HijriRepository {
     @Volatile
     private var contractualStartHijriMonth: Int? = null
 
-    // ═══════════════════════════════════════════════════════════
-    //  init
-    // ═══════════════════════════════════════════════════════════
     suspend fun init(context: Context, db: AppDb) = withContext(Dispatchers.IO) {
         HijriOfficialData.ensureLoaded(context)
         seedAssetIfNeeded(db)
         computeContractualStart(db)
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  seed asset به دیتابیس
-    // ═══════════════════════════════════════════════════════════
     private suspend fun seedAssetIfNeeded(db: AppDb) {
         val dao = db.hijriCacheDao()
         val allCaches = HijriOfficialData.getAllCaches()
@@ -51,9 +36,6 @@ object HijriRepository {
         dao.insertAll(allCaches)
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  محاسبه‌ی نقطه‌ی شروع حالت قراردادی
-    // ═══════════════════════════════════════════════════════════
     private suspend fun computeContractualStart(db: AppDb) {
         if (contractualStartJalaliMillis != null) return
 
@@ -81,9 +63,6 @@ object HijriRepository {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  گرفتن تاریخ قمری
-    // ═══════════════════════════════════════════════════════════
     suspend fun getHijriDate(
         db: AppDb,
         jalaliYear: Int,
@@ -92,19 +71,11 @@ object HijriRepository {
     ): HijriCache? {
         val jalaliDate = String.format("%04d/%02d/%02d", jalaliYear, jalaliMonth, jalaliDay)
 
-        // منبع ۱: دیتابیس
         db.hijriCacheDao().getByJalaliDate(jalaliDate)?.let { return it }
-
-        // منبع ۲: محاسبه از روی شروع ماه قمری
         calculateFromDbStarts(db, jalaliYear, jalaliMonth, jalaliDay)?.let { return it }
-
-        // منبع ۳: حالت قراردادی
         return calculateContractual(jalaliYear, jalaliMonth, jalaliDay)
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  محاسبه از روی شروع ماه‌های قمری توی دیتابیس
-    // ═══════════════════════════════════════════════════════════
     private suspend fun calculateFromDbStarts(
         db: AppDb,
         jalaliYear: Int,
@@ -140,9 +111,6 @@ object HijriRepository {
         )
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  حالت قراردادی (بعد از ۱۴۱۰)
-    // ═══════════════════════════════════════════════════════════
     private fun calculateContractual(
         jalaliYear: Int,
         jalaliMonth: Int,
@@ -195,22 +163,14 @@ object HijriRepository {
         )
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  به‌روزرسانی از API
-    //  منطق: از 1405 تا (سال جاری + 1)
-    //  - سال‌های < سال جاری: اگه توی دیتابیس هستن، رد کن
-    //  - سال‌های >= سال جاری: دانلود کن (حتی اگه قبلاً دانلود شده)
-    // ═══════════════════════════════════════════════════════════
     suspend fun refreshFromApi(
         db: AppDb,
         currentJalaliYear: Int,
         onProgress: (current: Int, year: Int) -> Unit = { _, _ -> }
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            val startYear = MIN_API_YEAR              // 1405
-            val endYear = currentJalaliYear + 1       // سال جاری + 1
-
-            // اگه سال جاری قبل از 1405 بود (غیرممکن)، فقط همون سال جاری + 1 رو بگیر
+            val startYear = MIN_API_YEAR
+            val endYear = currentJalaliYear + 1
             val actualEndYear = maxOf(endYear, startYear)
 
             var totalSaved = 0
@@ -220,7 +180,6 @@ object HijriRepository {
                 attemptCount++
                 onProgress(attemptCount, year)
 
-                // اگه سال < سال جاری AND توی دیتابیس هست → رد کن
                 if (year < currentJalaliYear) {
                     val existingCount = db.hijriCacheDao().countForYear(year)
                     if (existingCount > 0) {
@@ -228,7 +187,6 @@ object HijriRepository {
                     }
                 }
 
-                // دانلود
                 val result = HijriDataDownloader.downloadAndSave(db, year)
 
                 if (result.isSuccess) {
@@ -237,7 +195,6 @@ object HijriRepository {
                         delay(API_DELAY_MS)
                     }
                 } else {
-                    // اگه خطا داد، ادامه نده
                     break
                 }
             }
@@ -254,9 +211,6 @@ object HijriRepository {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  کمک‌تابع‌ها
-    // ═══════════════════════════════════════════════════════════
     private fun hijriMonthName(month: Int): String = when (month) {
         1 -> "محرم"
         2 -> "صفر"
