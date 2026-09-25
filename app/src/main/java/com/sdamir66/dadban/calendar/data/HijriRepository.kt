@@ -4,13 +4,9 @@ import android.content.Context
 import com.sdamir66.dadban.data.AppDb
 import com.sdamir66.dadban.util.Jalali
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 object HijriRepository {
-
-    private const val MIN_API_YEAR = 1405
-    private const val API_DELAY_MS = 2_000L
 
     @Volatile
     private var contractualStartJalaliMillis: Long? = null
@@ -19,12 +15,24 @@ object HijriRepository {
     @Volatile
     private var contractualStartHijriMonth: Int? = null
 
+    // ═══════════════════════════════════════════════════════════
+    //  init
+    // ═══════════════════════════════════════════════════════════
     suspend fun init(context: Context, db: AppDb) = withContext(Dispatchers.IO) {
+        // ۱. بارگذاری asset (hijri_official.txt)
         HijriOfficialData.ensureLoaded(context)
+
+        // ۲. seed asset به دیتابیس
         seedAssetIfNeeded(db)
+
+        // ۳. بارگذاری calendar.json از asset (برای رویدادها)
+        seedCalendarJsonIfNeeded(context, db)
+
+        // ۴. محاسبه‌ی نقطه‌ی شروع قراردادی
         computeContractualStart(db)
     }
 
+    // ═══ seed دیتای hijri_official.txt ═══
     private suspend fun seedAssetIfNeeded(db: AppDb) {
         val dao = db.hijriCacheDao()
         val allCaches = HijriOfficialData.getAllCaches()
@@ -34,6 +42,20 @@ object HijriRepository {
         if (dao.countForYear(minYear) > 0) return
 
         dao.insertAll(allCaches)
+    }
+
+    // ═══ seed calendar.json (فقط اگه دیتابیس خالیه) ═══
+    private suspend fun seedCalendarJsonIfNeeded(context: Context, db: AppDb) {
+        try {
+            val jsonText = context.assets.open("calendar.json")
+                .bufferedReader(Charsets.UTF_8)
+                .use { it.readText() }
+
+            val currentYear = Jalali.nowJalali()[0]
+            HijriCalendarUpdater.applyFromFile(db, jsonText, currentYear)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private suspend fun computeContractualStart(db: AppDb) {
@@ -161,54 +183,6 @@ object HijriRepository {
             isHoliday = false,
             eventsJson = "[]"
         )
-    }
-
-    suspend fun refreshFromApi(
-        db: AppDb,
-        currentJalaliYear: Int,
-        onProgress: (current: Int, year: Int) -> Unit = { _, _ -> }
-    ): Result<Int> = withContext(Dispatchers.IO) {
-        try {
-            val startYear = MIN_API_YEAR
-            val endYear = currentJalaliYear + 1
-            val actualEndYear = maxOf(endYear, startYear)
-
-            var totalSaved = 0
-            var attemptCount = 0
-
-            for (year in startYear..actualEndYear) {
-                attemptCount++
-                onProgress(attemptCount, year)
-
-                if (year < currentJalaliYear) {
-                    val existingCount = db.hijriCacheDao().countForYear(year)
-                    if (existingCount > 0) {
-                        continue
-                    }
-                }
-
-                val result = HijriDataDownloader.downloadAndSave(db, year)
-
-                if (result.isSuccess) {
-                    totalSaved += result.getOrNull() ?: 0
-                    if (year < actualEndYear) {
-                        delay(API_DELAY_MS)
-                    }
-                } else {
-                    break
-                }
-            }
-
-            if (attemptCount == 0) {
-                return@withContext Result.failure(
-                    Exception("سال معتبری برای دانلود پیدا نشد")
-                )
-            }
-
-            Result.success(totalSaved)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
     }
 
     private fun hijriMonthName(month: Int): String = when (month) {
