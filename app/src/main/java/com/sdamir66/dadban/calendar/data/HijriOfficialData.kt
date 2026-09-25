@@ -4,20 +4,23 @@ import android.content.Context
 import com.sdamir66.dadban.util.Jalali
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 // ═══════════════════════════════════════════════════════════════
 //  HijriOfficialData
 //  داده‌های رسمی تقویم قمری ایران (مؤسسه ژئوفیزیک)
 //  منبع: hijri_official.txt (فرمت میلادی)
-//  تبدیل: با Jalali.kt
+//  تبدیل: با Jalali.kt + TimeZone گوشی
 //  بازه: 1380 تا 1404
 // ═══════════════════════════════════════════════════════════════
 
 object HijriOfficialData {
 
     private const val ASSET_FILE = "hijri_official.txt"
-
     const val MAX_ASSET_YEAR = 1404
+
+    // ✅ TimeZone گوشی (برای تبدیل میلادی به جلالی)
+    private val DEVICE_TZ: TimeZone = TimeZone.getDefault()
 
     @Volatile
     private var loaded = false
@@ -59,15 +62,15 @@ object HijriOfficialData {
             val parts = line.split(Regex("\\s+"))
             if (parts.size < 2) continue
 
-            val hijriKey = parts[0]
-            val miladiDate = parts[1]  // "2025-06-27"
+            val hijriKey = parts[0]              // "1447/1"
+            val miladiDate = parts[1]            // "2025-06-27"
 
             val hijriParts = hijriKey.split("/")
             if (hijriParts.size != 2) continue
             val hijriYear = hijriParts[0].toIntOrNull() ?: continue
             val hijriMonth = hijriParts[1].toIntOrNull() ?: continue
 
-            // ═══ تبدیل میلادی به جلالی ═══
+            // ═══ تبدیل میلادی به جلالی (با TimeZone گوشی) ═══
             val jalaliDate = convertMiladiToJalali(miladiDate) ?: continue
 
             val jalaliParts = jalaliDate.split("/")
@@ -101,7 +104,7 @@ object HijriOfficialData {
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  تبدیل میلادی به جلالی (با Jalali.kt خودت)
+    //  تبدیل میلادی به جلالی (با TimeZone گوشی)
     // ═══════════════════════════════════════════════════════════
     private fun convertMiladiToJalali(miladi: String): String? {
         return try {
@@ -111,7 +114,8 @@ object HijriOfficialData {
             val gm = parts[1].toInt()
             val gd = parts[2].toInt()
 
-            val cal = Calendar.getInstance().apply {
+            // ✅ TimeZone گوشی
+            val cal = Calendar.getInstance(DEVICE_TZ).apply {
                 set(gy, gm - 1, gd, 0, 0, 0)
                 set(Calendar.MILLISECOND, 0)
             }
