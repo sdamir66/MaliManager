@@ -11,8 +11,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarSettings
@@ -34,9 +36,7 @@ fun CalendarHeader(
 ) {
     var showYearPicker by remember { mutableStateOf(false) }
 
-    val baseYear = remember { getYear(currentDate, primaryCalendar, hijriCacheMap) }
-
-    // ✅ محاسبه‌ی ماه و سال به‌صورت state
+    // ✅ ماه و سال به‌صورت state (با تغییر currentDate آپدیت می‌شن)
     val monthName = remember(currentDate, primaryCalendar) {
         getMonthName(currentDate, primaryCalendar, hijriCacheMap)
     }
@@ -81,35 +81,37 @@ fun CalendarHeader(
 
             Spacer(Modifier.height(10.dp))
 
-            // ═══ ترتیب: میلادی (چپ) - جلالی (وسط) - قمری (راست) ═══
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                // ─── میلادی (چپ) ───
-                CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.GREGORIAN, hijriCacheMap, primaryCalendar),
-                    isSelected = primaryCalendar == CalendarType.GREGORIAN,
-                    onClick = { onCalendarTypeChange(CalendarType.GREGORIAN) },
-                    modifier = Modifier.weight(1f)
-                )
+            // ═══ ترتیب LTR: میلادی (چپ) - جلالی (وسط) - قمری (راست) ═══
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    // ─── میلادی (چپ) ───
+                    CalendarTypeChip(
+                        label = getChipLabel(currentDate, CalendarType.GREGORIAN, hijriCacheMap, primaryCalendar),
+                        isSelected = primaryCalendar == CalendarType.GREGORIAN,
+                        onClick = { onCalendarTypeChange(CalendarType.GREGORIAN) },
+                        modifier = Modifier.weight(1f)
+                    )
 
-                // ─── جلالی (وسط) ───
-                CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.JALALI, hijriCacheMap, primaryCalendar),
-                    isSelected = primaryCalendar == CalendarType.JALALI,
-                    onClick = { onCalendarTypeChange(CalendarType.JALALI) },
-                    modifier = Modifier.weight(1f)
-                )
+                    // ─── جلالی (وسط) ───
+                    CalendarTypeChip(
+                        label = getChipLabel(currentDate, CalendarType.JALALI, hijriCacheMap, primaryCalendar),
+                        isSelected = primaryCalendar == CalendarType.JALALI,
+                        onClick = { onCalendarTypeChange(CalendarType.JALALI) },
+                        modifier = Modifier.weight(1f)
+                    )
 
-                // ─── قمری (راست) ───
-                CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.HIJRI, hijriCacheMap, primaryCalendar),
-                    isSelected = primaryCalendar == CalendarType.HIJRI,
-                    onClick = { onCalendarTypeChange(CalendarType.HIJRI) },
-                    modifier = Modifier.weight(1f)
-                )
+                    // ─── قمری (راست) ───
+                    CalendarTypeChip(
+                        label = getChipLabel(currentDate, CalendarType.HIJRI, hijriCacheMap, primaryCalendar),
+                        isSelected = primaryCalendar == CalendarType.HIJRI,
+                        onClick = { onCalendarTypeChange(CalendarType.HIJRI) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }
@@ -137,7 +139,6 @@ private fun CalendarTypeChip(
     Surface(
         color = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
         shape = if (isSelected) {
-            // چیپ انتخاب‌شده: گوشه‌های بالا گرد، پایین صاف (برای اتصال به کارت)
             RoundedCornerShape(
                 topStart = 14.dp,
                 topEnd = 14.dp,
@@ -145,18 +146,13 @@ private fun CalendarTypeChip(
                 bottomEnd = 0.dp
             )
         } else {
-            // چیپ غیرانتخاب‌شده: همه‌ی گوشه‌ها گرد
             RoundedCornerShape(14.dp)
         },
         modifier = modifier.clickable { onClick() }
     ) {
         Text(
             label,
-            modifier = Modifier
-                .padding(
-                    horizontal = 8.dp,
-                    vertical = if (isSelected) 10.dp else 10.dp
-                ),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             color = if (isSelected) HeaderBlue else Color.White,
