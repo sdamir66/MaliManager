@@ -3,6 +3,7 @@ package com.sdamir66.dadban.calendar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -10,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.components.*
 import com.sdamir66.dadban.calendar.data.*
 import com.sdamir66.dadban.calendar.prayer.PrayerTimesCalculator
@@ -39,17 +39,8 @@ fun CalendarScreen(db: AppDb) {
             withContext(Dispatchers.IO) {
                 val year = Jalali.nowJalali()[0]
 
-                // ۱. دیتابیس (شامل همه‌ی روزها از API)
+                // ۱. دیتابیس
                 val dbItems = db.hijriCacheDao().getAllForYear(year)
-
-                // ═══ DEBUG ═══
-                android.util.Log.d("HijriDebug", "=== Year $year ===")
-                android.util.Log.d("HijriDebug", "dbItems.size = ${dbItems.size}")
-                if (dbItems.isNotEmpty()) {
-                    android.util.Log.d("HijriDebug", "First: ${dbItems.first().jalaliDate} → ${dbItems.first().hijriDay} ${dbItems.first().hijriMonth} ${dbItems.first().hijriYear}")
-                    android.util.Log.d("HijriDebug", "Last: ${dbItems.last().jalaliDate} → ${dbItems.last().hijriDay} ${dbItems.last().hijriMonth} ${dbItems.last().hijriYear}")
-                }
-                // ═══════════
 
                 // ۲. اگه دیتابیس خالی بود، از asset
                 val finalItems = if (dbItems.isNotEmpty()) {
@@ -61,7 +52,6 @@ fun CalendarScreen(db: AppDb) {
                 }
 
                 hijriCacheMap = finalItems.associateBy { it.jalaliDate }
-                android.util.Log.d("HijriDebug", "hijriCacheMap.size = ${hijriCacheMap.size}")
             }
         }
     }
@@ -105,50 +95,7 @@ fun CalendarScreen(db: AppDb) {
         return
     }
 
-    // ═══════════════════════════════════════════════════
-    // ═══ DEBUG: نمایش وضعیت hijriCacheMap ═══
-    // ═══════════════════════════════════════════════════
-    val debugInfo = remember(hijriCacheMap) {
-        val nowJalali = Jalali.nowJalali()
-        val year = nowJalali[0]
-        val month = nowJalali[1]
-        val day = nowJalali[2]
-
-        val yearItems = hijriCacheMap.filterKeys { it.startsWith("$year/") }
-
-        val todayKey = String.format("%04d/%02d/%02d", year, month, day)
-
-        val todayCache = hijriCacheMap[todayKey]
-
-        """
-        🔍 Debug Info:
-        - hijriCacheMap size: ${hijriCacheMap.size}
-        - year $year items: ${yearItems.size}
-        - today key: $todayKey
-        - today cache: ${todayCache?.let { "${it.hijriDay} ${it.hijriMonth} ${it.hijriYear}" } ?: "NULL"}
-        - sample key: ${hijriCacheMap.keys.firstOrNull() ?: "empty"}
-        - sample value: ${hijriCacheMap.values.firstOrNull()?.let { "${it.hijriDay} ${it.hijriMonth} ${it.hijriYear}" } ?: "empty"}
-        """.trimIndent()
-    }
-
     LazyColumn(Modifier.fillMaxSize().background(BgLight)) {
-        // ═══ DEBUG ═══
-        item {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFFFF3E0))
-                    .padding(8.dp)
-            ) {
-                Text(
-                    debugInfo,
-                    fontSize = 10.sp,
-                    color = Color.Red,
-                    lineHeight = 14.sp
-                )
-            }
-        }
-
         // هدر
         item {
             CalendarHeader(
