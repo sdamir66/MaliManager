@@ -3,8 +3,6 @@ package com.sdamir66.dadban.calendar.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -37,33 +35,8 @@ fun CalendarHeader(
     var showYearPicker by remember { mutableStateOf(false) }
 
     val baseYear = remember { getYear(currentDate, primaryCalendar, hijriCacheMap) }
-    val pageCount = 200
-    val startPage = pageCount / 2
 
-    val pagerState = rememberPagerState(
-        initialPage = startPage,
-        pageCount = { pageCount }
-    )
-
-    fun pageToYear(page: Int): Int = baseYear + (page - startPage)
-
-    LaunchedEffect(pagerState.currentPage) {
-        val newYear = pageToYear(pagerState.currentPage)
-        val currentYear = getYear(currentDate, primaryCalendar, hijriCacheMap)
-        if (newYear != currentYear) {
-            onDateChange(setYear(currentDate, newYear, primaryCalendar))
-        }
-    }
-
-    LaunchedEffect(currentDate) {
-        val year = getYear(currentDate, primaryCalendar, hijriCacheMap)
-        val targetPage = startPage + (year - baseYear)
-        if (targetPage != pagerState.currentPage && targetPage in 0 until pageCount) {
-            pagerState.scrollToPage(targetPage)
-        }
-    }
-
-    // ✅ محاسبه‌ی ماه و سال به‌صورت state (که با تغییر currentDate آپدیت شن)
+    // ✅ محاسبه‌ی ماه و سال به‌صورت state
     val monthName = remember(currentDate, primaryCalendar) {
         getMonthName(currentDate, primaryCalendar, hijriCacheMap)
     }
@@ -79,12 +52,12 @@ fun CalendarHeader(
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             )
             .statusBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 24.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 0.dp)
     ) {
         Column {
-            // ═══ ماه و سال (بدون Pager، فقط state) ═══
+            // ═══ ماه و سال ═══
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -112,7 +85,7 @@ fun CalendarHeader(
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Bottom
             ) {
                 // ─── میلادی (چپ) ───
                 CalendarTypeChip(
@@ -163,12 +136,27 @@ private fun CalendarTypeChip(
 ) {
     Surface(
         color = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
-        shape = RoundedCornerShape(12.dp),
+        shape = if (isSelected) {
+            // چیپ انتخاب‌شده: گوشه‌های بالا گرد، پایین صاف (برای اتصال به کارت)
+            RoundedCornerShape(
+                topStart = 14.dp,
+                topEnd = 14.dp,
+                bottomStart = 0.dp,
+                bottomEnd = 0.dp
+            )
+        } else {
+            // چیپ غیرانتخاب‌شده: همه‌ی گوشه‌ها گرد
+            RoundedCornerShape(14.dp)
+        },
         modifier = modifier.clickable { onClick() }
     ) {
         Text(
             label,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            modifier = Modifier
+                .padding(
+                    horizontal = 8.dp,
+                    vertical = if (isSelected) 10.dp else 10.dp
+                ),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             color = if (isSelected) HeaderBlue else Color.White,
