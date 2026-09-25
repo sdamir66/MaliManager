@@ -207,13 +207,16 @@ object HijriRepository {
         onProgress: (current: Int, year: Int) -> Unit = { _, _ -> }
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            val startYear = MIN_API_YEAR
-            val endYear = currentJalaliYear + 1
+            val startYear = MIN_API_YEAR              // 1405
+            val endYear = currentJalaliYear + 1       // سال جاری + 1
+
+            // اگه سال جاری قبل از 1405 بود (غیرممکن)، فقط همون سال جاری + 1 رو بگیر
+            val actualEndYear = maxOf(endYear, startYear)
 
             var totalSaved = 0
             var attemptCount = 0
 
-            for (year in startYear..endYear) {
+            for (year in startYear..actualEndYear) {
                 attemptCount++
                 onProgress(attemptCount, year)
 
@@ -230,10 +233,11 @@ object HijriRepository {
 
                 if (result.isSuccess) {
                     totalSaved += result.getOrNull() ?: 0
-                    if (year < endYear) {
+                    if (year < actualEndYear) {
                         delay(API_DELAY_MS)
                     }
                 } else {
+                    // اگه خطا داد، ادامه نده
                     break
                 }
             }
