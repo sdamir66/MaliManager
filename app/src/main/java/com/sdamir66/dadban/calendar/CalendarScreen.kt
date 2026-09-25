@@ -108,7 +108,7 @@ fun CalendarScreen(db: AppDb) {
         }
 
         item {
-            Box(Modifier.offset(y = (-30).dp)) {
+            Box(Modifier.offset(y = (-50).dp)) {
                 MonthCalendarView(
                     currentDate = currentDate,
                     primaryCalendar = primaryCalendar,
@@ -127,7 +127,7 @@ fun CalendarScreen(db: AppDb) {
 
         if (settings!!.showPrayerTimes && prayerTimes != null) {
             item {
-                Box(Modifier.offset(y = (-25).dp)) {
+                Box(Modifier.offset(y = (-10).dp)) {
                     PrayerTimesSection(prayerTimes = prayerTimes)
                 }
             }
