@@ -65,7 +65,12 @@ fun MonthCalendarView(
 
         Card(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(380.dp),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(
+                topStart = 0.dp,
+                topEnd = 0.dp,
+                bottomStart = 20.dp,
+                bottomEnd = 20.dp
+            ),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
@@ -219,7 +224,6 @@ private fun getEventsForDay(
     val j = Jalali.toJalaliPublic(date.time)
     val jM = j[1]; val jD = j[2]
 
-    // ✅ استفاده از cache
     val hijri = getHijriFromCacheOrFallback(date, settings, hijriCacheMap)
 
     return events.filter { event ->
