@@ -1,8 +1,10 @@
 package com.sdamir66.dadban.calendar.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +21,7 @@ import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.calendar.data.HijriCache
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
+import com.sdamir66.dadban.util.Jalali
 import java.util.Calendar
 import java.util.Date
 
@@ -62,41 +65,86 @@ fun DayCell(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize().padding(1.dp)
+            modifier = Modifier.fillMaxSize().padding(2.dp)
         ) {
+            // ═══ روز اصلی (بزرگ) ═══
             Text(
                 toPersianDigits(day.toString()),
-                fontSize = 16.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor,
                 textAlign = TextAlign.Center
             )
-            Spacer(Modifier.height(1.dp))
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                // میلادی (چپ، لاتین)
+            Spacer(Modifier.height(2.dp))
+
+            // ═══ ردیف تاریخ‌های فرعی ═══
+            // چپ: میلادی (همیشه بدون دایره)
+            // راست: قمری یا جلالی (بسته به تقویم اصلی)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // ─── فرعی چپ: میلادی (همیشه) ───
                 Text(
-                    if (primaryCalendar != CalendarType.GREGORIAN && (settings?.showGregorianSmall ?: true)) {
-                        Calendar.getInstance().apply { time = date }.get(Calendar.DAY_OF_MONTH).toString()
+                    if (primaryCalendar != CalendarType.GREGORIAN &&
+                        (settings?.showGregorianSmall ?: true)) {
+                        Calendar.getInstance().apply { time = date }
+                            .get(Calendar.DAY_OF_MONTH).toString()
                     } else "",
-                    fontSize = 10.sp,
-                    color = if (isSelected) Color.White.copy(alpha = 0.9f) else Color(0xFF5C5D72),
+                    fontSize = 12.sp,
+                    color = if (isSelected) Color.White.copy(alpha = 0.9f)
+                            else Color(0xFF5C5D72),
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Start,
                     maxLines = 1
                 )
-                // قمری (راست، فارسی)
-                Text(
-                    if (primaryCalendar != CalendarType.HIJRI && (settings?.showHijriSmall ?: true)) {
+
+                // ─── فرعی راست: قمری یا جلالی ───
+                if (primaryCalendar == CalendarType.HIJRI) {
+                    // اگه تقویم اصلی قمریه → جلالی با دایره
+                    if (settings?.showGregorianSmall ?: true) {
+                        Box(
+                            Modifier
+                                .border(
+                                    width = 1.5.dp,
+                                    color = if (isSelected) Color.White.copy(alpha = 0.9f)
+                                            else HeaderBlue.copy(alpha = 0.6f),
+                                    shape = CircleShape
+                                )
+                                .padding(horizontal = 3.dp, vertical = 1.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                toPersianDigits(
+                                    Jalali.toJalaliPublic(date.time)[2].toString()
+                                ),
+                                fontSize = 11.sp,
+                                color = if (isSelected) Color.White.copy(alpha = 0.9f)
+                                        else HeaderBlue,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.End,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                } else {
+                    // اگه تقویم اصلی جلالی یا میلادیه → قمری بدون دایره
+                    if (primaryCalendar != CalendarType.HIJRI &&
+                        (settings?.showHijriSmall ?: true)) {
                         val h = getHijriFromCacheOrFallback(date, settings, hijriCacheMap)
-                        toPersianDigits(h[2].toString())
-                    } else "",
-                    fontSize = 10.sp,
-                    color = if (isSelected) Color.White.copy(alpha = 0.9f) else Color(0xFF5C5D72),
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.End,
-                    maxLines = 1
-                )
+                        Text(
+                            toPersianDigits(h[2].toString()),
+                            fontSize = 12.sp,
+                            color = if (isSelected) Color.White.copy(alpha = 0.9f)
+                                    else Color(0xFF5C5D72),
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.End,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
         }
     }
