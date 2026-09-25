@@ -32,26 +32,26 @@ fun CalendarScreen(db: AppDb) {
         settings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
     }
 
-    // ✅ بارگذاری cache تقویم قمری از asset + دیتابیس
+    // ✅ بارگذاری cache تقویم قمری
+    // اولویت: دیتابیس → asset
     LaunchedEffect(settings) {
         if (settings != null) {
             withContext(Dispatchers.IO) {
                 val year = Jalali.nowJalali()[0]
 
-                // بارگذاری داده‌های asset (برای سال‌های قبل از 1405)
-                HijriOfficialData.ensureLoaded(context)
-                val assetItems = HijriOfficialData.getAllCaches()
-                    .filter { it.jalaliYear == year }
-
-                // بارگذاری داده‌های API از دیتابیس
+                // ۱. دیتابیس (شامل همه‌ی روزها از API)
                 val dbItems = db.hijriCacheDao().getAllForYear(year)
 
-                // ترکیب: asset اول، بعد دیتابیس (دیتابیس اولویت داره اگه تکراری باشه)
-                val combined = mutableMapOf<String, HijriCache>()
-                assetItems.forEach { combined[it.jalaliDate] = it }
-                dbItems.forEach { combined[it.jalaliDate] = it }
+                // ۲. اگه دیتابیس خالی بود، از asset
+                val finalItems = if (dbItems.isNotEmpty()) {
+                    dbItems
+                } else {
+                    HijriOfficialData.ensureLoaded(context)
+                    HijriOfficialData.getAllCaches()
+                        .filter { it.jalaliYear == year }
+                }
 
-                hijriCacheMap = combined
+                hijriCacheMap = finalItems.associateBy { it.jalaliDate }
             }
         }
     }
@@ -96,7 +96,6 @@ fun CalendarScreen(db: AppDb) {
     }
 
     LazyColumn(Modifier.fillMaxSize().background(BgLight)) {
-        // هدر
         item {
             CalendarHeader(
                 currentDate = currentDate,
@@ -108,9 +107,8 @@ fun CalendarScreen(db: AppDb) {
             )
         }
 
-        // تقویم ماهانه
         item {
-            Box(Modifier.offset(y = (-20).dp)) {
+            Box(Modifier.offset(y = (-30).dp)) {
                 MonthCalendarView(
                     currentDate = currentDate,
                     primaryCalendar = primaryCalendar,
@@ -127,7 +125,6 @@ fun CalendarScreen(db: AppDb) {
             }
         }
 
-        // اوقات شرعی
         if (settings!!.showPrayerTimes && prayerTimes != null) {
             item {
                 Box(Modifier.offset(y = (-25).dp)) {
@@ -136,7 +133,6 @@ fun CalendarScreen(db: AppDb) {
             }
         }
 
-        // رویدادهای روز
         item {
             Box(Modifier.offset(y = if (settings!!.showPrayerTimes) (-15).dp else 0.dp)) {
                 EventsSection(
