@@ -1353,7 +1353,7 @@ fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: ()
 fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCancel: () -> Unit) {
     var name by remember(old) { mutableStateOf(old?.name ?: "") }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
-    var currency by remember(old) { mutableStateOf(old?.currency ?: "تومان") }
+    var currency by remember(old) { mutableStateOf(old?.currency ?: "ریال") }
     var customUnit by remember(old) { mutableStateOf(old?.customUnit ?: "") }
     var currencyExpanded by remember { mutableStateOf(false) }
     val currencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
@@ -1590,7 +1590,8 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
 
 @Composable
 fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: () -> Unit) {
-    val periods by db.profitPeriod().byAccount(accountId).collectAsState(emptyList())
+    val periodsRaw by db.profitPeriod().byAccount(accountId).collectAsState(emptyList())
+    val periods = periodsRaw.sortedByDescending { it.id }  // ✅ آخرین بازه بالا
     var addPeriod by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
     var deleteTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
