@@ -265,8 +265,8 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                                     syncProgress = 0 to 21
                                     syncCurrentYear = 0
 
-                                    val result = HijriRepository.refreshFromApi(db) { current, total, year ->
-                                        syncProgress = current to total
+                                    val result = HijriRepository.refreshFromApi(db) { current, year ->
+                                        syncProgress = current to (current + 10)  // تخمینی
                                         syncCurrentYear = year
                                     }
 
