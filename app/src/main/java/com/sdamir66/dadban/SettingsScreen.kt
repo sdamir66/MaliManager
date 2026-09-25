@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.CalendarType
-import com.sdamir66.dadban.calendar.data.HijriRepository
+import com.sdamir66.dadban.calendar.data.HijriCalendarUpdater
 import com.sdamir66.dadban.calendar.data.LocationMode
 import com.sdamir66.dadban.calendar.prayer.LocationHelper
 import com.sdamir66.dadban.data.AppDb
@@ -54,14 +54,9 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     var showCityPicker by remember { mutableStateOf(false) }
 
     // ✅ state های تقویم قمری
-    var isSyncing by remember { mutableStateOf(false) }
-    var syncProgress by remember { mutableStateOf(0 to 0) }
-    var syncCurrentYear by remember { mutableStateOf(0) }
-    var syncMessage by remember { mutableStateOf<String?>(null) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadMessage by remember { mutableStateOf<String?>(null) }
     var cacheCount by remember { mutableStateOf(0) }
-    var cacheLastDownload by remember { mutableStateOf<Long?>(null) }
-
-    val currentJalaliYear = remember { Jalali.nowJalali()[0] }
 
     val create = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -82,6 +77,39 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                 )
             } catch (e: Exception) { e.printStackTrace() }
             saveBackupFolderUri(context, uri)
+        }
+    }
+
+    // ✅ launcher برای انتخاب فایل calendar.json
+    val pickCalendarFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val jsonText = context.contentResolver
+                        .openInputStream(uri)
+                        ?.bufferedReader()
+                        ?.readText() ?: return@launch
+
+                    isDownloading = true
+                    downloadMessage = null
+
+                    val currentYear = Jalali.nowJalali()[0]
+                    val result = HijriCalendarUpdater.applyFromFile(db, jsonText, currentYear)
+
+                    isDownloading = false
+                    downloadMessage = if (result.isSuccess) {
+                        cacheCount = db.hijriCacheDao().countForYear(currentYear)
+                        "✅ فایل تقویم اعمال شد (${result.getOrNull()} روز)"
+                    } else {
+                        "❌ خطا: ${result.exceptionOrNull()?.message}"
+                    }
+                } catch (e: Exception) {
+                    isDownloading = false
+                    downloadMessage = "❌ خطا در خواندن فایل: ${e.message}"
+                }
+            }
         }
     }
 
@@ -109,15 +137,8 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 
     LaunchedEffect(Unit) {
         calendarSettings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
-
-        withContext(Dispatchers.IO) {
-            var total = 0
-            for (year in 1380..1410) {
-                total += db.hijriCacheDao().countForYear(year)
-            }
-            cacheCount = total
-            cacheLastDownload = db.hijriCacheDao().getLastDownloadForYear(currentJalaliYear)
-        }
+        val currentYear = Jalali.nowJalali()[0]
+        cacheCount = db.hijriCacheDao().countForYear(currentYear)
 
         val file = java.io.File(context.filesDir, "auto_backup.json")
         autoBackupExists = file.exists()
@@ -209,7 +230,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             }
 
             // ═══════════════════════════════════════════════
-            // تقویم قمری — به‌روزرسانی از API
+            // تقویم قمری — به‌روزرسانی از GitHub
             // ═══════════════════════════════════════════════
             item {
                 Text("تقویم قمری", style = MaterialTheme.typography.titleMedium,
@@ -244,11 +265,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                                     Text("تقویم قمری ذخیره شده",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
-                                    Text("$cacheCount ماه ذخیره شده" +
-                                        (cacheLastDownload?.let {
-                                            " • آخرین: " + SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.US)
-                                                .format(Date(it))
-                                        } ?: ""),
+                                    Text("$cacheCount روز ذخیره شده",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color(0xFF5C5D72))
                                 }
@@ -256,94 +273,67 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                             Spacer(Modifier.height(12.dp))
                         }
 
-                        // دکمه‌ی به‌روزرسانی
+                        // دکمه‌ی دریافت از GitHub
                         Button(
                             onClick = {
                                 scope.launch {
-                                    isSyncing = true
-                                    syncMessage = null
-                                    syncProgress = 0 to 21
-                                    syncCurrentYear = 0
+                                    isDownloading = true
+                                    downloadMessage = null
 
                                     val currentYear = Jalali.nowJalali()[0]
-                                    val result = HijriRepository.refreshFromApi(db, currentYear) { current, year ->
-                                        syncProgress = current to (currentYear + 1 - 1405 + 1)
-                                        syncCurrentYear = year
-                                    }
+                                    val result = HijriCalendarUpdater.downloadAndApply(db, currentYear)
 
-                                    isSyncing = false
-                                    syncMessage = if (result.isSuccess) {
-                                        var total = 0
-                                        withContext(Dispatchers.IO) {
-                                            for (year in 1380..1410) {
-                                                total += db.hijriCacheDao().countForYear(year)
-                                            }
-                                        }
-                                        cacheCount = total
-                                        cacheLastDownload = db.hijriCacheDao().getLastDownloadForYear(currentJalaliYear)
-                                        "✅ تقویم قمری به‌روزرسانی شد (${result.getOrNull()} ماه)"
+                                    isDownloading = false
+                                    downloadMessage = if (result.isSuccess) {
+                                        cacheCount = db.hijriCacheDao().countForYear(currentYear)
+                                        "✅ تقویم به‌روزرسانی شد (${result.getOrNull()} روز)"
                                     } else {
                                         "❌ خطا: ${result.exceptionOrNull()?.message}"
                                     }
                                 }
                             },
+                            enabled = !isDownloading,
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = !isSyncing,
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = HeaderBlue,
                                 contentColor = Color.White
                             )
                         ) {
-                            if (isSyncing) {
+                            if (isDownloading) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
                                     color = Color.White,
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text("در حال دانلود... ($syncCurrentYear)")
+                                Text("در حال دانلود...")
                             } else {
-                                Text(if (cacheCount > 0) "به‌روزرسانی تقویم قمری"
-                                     else "دریافت تقویم قمری")
+                                Text("📥 دریافت از GitHub")
                             }
                         }
 
-                        // نوار پیشرفت
-                        if (isSyncing && syncProgress.second > 0) {
-                            Spacer(Modifier.height(8.dp))
-                            LinearProgressIndicator(
-                                progress = { syncProgress.first.toFloat() / syncProgress.second },
-                                modifier = Modifier.fillMaxWidth(),
-                                color = HeaderBlue,
-                                trackColor = Color(0xFFEEEEEE)
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "سال ${syncCurrentYear} (${syncProgress.first}/${syncProgress.second})",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF5C5D72)
-                            )
+                        Spacer(Modifier.height(8.dp))
+
+                        // دکمه‌ی آپلود فایل
+                        OutlinedButton(
+                            onClick = { pickCalendarFile.launch(arrayOf("application/json", "text/*")) },
+                            enabled = !isDownloading,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = HeaderBlue)
+                        ) {
+                            Text("📁 آپلود فایل JSON")
                         }
 
                         // پیام نتیجه
-                        syncMessage?.let {
+                        downloadMessage?.let {
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 it,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (it.startsWith("✅")) CreditGreen else DebitRed,
                                 modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        // هشدار مدت زمان
-                        if (isSyncing && cacheCount == 0) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "توجه: اولین بار حدود ۲ دقیقه طول می‌کشه.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF5C5D72)
                             )
                         }
                     }
