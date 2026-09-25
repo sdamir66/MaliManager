@@ -2,20 +2,12 @@ package com.sdamir66.dadban.calendar.data
 
 import android.content.Context
 
-// ═══════════════════════════════════════════════════════════════
-//  HijriOfficialData
-//  داده‌های رسمی تقویم قمری ایران (مؤسسه ژئوفیزیک دانشگاه تهران)
-//  منبع: فایل hijri_official.txt در assets
-//  بازه‌ی پشتیبانی: قبل از سال ۱۴۰۵ خورشیدی
-//  از ۱۴۰۵ به بعد، از API pipe2time.ir استفاده می‌کنیم
-// ═══════════════════════════════════════════════════════════════
-
 object HijriOfficialData {
 
     private const val ASSET_FILE = "hijri_official.txt"
 
     // ═══ حداکثر سال جلالی که asset پشتیبانی می‌کنه ═══
-    const val MAX_ASSET_YEAR = 1404
+    const val MAX_ASSET_YEAR = 1405
 
     // ═══ cache در حافظه ═══
     @Volatile
