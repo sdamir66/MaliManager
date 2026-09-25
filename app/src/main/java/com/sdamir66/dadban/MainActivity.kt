@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import com.sdamir66.dadban.calendar.data.CalendarSettings
+import com.sdamir66.dadban.calendar.data.HijriRepository
 import com.sdamir66.dadban.calendar.data.IranEvents
 import com.sdamir66.dadban.data.*
 import com.sdamir66.dadban.ui.theme.BgLight
@@ -57,7 +58,6 @@ import com.sdamir66.dadban.util.Jalali
 import com.sdamir66.dadban.calendar.data.Event
 import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.calendar.data.EventCategory
-import com.sdamir66.dadban.calendar.data.HijriRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -130,55 +130,55 @@ class MainActivity : ComponentActivity() {
     private val backupScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate(b: Bundle?) {
-    super.onCreate(b)
-    db = AppDb.build(applicationContext)
+        super.onCreate(b)
+        db = AppDb.build(applicationContext)
 
-    window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
-    window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
+        window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
+        window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
 
-    // ✅ insert رویدادهای آماده + به‌روزرسانی تنظیمات قدیمی
-    backupScope.launch {
-        delay(500L)
+        // ✅ insert رویدادهای آماده + به‌روزرسانی تنظیمات قدیمی + راه‌اندازی تقویم قمری
+        backupScope.launch {
+            delay(500L)
 
-        // ═══ راه‌اندازی تقویم قمری ═══
-        HijriRepository.init(applicationContext, db)
+            // ═══ راه‌اندازی تقویم قمری ═══
+            HijriRepository.init(applicationContext, db)
 
-        // ═══ رویدادهای آماده (فقط بار اول) ═══
-        if (db.eventDao().allNow().isEmpty()) {
-            db.eventDao().insertAll(IranEvents.events)
-        }
+            // ═══ رویدادهای آماده (فقط بار اول) ═══
+            if (db.eventDao().allNow().isEmpty()) {
+                db.eventDao().insertAll(IranEvents.events)
+            }
 
-        // ═══ تنظیمات پیش‌فرض ═══
-        val current = db.calendarSettingsDao().getNow()
-        if (current == null) {
-            db.calendarSettingsDao().insert(CalendarSettings())
-        } else {
-            if (!current.showReligiousNonHoliday &&
-                !current.showNationalNonHoliday &&
-                !current.showGlobalEvents) {
-                db.calendarSettingsDao().insert(
-                    current.copy(
-                        showReligiousNonHoliday = true,
-                        showNationalNonHoliday = true,
-                        showGlobalEvents = true
+            // ═══ تنظیمات پیش‌فرض ═══
+            val current = db.calendarSettingsDao().getNow()
+            if (current == null) {
+                db.calendarSettingsDao().insert(CalendarSettings())
+            } else {
+                if (!current.showReligiousNonHoliday &&
+                    !current.showNationalNonHoliday &&
+                    !current.showGlobalEvents) {
+                    db.calendarSettingsDao().insert(
+                        current.copy(
+                            showReligiousNonHoliday = true,
+                            showNationalNonHoliday = true,
+                            showGlobalEvents = true
+                        )
                     )
-                )
+                }
             }
         }
-    }
 
-    // بکاپ خودکار
-    backupScope.launch {
-        while (true) {
-            delay(5_000L)
-            autoBackupToInternal(applicationContext, db)
+        // بکاپ خودکار
+        backupScope.launch {
+            while (true) {
+                delay(5_000L)
+                autoBackupToInternal(applicationContext, db)
+            }
+        }
+
+        setContent {
+            MaliManagerTheme { DadbanApp(db) }
         }
     }
-
-    setContent {
-        MaliManagerTheme { DadbanApp(db) }
-    }
-}
 
     override fun onStop() {
         super.onStop()
@@ -195,7 +195,6 @@ class MainActivity : ComponentActivity() {
 // کمک‌تابع‌ها
 // ═══════════════════════════════════════════════════════
 
-// ✅ نسخه Double
 private fun money(v: Double): String {
     val formatter = NumberFormat.getNumberInstance(Locale.US)
     formatter.minimumFractionDigits = 0
@@ -203,10 +202,8 @@ private fun money(v: Double): String {
     return formatter.format(v)
 }
 
-// ✅ نسخه Long (برای جاهایی که هنوز Long دارن)
 private fun money(v: Long): String = NumberFormat.getNumberInstance(Locale.US).format(v)
 
-// ✅ فرمت اعشار برای فیلد مبلغ
 private fun formatDecimalTextFieldValue(input: TextFieldValue): TextFieldValue {
     val text = input.text.replace(",", "")
     if (text.isEmpty()) return input.copy(text = "")
@@ -332,6 +329,7 @@ fun PageHeader(
         }
     }
 }
+
 // ═══════════════════════════════════════════════════════
 // PersonsScreen (بدون چرخ‌دنده)
 // ═══════════════════════════════════════════════════════
@@ -381,7 +379,6 @@ fun PersonsScreen(
                     Text(if (editMode) "✓" else "⇅", color = Color.White, fontSize = 22.sp)
                 }
 
-                // ✅ فقط دکمه + (چرخ‌دنده حذف شد)
                 if (!editMode) {
                     Spacer(Modifier.width(6.dp))
                     Box(
@@ -669,17 +666,16 @@ fun PersonScreen(
                     }
 
                     if (!editMode) {
-    // ❌ دکمه ویرایش حذف شد
-    Box(
-        Modifier
-            .size(44.dp)
-            .background(Color.White, shape = CircleShape)
-            .clickable { add = true },
-        contentAlignment = Alignment.Center
-    ) {
-        Text("+", color = HeaderBlue, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-    }
-}
+                        Box(
+                            Modifier
+                                .size(44.dp)
+                                .background(Color.White, shape = CircleShape)
+                                .clickable { add = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("+", color = HeaderBlue, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
 
@@ -860,6 +856,7 @@ fun SwipeableAccountCard(
         }
     }
 }
+
 // ═══════════════════════════════════════════════════════
 // AccountScreen
 // ═══════════════════════════════════════════════════════
@@ -1257,6 +1254,7 @@ fun JalaliCalendarDialog(
         }
     )
 }
+
 // ═══════════════════════════════════════════════════════
 // PersonEditor
 // ═══════════════════════════════════════════════════════
@@ -2163,6 +2161,7 @@ fun ConfirmDeleteDialog(title: String, message: String, onConfirm: () -> Unit, o
         dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
     )
 }
+
 // ═══════════════════════════════════════════════════════
 // Backup
 // ═══════════════════════════════════════════════════════
@@ -2174,7 +2173,6 @@ object Backup {
         val root = JSONObject()
         root.put("version", CURRENT_VERSION)
 
-        // ═══ دیتای مالی ═══
         val pp = JSONArray()
         for (p in db.persons().allNow()) {
             val o = JSONObject()
@@ -2199,7 +2197,7 @@ object Backup {
         for (a in db.accounts().allNow()) for (t in db.tx().byAccountNow(a.id)) {
             val o = JSONObject()
             o.put("accountId", t.accountId); o.put("dateMillis", t.dateMillis)
-            o.put("type", t.type); o.put("amount", t.amount)   // ✅ Double
+            o.put("type", t.type); o.put("amount", t.amount)
             o.put("note", t.note); o.put("isAutoProfit", t.isAutoProfit)
             o.put("profitKey", t.profitKey)
             tt.put(o)
@@ -2221,7 +2219,6 @@ object Backup {
         }
         root.put("profitPeriods", pp2)
 
-        // ═══ دیتای تقویم ═══
         val eventsArr = JSONArray()
         for (event in db.eventDao().allNow()) {
             val o = JSONObject()
@@ -2240,7 +2237,6 @@ object Backup {
         }
         root.put("userEvents", eventsArr)
 
-        // ═══ تنظیمات تقویم ═══
         val settingsObj = db.calendarSettingsDao().getNow()
         if (settingsObj != null) {
             val o = JSONObject()
@@ -2273,7 +2269,6 @@ object Backup {
 
             db.tx().clear(); db.accounts().clear(); db.persons().clear(); db.profitPeriod().clear()
 
-            // ═══ بازیابی مالی ═══
             val persons = root.optJSONArray("persons") ?: JSONArray()
             val personIdMap = mutableMapOf<Long, Long>()
             for (i in 0 until persons.length()) {
@@ -2309,7 +2304,6 @@ object Backup {
             for (i in 0 until txArr.length()) {
                 val o = txArr.getJSONObject(i)
                 val aid = accountIdMap[o.optLong("accountId")] ?: continue
-                // ✅ نسخه ۱: amount Long | نسخه ۲: amount Double
                 val amount = if (backupVersion >= 2) o.getDouble("amount")
                              else o.getLong("amount").toDouble()
                 db.tx().insert(Transaction(
@@ -2342,14 +2336,13 @@ object Backup {
                 ))
             }
 
-            // ═══ بازیابی دیتای تقویم (فقط نسخه ۲) ═══
             if (backupVersion >= 2) {
                 db.eventDao().deleteAllUserEvents()
 
                 val eventsArr = root.optJSONArray("userEvents") ?: JSONArray()
                 for (i in 0 until eventsArr.length()) {
                     val o = eventsArr.getJSONObject(i)
-                    if (!o.optBoolean("isUserCreated", false)) continue  // فقط رویدادهای کاربر
+                    if (!o.optBoolean("isUserCreated", false)) continue
                     db.eventDao().insert(Event(
                         title = o.getString("title"),
                         description = o.optString("description", ""),
