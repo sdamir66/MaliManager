@@ -63,6 +63,14 @@ fun CalendarHeader(
         }
     }
 
+    // ✅ محاسبه‌ی ماه و سال به‌صورت state (که با تغییر currentDate آپدیت شن)
+    val monthName = remember(currentDate, primaryCalendar) {
+        getMonthName(currentDate, primaryCalendar, hijriCacheMap)
+    }
+    val yearNumber = remember(currentDate, primaryCalendar) {
+        getYear(currentDate, primaryCalendar, hijriCacheMap)
+    }
+
     Box(
         Modifier
             .fillMaxWidth()
@@ -71,64 +79,62 @@ fun CalendarHeader(
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             )
             .statusBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 24.dp)
     ) {
         Column {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxWidth(),
-                pageSpacing = 0.dp
-            ) { page ->
-                val year = pageToYear(page)
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        getMonthName(currentDate, primaryCalendar, hijriCacheMap),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        fontSize = 22.sp
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        year.toString(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 22.sp,
-                        modifier = Modifier.clickable { showYearPicker = true }
-                    )
-                }
+            // ═══ ماه و سال (بدون Pager، فقط state) ═══
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    monthName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontSize = 22.sp
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    yearNumber.toString(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 22.sp,
+                    modifier = Modifier.clickable { showYearPicker = true }
+                )
             }
 
             Spacer(Modifier.height(10.dp))
 
+            // ═══ ترتیب: میلادی (چپ) - جلالی (وسط) - قمری (راست) ═══
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // ─── میلادی (چپ) ───
+                CalendarTypeChip(
+                    label = getChipLabel(currentDate, CalendarType.GREGORIAN, hijriCacheMap, primaryCalendar),
+                    isSelected = primaryCalendar == CalendarType.GREGORIAN,
+                    onClick = { onCalendarTypeChange(CalendarType.GREGORIAN) },
+                    modifier = Modifier.weight(1f)
+                )
+
+                // ─── جلالی (وسط) ───
                 CalendarTypeChip(
                     label = getChipLabel(currentDate, CalendarType.JALALI, hijriCacheMap, primaryCalendar),
                     isSelected = primaryCalendar == CalendarType.JALALI,
                     onClick = { onCalendarTypeChange(CalendarType.JALALI) },
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(Modifier.width(8.dp))
+
+                // ─── قمری (راست) ───
                 CalendarTypeChip(
                     label = getChipLabel(currentDate, CalendarType.HIJRI, hijriCacheMap, primaryCalendar),
                     isSelected = primaryCalendar == CalendarType.HIJRI,
                     onClick = { onCalendarTypeChange(CalendarType.HIJRI) },
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(Modifier.width(8.dp))
-                CalendarTypeChip(
-                    label = getChipLabel(currentDate, CalendarType.GREGORIAN, hijriCacheMap, primaryCalendar),
-                    isSelected = primaryCalendar == CalendarType.GREGORIAN,
-                    onClick = { onCalendarTypeChange(CalendarType.GREGORIAN) },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -137,7 +143,7 @@ fun CalendarHeader(
 
     if (showYearPicker) {
         YearPickerDialog(
-            currentYear = getYear(currentDate, primaryCalendar, hijriCacheMap),
+            currentYear = yearNumber,
             primaryCalendar = primaryCalendar,
             onYearSelected = { year ->
                 onDateChange(setYear(currentDate, year, primaryCalendar))
@@ -186,7 +192,7 @@ private fun getHijriFromCache(date: Date, cache: Map<String, HijriCache>): IntAr
 
 fun hijriMonthNameToNumber(name: String): Int {
     val clean = name.trim()
-        .replace("‌", "")  // حذف نیم‌فاصله
+        .replace("‌", "")
         .replace(" ", "")
         .replace("ي", "ی")
         .replace("ك", "ک")
