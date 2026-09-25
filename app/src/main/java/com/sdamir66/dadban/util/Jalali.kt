@@ -3,8 +3,13 @@ package com.sdamir66.dadban.util
 import java.util.Calendar
 import java.util.GregorianCalendar
 import java.util.Locale
+import java.util.TimeZone
 
 object Jalali {
+
+    // ✅ TimeZone گوشی (برای همه‌ی تبدیل‌ها)
+    private val DEVICE_TZ: TimeZone = TimeZone.getDefault()
+
     private val monthNames = arrayOf(
         "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
         "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
@@ -67,17 +72,20 @@ object Jalali {
         return r in intArrayOf(1, 5, 9, 13, 17, 22, 26, 30)
     }
 
+    // ✅ تبدیل با TimeZone گوشی
     private fun toJalali(millis: Long): IntArray {
-        val cal = GregorianCalendar().apply { timeInMillis = millis }
+        val cal = GregorianCalendar(DEVICE_TZ).apply { timeInMillis = millis }
         val gy = cal.get(Calendar.YEAR)
         val gm = cal.get(Calendar.MONTH) + 1
         val gd = cal.get(Calendar.DAY_OF_MONTH)
         return gregorianToJalali(gy, gm, gd)
     }
 
+    // ✅ تبدیل با TimeZone گوشی
     private fun toGregorian(jy: Int, jm: Int, jd: Int): Long {
         val g = jalaliToGregorian(jy, jm, jd)
-        val cal = GregorianCalendar(g[0], g[1] - 1, g[2], 0, 0, 0)
+        val cal = GregorianCalendar(DEVICE_TZ)
+        cal.set(g[0], g[1] - 1, g[2], 0, 0, 0)
         cal.set(Calendar.MILLISECOND, 0)
         return cal.timeInMillis
     }
