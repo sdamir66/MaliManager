@@ -11,8 +11,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarSettings
@@ -75,13 +77,16 @@ fun MonthCalendarView(
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             Column(Modifier.padding(8.dp).fillMaxHeight()) {
-                Row(Modifier.fillMaxWidth()) {
-                    listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
-                        Text(day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72),
-                            fontSize = 13.sp)
+                // ═══ هدر روزهای هفته (force LTR) ═══
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Row(Modifier.fillMaxWidth()) {
+                        listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
+                            Text(day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72),
+                                fontSize = 13.sp)
+                        }
                     }
                 }
 
@@ -92,29 +97,32 @@ fun MonthCalendarView(
                 val rows = 6
 
                 for (row in 0 until rows) {
-                    Row(Modifier.fillMaxWidth().weight(1f)) {
-                        for (col in 0 until 7) {
-                            val cellIndex = row * 7 + col
-                            val dayNumber = cellIndex - firstDayOfWeek + 1
-                            if (dayNumber in 1..daysInMonth) {
-                                val date = getDateForDay(monthDate, dayNumber, primaryCalendar)
-                                val isSelected = selectedDay?.let { isSameDay(it, date) } ?: false
-                                val isToday = isSameDay(Date(), date)
-                                val isFriday = col == 6
-                                val dayEvents = getEventsForDay(events, date, settings, hijriCacheMap)
-                                val hasHoliday = dayEvents.any { it.isHoliday }
+                    // ═══ هر ردیف روزها (force LTR) ═══
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Row(Modifier.fillMaxWidth().weight(1f)) {
+                            for (col in 0 until 7) {
+                                val cellIndex = row * 7 + col
+                                val dayNumber = cellIndex - firstDayOfWeek + 1
+                                if (dayNumber in 1..daysInMonth) {
+                                    val date = getDateForDay(monthDate, dayNumber, primaryCalendar)
+                                    val isSelected = selectedDay?.let { isSameDay(it, date) } ?: false
+                                    val isToday = isSameDay(Date(), date)
+                                    val isFriday = col == 6
+                                    val dayEvents = getEventsForDay(events, date, settings, hijriCacheMap)
+                                    val hasHoliday = dayEvents.any { it.isHoliday }
 
-                                DayCell(
-                                    day = dayNumber, date = date,
-                                    isSelected = isSelected, isToday = isToday,
-                                    isFriday = isFriday, hasHoliday = hasHoliday,
-                                    primaryCalendar = primaryCalendar, settings = settings,
-                                    hijriCacheMap = hijriCacheMap,
-                                    onClick = { onDayClick(date) },
-                                    modifier = Modifier.weight(1f).fillMaxHeight()
-                                )
-                            } else {
-                                Box(Modifier.weight(1f).fillMaxHeight())
+                                    DayCell(
+                                        day = dayNumber, date = date,
+                                        isSelected = isSelected, isToday = isToday,
+                                        isFriday = isFriday, hasHoliday = hasHoliday,
+                                        primaryCalendar = primaryCalendar, settings = settings,
+                                        hijriCacheMap = hijriCacheMap,
+                                        onClick = { onDayClick(date) },
+                                        modifier = Modifier.weight(1f).fillMaxHeight()
+                                    )
+                                } else {
+                                    Box(Modifier.weight(1f).fillMaxHeight())
+                                }
                             }
                         }
                     }
