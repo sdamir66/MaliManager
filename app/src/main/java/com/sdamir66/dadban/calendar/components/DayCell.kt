@@ -1,19 +1,21 @@
 package com.sdamir66.dadban.calendar.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarSettings
@@ -67,71 +69,28 @@ fun DayCell(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize().padding(1.dp)
         ) {
-            // ═══ روز اصلی (بزرگ) ═══
+            // ═══ روز اصلی ═══
             Text(
                 toPersianDigits(day.toString()),
-                fontSize = 20.sp,   // ← 18 → 20
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(Modifier.height(1.dp))  // ← 2 → 1
+            Spacer(Modifier.height(1.dp))
 
-            // ═══ ردیف تاریخ‌های فرعی ═══
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // ─── فرعی چپ ───
-                when {
-                    // اگه تقویم اصلی میلادیه → جلالی با دایره
-                    primaryCalendar == CalendarType.GREGORIAN -> {
-                        Box(
-                            Modifier
-                                .background(
-                                    color = if (isSelected) Color.White.copy(alpha = 0.25f)
-                                            else HeaderBlue.copy(alpha = 0.15f),
-                                    shape = CircleShape
-                                )
-                                .padding(horizontal = 4.dp, vertical = 1.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                toPersianDigits(
-                                    Jalali.toJalaliPublic(date.time)[2].toString()
-                                ),
-                                fontSize = 12.sp,
-                                color = if (isSelected) Color.White.copy(alpha = 0.9f)
-                                        else HeaderBlue,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Start,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                    // وگرنه → میلادی بدون دایره
-                    (settings?.showGregorianSmall ?: true) -> {
-                        Text(
-                            Calendar.getInstance().apply { time = date }
-                                .get(Calendar.DAY_OF_MONTH).toString(),
-                            fontSize = 13.sp,   // ← 12 → 13
-                            color = if (isSelected) Color.White.copy(alpha = 0.9f)
-                                    else Color(0xFF5C5D72),
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Start,
-                            maxLines = 1
-                        )
-                    }
-                    else -> Text("", fontSize = 13.sp)
-                }
-
-                // ─── فرعی راست ───
-                when {
-                    // اگه تقویم اصلی قمریه → جلالی با دایره
-                    primaryCalendar == CalendarType.HIJRI -> {
-                        if (settings?.showHijriSmall ?: true) {
+            // ═══ فرعی‌ها — force LTR تا ترتیب درست شه ═══
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // ─── فرعی چپ ───
+                    when {
+                        primaryCalendar == CalendarType.GREGORIAN -> {
+                            // تقویم اصلی میلادیه → جلالی با هایلایت دایره‌ای
                             Box(
                                 Modifier
                                     .background(
@@ -150,26 +109,64 @@ fun DayCell(
                                     color = if (isSelected) Color.White.copy(alpha = 0.9f)
                                             else HeaderBlue,
                                     fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.End,
                                     maxLines = 1
                                 )
                             }
                         }
+                        (settings?.showGregorianSmall ?: true) -> {
+                            Text(
+                                Calendar.getInstance().apply { time = date }
+                                    .get(Calendar.DAY_OF_MONTH).toString(),
+                                fontSize = 13.sp,
+                                color = if (isSelected) Color.White.copy(alpha = 0.9f)
+                                        else Color(0xFF5C5D72),
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
+                        else -> Text("", fontSize = 13.sp)
                     }
-                    // وگرنه → قمری بدون دایره
-                    (settings?.showHijriSmall ?: true) -> {
-                        val h = getHijriFromCacheOrFallback(date, settings, hijriCacheMap)
-                        Text(
-                            toPersianDigits(h[2].toString()),
-                            fontSize = 13.sp,   // ← 12 → 13
-                            color = if (isSelected) Color.White.copy(alpha = 0.9f)
-                                    else Color(0xFF5C5D72),
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.End,
-                            maxLines = 1
-                        )
+
+                    // ─── فرعی راست ───
+                    when {
+                        primaryCalendar == CalendarType.HIJRI -> {
+                            if (settings?.showHijriSmall ?: true) {
+                                Box(
+                                    Modifier
+                                        .background(
+                                            color = if (isSelected) Color.White.copy(alpha = 0.25f)
+                                                    else HeaderBlue.copy(alpha = 0.15f),
+                                            shape = CircleShape
+                                        )
+                                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        toPersianDigits(
+                                            Jalali.toJalaliPublic(date.time)[2].toString()
+                                        ),
+                                        fontSize = 12.sp,
+                                        color = if (isSelected) Color.White.copy(alpha = 0.9f)
+                                                else HeaderBlue,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                        (settings?.showHijriSmall ?: true) -> {
+                            val h = getHijriFromCacheOrFallback(date, settings, hijriCacheMap)
+                            Text(
+                                toPersianDigits(h[2].toString()),
+                                fontSize = 13.sp,
+                                color = if (isSelected) Color.White.copy(alpha = 0.9f)
+                                        else Color(0xFF5C5D72),
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
+                        else -> Text("", fontSize = 13.sp)
                     }
-                    else -> Text("", fontSize = 13.sp)
                 }
             }
         }
