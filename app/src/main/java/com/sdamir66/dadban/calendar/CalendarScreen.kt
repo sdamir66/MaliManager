@@ -3,7 +3,6 @@ package com.sdamir66.dadban.calendar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,19 +26,23 @@ fun CalendarScreen(db: AppDb) {
 
     var settings by remember { mutableStateOf<CalendarSettings?>(null) }
     var hijriCacheMap by remember { mutableStateOf<Map<String, HijriCache>>(emptyMap()) }
+    var refreshTrigger by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         settings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
     }
 
     // ✅ بارگذاری cache تقویم قمری — اولویت: دیتابیس → asset
-    LaunchedEffect(settings) {
+    // با refreshTrigger دوباره اجرا می‌شه وقتی تقویم به‌روزرسانی شد
+    LaunchedEffect(settings, refreshTrigger) {
         if (settings != null) {
             withContext(Dispatchers.IO) {
                 val year = Jalali.nowJalali()[0]
 
+                // ۱. دیتابیس (شامل همه‌ی روزها از API)
                 val dbItems = db.hijriCacheDao().getAllForYear(year)
 
+                // ۲. اگه دیتابیس خالی بود، از asset
                 val finalItems = if (dbItems.isNotEmpty()) {
                     dbItems
                 } else {
@@ -105,29 +108,27 @@ fun CalendarScreen(db: AppDb) {
             )
         }
 
-        // تقویم ماهانه — بدون offset (به هدر می‌چسبه)
+        // تقویم ماهانه — چسبیده به هدر
         item {
-            Box(Modifier.offset(y = 0.dp)) {
-                MonthCalendarView(
-                    currentDate = currentDate,
-                    primaryCalendar = primaryCalendar,
-                    settings = settings,
-                    hijriCacheMap = hijriCacheMap,
-                    events = visibleEvents,
-                    selectedDay = selectedDay,
-                    onDayClick = { date ->
-                        selectedDay = date
-                        currentDate = date
-                    },
-                    onDateChange = { newDate -> currentDate = newDate }
-                )
-            }
+            MonthCalendarView(
+                currentDate = currentDate,
+                primaryCalendar = primaryCalendar,
+                settings = settings,
+                hijriCacheMap = hijriCacheMap,
+                events = visibleEvents,
+                selectedDay = selectedDay,
+                onDayClick = { date ->
+                    selectedDay = date
+                    currentDate = date
+                },
+                onDateChange = { newDate -> currentDate = newDate }
+            )
         }
 
         // اوقات شرعی
         if (settings!!.showPrayerTimes && prayerTimes != null) {
             item {
-                Box(Modifier.offset(y = 10.dp)) {
+                Box(Modifier.offset(y = 8.dp)) {
                     PrayerTimesSection(prayerTimes = prayerTimes)
                 }
             }
@@ -135,7 +136,7 @@ fun CalendarScreen(db: AppDb) {
 
         // رویدادهای روز
         item {
-            Box(Modifier.offset(y = if (settings!!.showPrayerTimes) 20.dp else 10.dp)) {
+            Box(Modifier.offset(y = if (settings!!.showPrayerTimes) 18.dp else 8.dp)) {
                 EventsSection(
                     events = visibleEvents,
                     selectedDate = selectedDay ?: currentDate,
