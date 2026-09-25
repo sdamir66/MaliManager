@@ -32,17 +32,14 @@ fun CalendarScreen(db: AppDb) {
         settings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
     }
 
-    // ✅ بارگذاری cache تقویم قمری
-    // اولویت: دیتابیس → asset
+    // ✅ بارگذاری cache تقویم قمری — اولویت: دیتابیس → asset
     LaunchedEffect(settings) {
         if (settings != null) {
             withContext(Dispatchers.IO) {
                 val year = Jalali.nowJalali()[0]
 
-                // ۱. دیتابیس (شامل همه‌ی روزها از API)
                 val dbItems = db.hijriCacheDao().getAllForYear(year)
 
-                // ۲. اگه دیتابیس خالی بود، از asset
                 val finalItems = if (dbItems.isNotEmpty()) {
                     dbItems
                 } else {
@@ -96,6 +93,7 @@ fun CalendarScreen(db: AppDb) {
     }
 
     LazyColumn(Modifier.fillMaxSize().background(BgLight)) {
+        // هدر
         item {
             CalendarHeader(
                 currentDate = currentDate,
@@ -107,8 +105,9 @@ fun CalendarScreen(db: AppDb) {
             )
         }
 
+        // تقویم ماهانه — بدون offset (به هدر می‌چسبه)
         item {
-            Box(Modifier.offset(y = (-50).dp)) {
+            Box(Modifier.offset(y = 0.dp)) {
                 MonthCalendarView(
                     currentDate = currentDate,
                     primaryCalendar = primaryCalendar,
@@ -125,16 +124,18 @@ fun CalendarScreen(db: AppDb) {
             }
         }
 
+        // اوقات شرعی
         if (settings!!.showPrayerTimes && prayerTimes != null) {
             item {
-                Box(Modifier.offset(y = (-10).dp)) {
+                Box(Modifier.offset(y = 10.dp)) {
                     PrayerTimesSection(prayerTimes = prayerTimes)
                 }
             }
         }
 
+        // رویدادهای روز
         item {
-            Box(Modifier.offset(y = if (settings!!.showPrayerTimes) (-15).dp else 0.dp)) {
+            Box(Modifier.offset(y = if (settings!!.showPrayerTimes) 20.dp else 10.dp)) {
                 EventsSection(
                     events = visibleEvents,
                     selectedDate = selectedDay ?: currentDate,
