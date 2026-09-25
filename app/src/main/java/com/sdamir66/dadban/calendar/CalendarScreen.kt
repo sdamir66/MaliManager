@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.sdamir66.dadban.calendar.components.*
 import com.sdamir66.dadban.calendar.data.*
@@ -18,11 +19,12 @@ import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.util.Jalali
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Calendar
 import java.util.Date
 
 @Composable
 fun CalendarScreen(db: AppDb) {
+    val context = LocalContext.current
+
     var settings by remember { mutableStateOf<CalendarSettings?>(null) }
     var hijriCacheMap by remember { mutableStateOf<Map<String, HijriCache>>(emptyMap()) }
 
@@ -30,13 +32,26 @@ fun CalendarScreen(db: AppDb) {
         settings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
     }
 
-    // ✅ بارگذاری cache تقویم قمری
+    // ✅ بارگذاری cache تقویم قمری از asset + دیتابیس
     LaunchedEffect(settings) {
         if (settings != null) {
             withContext(Dispatchers.IO) {
                 val year = Jalali.nowJalali()[0]
-                val items = db.hijriCacheDao().getAllForYear(year)
-                hijriCacheMap = items.associateBy { it.jalaliDate }
+
+                // بارگذاری داده‌های asset (برای سال‌های قبل از 1405)
+                HijriOfficialData.ensureLoaded(context)
+                val assetItems = HijriOfficialData.getAllCaches()
+                    .filter { it.jalaliYear == year }
+
+                // بارگذاری داده‌های API از دیتابیس
+                val dbItems = db.hijriCacheDao().getAllForYear(year)
+
+                // ترکیب: asset اول، بعد دیتابیس (دیتابیس اولویت داره اگه تکراری باشه)
+                val combined = mutableMapOf<String, HijriCache>()
+                assetItems.forEach { combined[it.jalaliDate] = it }
+                dbItems.forEach { combined[it.jalaliDate] = it }
+
+                hijriCacheMap = combined
             }
         }
     }
