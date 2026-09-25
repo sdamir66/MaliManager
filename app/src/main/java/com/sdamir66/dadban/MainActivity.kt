@@ -57,6 +57,7 @@ import com.sdamir66.dadban.util.Jalali
 import com.sdamir66.dadban.calendar.data.Event
 import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.calendar.data.EventCategory
+import com.sdamir66.dadban.calendar.data.HijriRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -129,53 +130,55 @@ class MainActivity : ComponentActivity() {
     private val backupScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate(b: Bundle?) {
-        super.onCreate(b)
-        db = AppDb.build(applicationContext)
+    super.onCreate(b)
+    db = AppDb.build(applicationContext)
 
-        window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
-        window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
+    window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
+    window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
 
-        // ✅ insert رویدادهای آماده + به‌روزرسانی تنظیمات قدیمی
-        backupScope.launch {
-            delay(500L)
+    // ✅ insert رویدادهای آماده + به‌روزرسانی تنظیمات قدیمی
+    backupScope.launch {
+        delay(500L)
 
-            // رویدادهای آماده (فقط بار اول)
-            if (db.eventDao().allNow().isEmpty()) {
-                db.eventDao().insertAll(IranEvents.events)
-            }
+        // ═══ راه‌اندازی تقویم قمری ═══
+        HijriRepository.init(applicationContext, db)
 
-            // تنظیمات پیش‌فرض
-            val current = db.calendarSettingsDao().getNow()
-            if (current == null) {
-                db.calendarSettingsDao().insert(CalendarSettings())
-            } else {
-                // ✅ به‌روزرسانی تنظیمات قدیمی (اگه همه false بودن → true)
-                if (!current.showReligiousNonHoliday &&
-                    !current.showNationalNonHoliday &&
-                    !current.showGlobalEvents) {
-                    db.calendarSettingsDao().insert(
-                        current.copy(
-                            showReligiousNonHoliday = true,
-                            showNationalNonHoliday = true,
-                            showGlobalEvents = true
-                        )
+        // ═══ رویدادهای آماده (فقط بار اول) ═══
+        if (db.eventDao().allNow().isEmpty()) {
+            db.eventDao().insertAll(IranEvents.events)
+        }
+
+        // ═══ تنظیمات پیش‌فرض ═══
+        val current = db.calendarSettingsDao().getNow()
+        if (current == null) {
+            db.calendarSettingsDao().insert(CalendarSettings())
+        } else {
+            if (!current.showReligiousNonHoliday &&
+                !current.showNationalNonHoliday &&
+                !current.showGlobalEvents) {
+                db.calendarSettingsDao().insert(
+                    current.copy(
+                        showReligiousNonHoliday = true,
+                        showNationalNonHoliday = true,
+                        showGlobalEvents = true
                     )
-                }
+                )
             }
-        }
-
-        // بکاپ خودکار
-        backupScope.launch {
-            while (true) {
-                delay(5_000L)
-                autoBackupToInternal(applicationContext, db)
-            }
-        }
-
-        setContent {
-            MaliManagerTheme { DadbanApp(db) }
         }
     }
+
+    // بکاپ خودکار
+    backupScope.launch {
+        while (true) {
+            delay(5_000L)
+            autoBackupToInternal(applicationContext, db)
+        }
+    }
+
+    setContent {
+        MaliManagerTheme { DadbanApp(db) }
+    }
+}
 
     override fun onStop() {
         super.onStop()
