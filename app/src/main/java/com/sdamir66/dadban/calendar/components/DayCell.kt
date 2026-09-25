@@ -65,18 +65,18 @@ fun DayCell(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize().padding(2.dp)
+            modifier = Modifier.fillMaxSize().padding(1.dp)
         ) {
             // ═══ روز اصلی (بزرگ) ═══
             Text(
                 toPersianDigits(day.toString()),
-                fontSize = 18.sp,
+                fontSize = 20.sp,   // ← 18 → 20
                 fontWeight = FontWeight.Bold,
                 color = textColor,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(1.dp))  // ← 2 → 1
 
             // ═══ ردیف تاریخ‌های فرعی ═══
             Row(
@@ -90,20 +90,19 @@ fun DayCell(
                     primaryCalendar == CalendarType.GREGORIAN -> {
                         Box(
                             Modifier
-                                .border(
-                                    width = 1.5.dp,
-                                    color = if (isSelected) Color.White.copy(alpha = 0.9f)
-                                            else HeaderBlue.copy(alpha = 0.6f),
+                                .background(
+                                    color = if (isSelected) Color.White.copy(alpha = 0.25f)
+                                            else HeaderBlue.copy(alpha = 0.15f),
                                     shape = CircleShape
                                 )
-                                .padding(horizontal = 3.dp, vertical = 1.dp),
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 toPersianDigits(
                                     Jalali.toJalaliPublic(date.time)[2].toString()
                                 ),
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 color = if (isSelected) Color.White.copy(alpha = 0.9f)
                                         else HeaderBlue,
                                 fontWeight = FontWeight.Bold,
@@ -117,7 +116,7 @@ fun DayCell(
                         Text(
                             Calendar.getInstance().apply { time = date }
                                 .get(Calendar.DAY_OF_MONTH).toString(),
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,   // ← 12 → 13
                             color = if (isSelected) Color.White.copy(alpha = 0.9f)
                                     else Color(0xFF5C5D72),
                             fontWeight = FontWeight.Medium,
@@ -125,7 +124,7 @@ fun DayCell(
                             maxLines = 1
                         )
                     }
-                    else -> Text("", fontSize = 12.sp)
+                    else -> Text("", fontSize = 13.sp)
                 }
 
                 // ─── فرعی راست ───
@@ -135,20 +134,19 @@ fun DayCell(
                         if (settings?.showHijriSmall ?: true) {
                             Box(
                                 Modifier
-                                    .border(
-                                        width = 1.5.dp,
-                                        color = if (isSelected) Color.White.copy(alpha = 0.9f)
-                                                else HeaderBlue.copy(alpha = 0.6f),
+                                    .background(
+                                        color = if (isSelected) Color.White.copy(alpha = 0.25f)
+                                                else HeaderBlue.copy(alpha = 0.15f),
                                         shape = CircleShape
                                     )
-                                    .padding(horizontal = 3.dp, vertical = 1.dp),
+                                    .padding(horizontal = 4.dp, vertical = 1.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     toPersianDigits(
                                         Jalali.toJalaliPublic(date.time)[2].toString()
                                     ),
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     color = if (isSelected) Color.White.copy(alpha = 0.9f)
                                             else HeaderBlue,
                                     fontWeight = FontWeight.Bold,
@@ -163,7 +161,7 @@ fun DayCell(
                         val h = getHijriFromCacheOrFallback(date, settings, hijriCacheMap)
                         Text(
                             toPersianDigits(h[2].toString()),
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,   // ← 12 → 13
                             color = if (isSelected) Color.White.copy(alpha = 0.9f)
                                     else Color(0xFF5C5D72),
                             fontWeight = FontWeight.Medium,
@@ -171,7 +169,7 @@ fun DayCell(
                             maxLines = 1
                         )
                     }
-                    else -> Text("", fontSize = 12.sp)
+                    else -> Text("", fontSize = 13.sp)
                 }
             }
         }
