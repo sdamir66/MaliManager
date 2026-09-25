@@ -110,7 +110,7 @@ fun CalendarScreen(db: AppDb) {
 
         // تقویم ماهانه
         item {
-            Box(Modifier.offset(y = (-30).dp)) {
+            Box(Modifier.offset(y = (-20).dp)) {
                 MonthCalendarView(
                     currentDate = currentDate,
                     primaryCalendar = primaryCalendar,
