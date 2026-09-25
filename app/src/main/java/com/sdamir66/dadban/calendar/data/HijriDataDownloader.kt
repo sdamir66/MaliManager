@@ -1,7 +1,9 @@
 package com.sdamir66.dadban.calendar.data
 
+import android.content.Context
 import com.sdamir66.dadban.data.AppDb
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -9,14 +11,20 @@ import java.util.Locale
 
 // ═══════════════════════════════════════════════════════════════
 //  HijriDataDownloader
-//  دانلود و پارس داده‌های تقویم قمری از pipe2time.ir
+//  دانلود داده‌های تقویم قمری از API pipe2time.ir (GitHub Pages)
+//  منبع: https://github.com/HMarzban/pipe2time.ir
+//  بازه‌ی پشتیبانی: 1390 تا 1410 خورشیدی
 // ═══════════════════════════════════════════════════════════════
 
 object HijriDataDownloader {
 
-    // ═══ آدرس‌های دانلود ═══
-    private const val BASE_URL = "https://pipe2time.ir/api/calendar"
-    private const val TIMEOUT_MS = 15_000
+    // ═══ آدرس API ═══
+    private const val BASE_URL = "https://hmarzban.github.io/pipe2time.ir/api"
+    private const val TIMEOUT_MS = 20_000
+
+    // ═══ بازه‌ی سال‌های پشتیبانی‌شده توسط API ═══
+    const val MIN_YEAR = 1390
+    const val MAX_YEAR = 1410
 
     // ═══════════════════════════════════════════════════════════
     //  دانلود + ذخیره در دیتابیس
@@ -27,6 +35,14 @@ object HijriDataDownloader {
         jalaliYear: Int
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
+            if (jalaliYear < MIN_YEAR || jalaliYear > MAX_YEAR) {
+                return@withContext Result.failure(
+                    IllegalArgumentException(
+                        "سال $jalaliYear پشتیبانی نمی‌شود. بازه‌ی مجاز: $MIN_YEAR تا $MAX_YEAR"
+                    )
+                )
+            }
+
             val dao: HijriCacheDao = db.hijriCacheDao()
             val list = downloadYear(jalaliYear)
             if (list.isNotEmpty()) {
@@ -41,8 +57,8 @@ object HijriDataDownloader {
     // ═══════════════════════════════════════════════════════════
     //  دانلود داده‌ی یک سال جلالی و تبدیل به لیست HijriCache
     // ═══════════════════════════════════════════════════════════
-    fun downloadYear(jalaliYear: Int): List<HijriCache> {
-        val url = "$BASE_URL?year=$jalaliYear"
+    private fun downloadYear(jalaliYear: Int): List<HijriCache> {
+        val url = "$BASE_URL/$jalaliYear/index.json"
         val jsonText = fetchUrl(url)
         return parseJson(jsonText, jalaliYear)
     }
@@ -72,6 +88,13 @@ object HijriDataDownloader {
 
     // ═══════════════════════════════════════════════════════════
     //  پارس JSON و ساخت لیست HijriCache
+    //  ساختار API:
+    //  {
+    //    "1405": [
+    //      { "header": {...}, "events": [...], "weeks": [...] },
+    //      ...
+    //    ]
+    //  }
     // ═══════════════════════════════════════════════════════════
     private fun parseJson(jsonText: String, jalaliYear: Int): List<HijriCache> {
         val root = JSONObject(jsonText)
@@ -91,11 +114,10 @@ object HijriDataDownloader {
 
             val jMonth = monthIndex + 1
 
-            // ✅ متغیرهای محلی برای هر ماه
             var lastHijriMonth: String? = null
             var hijriMonthIndex = 0
 
-            // Parse رویدادها — مستقیم به JSONArray
+            // Parse رویدادها
             val eventsArray = monthData.optJSONArray("events") ?: JSONArray()
             val eventsByDay = mutableMapOf<Int, JSONArray>()
             for (i in 0 until eventsArray.length()) {
@@ -116,7 +138,6 @@ object HijriDataDownloader {
                 val jDay = dayObj.optString("j", "").toIntOrNull() ?: continue
                 val qDay = dayObj.optString("q", "").toIntOrNull() ?: continue
 
-                // ✅ اگه qDay == 1 و ماه قبلی ست شده → ماه بعدی
                 if (qDay == 1 && lastHijriMonth != null) {
                     hijriMonthIndex += 1
                 }
