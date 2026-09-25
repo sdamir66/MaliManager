@@ -80,7 +80,7 @@ fun DayCell(
 
             Spacer(Modifier.height(1.dp))
 
-            // ═══ فرعی‌ها — force LTR تا ترتیب درست شه ═══
+            // ═══ فرعی‌ها — force LTR فقط برای این Row ═══
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Row(
                     Modifier.fillMaxWidth(),
@@ -90,7 +90,7 @@ fun DayCell(
                     // ─── فرعی چپ ───
                     when {
                         primaryCalendar == CalendarType.GREGORIAN -> {
-                            // تقویم اصلی میلادیه → جلالی با هایلایت دایره‌ای
+                            // تقویم اصلی میلادیه → جلالی با هایلایت
                             Box(
                                 Modifier
                                     .background(
@@ -114,6 +114,7 @@ fun DayCell(
                             }
                         }
                         (settings?.showGregorianSmall ?: true) -> {
+                            // میلادی بدون دایره
                             Text(
                                 Calendar.getInstance().apply { time = date }
                                     .get(Calendar.DAY_OF_MONTH).toString(),
