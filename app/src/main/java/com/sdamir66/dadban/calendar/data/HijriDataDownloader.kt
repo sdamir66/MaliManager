@@ -23,23 +23,16 @@ object HijriDataDownloader {
     private const val TIMEOUT_MS = 20_000
 
     // ═══ بازه‌ی سال‌های پشتیبانی‌شده توسط API ═══
-    const val MIN_YEAR = 1390
-    const val MAX_YEAR = 1410
+    const val MIN_API_YEAR = 1405
 
-    // ═══════════════════════════════════════════════════════════
-    //  دانلود + ذخیره در دیتابیس
-    //  امضا: (AppDb, Int) → Result<Int>
-    // ═══════════════════════════════════════════════════════════
     suspend fun downloadAndSave(
         db: AppDb,
         jalaliYear: Int
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            if (jalaliYear < MIN_YEAR || jalaliYear > MAX_YEAR) {
+            if (jalaliYear < MIN_API_YEAR) {
                 return@withContext Result.failure(
-                    IllegalArgumentException(
-                        "سال $jalaliYear پشتیبانی نمی‌شود. بازه‌ی مجاز: $MIN_YEAR تا $MAX_YEAR"
-                    )
+                    IllegalArgumentException("سال $jalaliYear پشتیبانی نمی‌شود")
                 )
             }
 
