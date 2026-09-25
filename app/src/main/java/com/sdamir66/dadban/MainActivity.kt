@@ -47,7 +47,6 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.HijriRepository
-import com.sdamir66.dadban.calendar.data.IranEvents
 import com.sdamir66.dadban.data.*
 import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.CreditGreen
@@ -129,56 +128,53 @@ class MainActivity : ComponentActivity() {
     private lateinit var db: AppDb
     private val backupScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    override fun onCreate(b: Bundle?) {
-        super.onCreate(b)
-        db = AppDb.build(applicationContext)
+override fun onCreate(b: Bundle?) {
+    super.onCreate(b)
+    db = AppDb.build(applicationContext)
 
-        window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
-        window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
+    window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
+    window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
 
-        // ✅ insert رویدادهای آماده + به‌روزرسانی تنظیمات قدیمی + راه‌اندازی تقویم قمری
-        backupScope.launch {
-            delay(500L)
+    // ✅ راه‌اندازی تقویم قمری + تنظیمات پیش‌فرض
+    backupScope.launch {
+        delay(500L)
 
-            // ═══ راه‌اندازی تقویم قمری ═══
-            HijriRepository.init(applicationContext, db)
+        // ═══ راه‌اندازی تقویم قمری ═══
+        // این کار hijri_official.txt (1380-1404) و calendar.json (1405) رو
+        // توی دیتابیس seed می‌کنه
+        HijriRepository.init(applicationContext, db)
 
-            // ═══ رویدادهای آماده (فقط بار اول) ═══
-            if (db.eventDao().allNow().isEmpty()) {
-                db.eventDao().insertAll(IranEvents.events)
-            }
-
-            // ═══ تنظیمات پیش‌فرض ═══
-            val current = db.calendarSettingsDao().getNow()
-            if (current == null) {
-                db.calendarSettingsDao().insert(CalendarSettings())
-            } else {
-                if (!current.showReligiousNonHoliday &&
-                    !current.showNationalNonHoliday &&
-                    !current.showGlobalEvents) {
-                    db.calendarSettingsDao().insert(
-                        current.copy(
-                            showReligiousNonHoliday = true,
-                            showNationalNonHoliday = true,
-                            showGlobalEvents = true
-                        )
+        // ═══ تنظیمات پیش‌فرض ═══
+        val current = db.calendarSettingsDao().getNow()
+        if (current == null) {
+            db.calendarSettingsDao().insert(CalendarSettings())
+        } else {
+            if (!current.showReligiousNonHoliday &&
+                !current.showNationalNonHoliday &&
+                !current.showGlobalEvents) {
+                db.calendarSettingsDao().insert(
+                    current.copy(
+                        showReligiousNonHoliday = true,
+                        showNationalNonHoliday = true,
+                        showGlobalEvents = true
                     )
-                }
+                )
             }
-        }
-
-        // بکاپ خودکار
-        backupScope.launch {
-            while (true) {
-                delay(5_000L)
-                autoBackupToInternal(applicationContext, db)
-            }
-        }
-
-        setContent {
-            MaliManagerTheme { DadbanApp(db) }
         }
     }
+
+    // بکاپ خودکار
+    backupScope.launch {
+        while (true) {
+            delay(5_000L)
+            autoBackupToInternal(applicationContext, db)
+        }
+    }
+
+    setContent {
+        MaliManagerTheme { DadbanApp(db) }
+    }
+}
 
     override fun onStop() {
         super.onStop()
