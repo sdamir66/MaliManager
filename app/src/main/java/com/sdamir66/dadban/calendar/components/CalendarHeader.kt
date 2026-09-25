@@ -71,7 +71,7 @@ fun CalendarHeader(
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
             )
             .statusBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp)
     ) {
         Column {
             HorizontalPager(
