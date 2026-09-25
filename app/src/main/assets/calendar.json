@@ -7,16 +7,16 @@
       "hijriMonths": [
         { "hijriYear": 1447, "hijriMonth": 10, "startJalali": "1405/01/01" },
         { "hijriYear": 1447, "hijriMonth": 11, "startJalali": "1405/01/30" },
-        { "hijriYear": 1447, "hijriMonth": 12, "startJalali": "1405/02/29" },
+        { "hijriYear": 1447, "hijriMonth": 12, "startJalali": "1405/02/28" },
         { "hijriYear": 1448, "hijriMonth": 1, "startJalali": "1405/03/26" },
         { "hijriYear": 1448, "hijriMonth": 2, "startJalali": "1405/04/25" },
         { "hijriYear": 1448, "hijriMonth": 3, "startJalali": "1405/05/23" },
         { "hijriYear": 1448, "hijriMonth": 4, "startJalali": "1405/06/22" },
-        { "hijriYear": 1448, "hijriMonth": 5, "startJalali": "1405/07/21" },
+        { "hijriYear": 1448, "hijriMonth": 5, "startJalali": "1405/07/20" },
         { "hijriYear": 1448, "hijriMonth": 6, "startJalali": "1405/08/20" },
-        { "hijriYear": 1448, "hijriMonth": 7, "startJalali": "1405/09/19" },
-        { "hijriYear": 1448, "hijriMonth": 8, "startJalali": "1405/10/19" },
-        { "hijriYear": 1448, "hijriMonth": 9, "startJalali": "1405/11/17" },
+        { "hijriYear": 1448, "hijriMonth": 7, "startJalali": "1405/09/20" },
+        { "hijriYear": 1448, "hijriMonth": 8, "startJalali": "1405/10/20" },
+        { "hijriYear": 1448, "hijriMonth": 9, "startJalali": "1405/11/19" },
         { "hijriYear": 1448, "hijriMonth": 10, "startJalali": "1405/12/19" }
       ]
     }
