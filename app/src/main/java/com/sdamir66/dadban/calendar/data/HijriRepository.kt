@@ -12,22 +12,18 @@ import kotlinx.coroutines.withContext
 //  لایه‌ی اصلی دسترسی به تاریخ قمری
 //
 //  منابع به ترتیب اولویت:
-//  ۱. asset رسمی (قبل از ۱۴۰۵) — یک بار seed می‌شه
-//  ۲. API pipe2time.ir (۱۳۹۰ تا ۱۴۱۰) — با دکمه‌ی به‌روزرسانی
-//  ۳. حالت قراردادی (بعد از ۱۴۱۰) — محاسبه‌ی درجا
+//  ۱. دیتابیس (شامل asset seed شده + API cache)
+//  ۲. محاسبه از روی شروع ماه قمری (توی دیتابیس)
+//  ۳. حالت قراردادی (بعد از ۱۴۱۰)
 // ═══════════════════════════════════════════════════════════════
 
 object HijriRepository {
 
-    // ═══ بازه‌ی سال‌های API ═══
-    private const val API_MIN_YEAR = 1390
-    private const val API_MAX_YEAR = 1410
-
-    // ═══ بازه‌ی asset ═══
-    private const val ASSET_MAX_YEAR = 1404
+    // ═══ حداقل سالی که API پشتیبانی می‌کنه ═══
+    // (چون asset تا 1404 رو پوشش می‌ده)
+    private const val MIN_API_YEAR = 1405
 
     // ═══ نقطه‌ی شروع حالت قراردادی ═══
-    // این مقدار توی initialize محاسبه و ذخیره می‌شه
     @Volatile
     private var contractualStartJalaliMillis: Long? = null
     @Volatile
@@ -58,7 +54,6 @@ object HijriRepository {
     private suspend fun seedAssetIfNeeded(db: AppDb) {
         val dao = db.hijriCacheDao()
 
-        // اگه هیچ دیتایی از asset توی دیتابیس نیست، اضافه کن
         val allCaches = HijriOfficialData.getAllCaches()
         if (allCaches.isEmpty()) return
 
@@ -77,7 +72,7 @@ object HijriRepository {
         if (contractualStartJalaliMillis != null) return
 
         // آخرین روز 1410 توی دیتابیس
-        val lastDayOf1410 = "1410/12/29" // فرض: 1410 کبیسه نیست
+        val lastDayOf1410 = "1410/12/29"  // فرض: 1410 کبیسه نیست
         val lastDayMillis = Jalali.parse(lastDayOf1410) ?: return
 
         // روز بعدش
@@ -130,7 +125,6 @@ object HijriRepository {
 
     // ═══════════════════════════════════════════════════════════
     //  محاسبه از روی شروع ماه‌های قمری توی دیتابیس
-    //  (برای روزهای میانی که توی دیتابیس نیستن)
     // ═══════════════════════════════════════════════════════════
     private suspend fun calculateFromDbStarts(
         db: AppDb,
@@ -181,21 +175,18 @@ object HijriRepository {
         val startMillis = contractualStartJalaliMillis ?: return null
         val startHijriYear = contractualStartHijriYear ?: return null
         val startHijriMonth = contractualStartHijriMonth ?: return null
-        val startHijriDay = contractualStartHijriDay ?: return null
 
         val targetDate = String.format("%04d/%02d/%02d", jalaliYear, jalaliMonth, jalaliDay)
         val targetMillis = Jalali.parse(targetDate) ?: return null
 
         if (targetMillis < startMillis) return null
 
-        var daysFromStart = ((targetMillis - startMillis) / 86_400_000L).toInt() + (startHijriDay - 1)
+        val daysFromStart = ((targetMillis - startMillis) / 86_400_000L).toInt()
 
         var hijriYear = startHijriYear
         var hijriMonth = startHijriMonth
         var hijriDay = 1
 
-        // از روز شروع، روزها رو می‌شمُریم تا به target برسیم
-        // هر ماه: فرد ۳۰، زوج ۲۹
         var remaining = daysFromStart
         var currentMonth = hijriMonth
 
@@ -231,29 +222,50 @@ object HijriRepository {
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  به‌روزرسانی از API (دکمه‌ی «به‌روزرسانی»)
-    //  از ۱۳۹۰ تا ۱۴۱۰ همه رو یه بار دانلود می‌کنه
+    //  به‌روزرسانی از API
+    //  از سال ۱۴۰۵ شروع می‌کنه و تا هر سالی که API جواب بده ادامه می‌ده
     // ═══════════════════════════════════════════════════════════
     suspend fun refreshFromApi(
         db: AppDb,
-        onProgress: (current: Int, total: Int, year: Int) -> Unit = { _, _, _ -> }
+        onProgress: (current: Int, year: Int) -> Unit = { _, _ -> }
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
+            // ═══ همیشه از 1405 شروع کن (چون asset تا 1404 رو پوشش می‌ده) ═══
+            val startYear = MIN_API_YEAR
+
+            // ═══ حداکثر 20 سال جلوتر (فقط برای امنیت) ═══
+            val maxAttemptYear = startYear + 20
+
             var totalSaved = 0
-            val years = (API_MIN_YEAR..API_MAX_YEAR).toList()
+            var successfulYears = 0
 
-            for ((index, year) in years.withIndex()) {
-                onProgress(index + 1, years.size, year)
+            for (year in startYear..maxAttemptYear) {
+                onProgress(successfulYears + 1, year)
 
+                // ═══ اگه سال توی دیتابیس هست، رد شو ═══
+                val existingCount = db.hijriCacheDao().countForYear(year)
+                if (existingCount > 0) {
+                    successfulYears++
+                    continue
+                }
+
+                // ═══ تلاش برای دانلود ═══
                 val result = HijriDataDownloader.downloadAndSave(db, year)
+
                 if (result.isSuccess) {
                     totalSaved += result.getOrNull() ?: 0
+                    successfulYears++
+                    delay(7_000L)  // rate limit
+                } else {
+                    // ═══ خطا داد (احتمالاً 404)، متوقف شو ═══
+                    break
                 }
+            }
 
-                // rate limit: 10/minute → 7 ثانیه بین درخواست‌ها
-                if (index < years.size - 1) {
-                    delay(7_000L)
-                }
+            if (successfulYears == 0) {
+                return@withContext Result.failure(
+                    Exception("هیچ سالی دانلود نشد. اتصال اینترنت رو چک کن.")
+                )
             }
 
             Result.success(totalSaved)
