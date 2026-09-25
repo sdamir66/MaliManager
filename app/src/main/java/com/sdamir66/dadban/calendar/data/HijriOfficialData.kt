@@ -6,7 +6,8 @@ import android.content.Context
 //  HijriOfficialData
 //  داده‌های رسمی تقویم قمری ایران (مؤسسه ژئوفیزیک دانشگاه تهران)
 //  منبع: فایل hijri_official.txt در assets
-//  بازه‌ی پشتیبانی: قبل از سال ۱۳۹۰ خورشیدی
+//  بازه‌ی پشتیبانی: قبل از سال ۱۴۰۵ خورشیدی
+//  از ۱۴۰۵ به بعد، از API pipe2time.ir استفاده می‌کنیم
 // ═══════════════════════════════════════════════════════════════
 
 object HijriOfficialData {
@@ -14,23 +15,22 @@ object HijriOfficialData {
     private const val ASSET_FILE = "hijri_official.txt"
 
     // ═══ حداکثر سال جلالی که asset پشتیبانی می‌کنه ═══
-    // از سال 1390 به بعد، از API استفاده می‌کنیم
-    const val MAX_ASSET_YEAR = 1389
+    const val MAX_ASSET_YEAR = 1404
 
     // ═══ cache در حافظه ═══
     @Volatile
     private var loaded = false
 
-    // jalaliDate ("1385/04/06") → HijriCache
+    // jalaliDate ("1385/04/06") → HijriCache (فقط روز اول ماه)
     private val byJalaliDate = mutableMapOf<String, HijriCache>()
 
     // "hijriYear/hijriMonth" ("1427/1") → jalaliDate ("1385/04/06")
     private val startsByHijriKey = mutableMapOf<String, String>()
 
-    // سال‌های قمری موجود توی فایل
+    // سال‌های قمری موجود
     private val availableHijriYears = mutableSetOf<Int>()
 
-    // سال‌های جلالی موجود توی فایل
+    // سال‌های جلالی موجود
     private val availableJalaliYears = mutableSetOf<Int>()
 
     // ═══════════════════════════════════════════════════════════
@@ -51,7 +51,7 @@ object HijriOfficialData {
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  پارس فایل و پر کردن map ها
+    //  پارس فایل
     // ═══════════════════════════════════════════════════════════
     private fun parseAndFill(text: String) {
         for (rawLine in text.lineSequence()) {
@@ -62,8 +62,8 @@ object HijriOfficialData {
             val parts = line.split(Regex("\\s+"))
             if (parts.size < 2) continue
 
-            val hijriKey = parts[0]              // "1427/1"
-            val jalaliDate = parts[1]            // "1385/04/06"
+            val hijriKey = parts[0]
+            val jalaliDate = parts[1]
 
             val hijriParts = hijriKey.split("/")
             if (hijriParts.size != 2) continue
@@ -76,8 +76,7 @@ object HijriOfficialData {
             val jm = jalaliParts[1].toIntOrNull() ?: continue
             val jd = jalaliParts[2].toIntOrNull() ?: continue
 
-            // فقط سال‌های جلالی قبل از 1390 رو نگه دار
-            // (چون از 1390 به بعد از API استفاده می‌کنیم)
+            // فقط سال‌های جلالی قبل از 1405
             if (jy > MAX_ASSET_YEAR) continue
 
             startsByHijriKey[hijriKey] = jalaliDate
@@ -106,62 +105,37 @@ object HijriOfficialData {
     //  API عمومی
     // ═══════════════════════════════════════════════════════════
 
-    /**
-     * آیا دیتای asset برای این سال جلالی داریم؟
-     * (فقط برای سال‌های قبل از 1390)
-     */
-    fun hasJalaliYear(jalaliYear: Int): Boolean {
-        return availableJalaliYears.contains(jalaliYear)
-    }
+    fun hasJalaliYear(jalaliYear: Int): Boolean =
+        availableJalaliYears.contains(jalaliYear)
+
+    fun hasHijriYear(hijriYear: Int): Boolean =
+        availableHijriYears.contains(hijriYear)
+
+    fun hasJalaliDate(jalaliDate: String): Boolean =
+        byJalaliDate.containsKey(jalaliDate)
+
+    fun getHijriMonthStart(hijriYear: Int, hijriMonth: Int): String? =
+        startsByHijriKey["$hijriYear/$hijriMonth"]
+
+    fun findByJalaliDate(jalaliDate: String): HijriCache? =
+        byJalaliDate[jalaliDate]
+
+    fun getAllStarts(): Map<String, String> = startsByHijriKey.toMap()
 
     /**
-     * آیا دیتای asset برای این سال قمری داریم؟
+     * همه‌ی HijriCache ها (برای seed به دیتابیس)
      */
-    fun hasHijriYear(hijriYear: Int): Boolean {
-        return availableHijriYears.contains(hijriYear)
-    }
+    fun getAllCaches(): List<HijriCache> = byJalaliDate.values.toList()
 
     /**
-     * آیا دیتای asset برای این تاریخ جلالی داریم؟
+     * آخرین تاریخ جلالی موجود توی asset
      */
-    fun hasJalaliDate(jalaliDate: String): Boolean {
-        return byJalaliDate.containsKey(jalaliDate)
-    }
-
-    /**
-     * شروع ماه قمری رو برمی‌گردونه (تاریخ جلالی)
-     */
-    fun getHijriMonthStart(hijriYear: Int, hijriMonth: Int): String? {
-        return startsByHijriKey["$hijriYear/$hijriMonth"]
-    }
-
-    /**
-     * از روی تاریخ جلالی، HijriCache روز اول ماه قمری رو برمی‌گردونه.
-     */
-    fun findByJalaliDate(jalaliDate: String): HijriCache? {
-        return byJalaliDate[jalaliDate]
-    }
-
-    /**
-     * همه‌ی شروع‌های ماه قمری (برای محاسبه‌ی روزهای میانی).
-     * کلید: "hijriYear/hijriMonth" | مقدار: "jalaliDate"
-     */
-    fun getAllStarts(): Map<String, String> {
-        return startsByHijriKey.toMap()
-    }
-
-    /**
-     * همه‌ی شروع‌های ماه قمری مرتب‌شده بر اساس تاریخ جلالی.
-     * (برای پیدا کردن نزدیک‌ترین شروع قبل از یه تاریخ خاص)
-     */
-    fun getAllStartsSortedByJalali(): List<Pair<String, String>> {
-        return startsByHijriKey.entries
-            .sortedBy { it.value }
-            .map { it.key to it.value }
+    fun getLastJalaliDate(): String? {
+        return byJalaliDate.keys.maxOrNull()
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  کمکی: اسم ماه قمری
+    //  کمکی
     // ═══════════════════════════════════════════════════════════
     private fun hijriMonthName(month: Int): String = when (month) {
         1 -> "محرم"
