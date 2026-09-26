@@ -31,6 +31,7 @@ interface HijriCacheDao {
     @Query("DELETE FROM hijri_cache WHERE jalaliYear = :year")
     suspend fun deleteForYear(year: Int)
 
+    // ✅ پاک کردن کل جدول (برای seed مجدد)
     @Query("DELETE FROM hijri_cache")
     suspend fun clear()
 }
