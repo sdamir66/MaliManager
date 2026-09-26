@@ -37,9 +37,7 @@ fun MonthCalendarView(
     onDayClick: (Date) -> Unit,
     onDateChange: (Date) -> Unit
 ) {
-    val baseMonth = remember(primaryCalendar) {
-        normalizeToMonthStart(currentDate, primaryCalendar)
-    }
+    val baseMonth = remember { normalizeToMonthStart(currentDate, primaryCalendar) }
     val pageCount = 2400
     val startPage = pageCount / 2
 
@@ -50,14 +48,23 @@ fun MonthCalendarView(
 
     fun pageToDate(page: Int): Date = addMonths(baseMonth, page - startPage)
 
-    LaunchedEffect(pagerState.currentPage, primaryCalendar, hijriCacheMap) {
+    // ✅ اصلاح: برای HIJRI، onDateChange رو حتماً صدا بزن
+    LaunchedEffect(pagerState.currentPage, primaryCalendar) {
         val newDate = pageToDate(pagerState.currentPage)
-        if (!isSameMonth(newDate, currentDate, primaryCalendar, settings, hijriCacheMap)) {
-            onDateChange(newDate)
+        
+        if (primaryCalendar == CalendarType.HIJRI) {
+            // برای قمری: اگه روز فرق کرد، onDateChange رو صدا بزن
+            if (!isSameDay(newDate, currentDate)) {
+                onDateChange(newDate)
+            }
+        } else {
+            if (!isSameMonth(newDate, currentDate, primaryCalendar, settings)) {
+                onDateChange(newDate)
+            }
         }
     }
 
-    LaunchedEffect(currentDate, primaryCalendar) {
+    LaunchedEffect(currentDate) {
         val offset = monthsBetween(baseMonth, normalizeToMonthStart(currentDate, primaryCalendar))
         val targetPage = startPage + offset
         if (targetPage != pagerState.currentPage && targetPage in 0 until pageCount) {
@@ -80,7 +87,6 @@ fun MonthCalendarView(
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             Column(Modifier.padding(8.dp).fillMaxHeight()) {
-                // ═══ هدر روزهای هفته ═══
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Row(Modifier.fillMaxWidth()) {
                         listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
@@ -133,7 +139,6 @@ fun MonthCalendarView(
 }
 
 // ═══ کمک‌تابع‌ها ═══
-
 private fun normalizeToMonthStart(date: Date, type: CalendarType): Date {
     return when (type) {
         CalendarType.JALALI -> {
@@ -145,7 +150,7 @@ private fun normalizeToMonthStart(date: Date, type: CalendarType): Date {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.time
-        CalendarType.HIJRI -> date  // ✅ مثل قبل
+        CalendarType.HIJRI -> date
     }
 }
 
@@ -159,12 +164,7 @@ private fun monthsBetween(from: Date, to: Date): Int {
             (c2.get(Calendar.MONTH) - c1.get(Calendar.MONTH))
 }
 
-// ✅ فقط این تابع تغییر کرده (hijriCacheMap اضافه شد)
-private fun isSameMonth(
-    d1: Date, d2: Date, type: CalendarType,
-    settings: CalendarSettings?,
-    hijriCacheMap: Map<String, HijriCache>
-): Boolean {
+private fun isSameMonth(d1: Date, d2: Date, type: CalendarType, settings: CalendarSettings?): Boolean {
     return when (type) {
         CalendarType.JALALI -> {
             val j1 = Jalali.toJalaliPublic(d1.time); val j2 = Jalali.toJalaliPublic(d2.time)
@@ -175,12 +175,7 @@ private fun isSameMonth(
             val c2 = Calendar.getInstance().apply { time = d2 }
             c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) && c1.get(Calendar.MONTH) == c2.get(Calendar.MONTH)
         }
-        CalendarType.HIJRI -> {
-            // ✅ برای قمری: با hijriCacheMap چک کن
-            val h1 = getHijriFromCacheOrFallback(d1, settings, hijriCacheMap)
-            val h2 = getHijriFromCacheOrFallback(d2, settings, hijriCacheMap)
-            h1[0] == h2[0] && h1[1] == h2[1]
-        }
+        CalendarType.HIJRI -> true
     }
 }
 
