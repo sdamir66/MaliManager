@@ -241,9 +241,14 @@ private fun getChipLabel(
             getMonthRangeForPrimary(date, primaryCalendar, CalendarType.GREGORIAN, cache)
         }
         CalendarType.HIJRI -> {
-            val h = getHijriFromCache(date, cache) ?: getHijriDate(date, null)
+            // ✅ برای HIJRI، ماه وسط ماه جلالی رو بگیر (نه بازه)
+            val midMonth = Calendar.getInstance().apply {
+                time = date
+                set(Calendar.DAY_OF_MONTH, 15)
+            }.time
+            val h = getHijriFromCache(midMonth, cache) ?: getHijriDate(midMonth, null)
             "${h[0]}/${h[1].toString().padStart(2, '0')}/${h[2].toString().padStart(2, '0')}\n" +
-            getMonthRangeForPrimary(date, primaryCalendar, CalendarType.HIJRI, cache)
+            hijriMonthName(h[1])
         }
     }
 }
@@ -278,13 +283,13 @@ private fun getMonthRangeForPrimary(
             }
         }
         CalendarType.HIJRI -> {
-            val firstH = getHijriFromCache(firstDay, cache) ?: getHijriDate(firstDay, null)
-            val lastH = getHijriFromCache(lastDay, cache) ?: getHijriDate(lastDay, null)
-            if (firstH[1] == lastH[1]) {
-                hijriMonthName(firstH[1])
-            } else {
-                "${hijriMonthName(firstH[1])} - ${hijriMonthName(lastH[1])}"
-            }
+            // ✅ برای HIJRI، فقط ماه وسط ماه جلالی رو نشون بده
+            val midMonth = Calendar.getInstance().apply {
+                time = date
+                set(Calendar.DAY_OF_MONTH, 15)
+            }.time
+            val h = getHijriFromCache(midMonth, cache) ?: getHijriDate(midMonth, null)
+            hijriMonthName(h[1])
         }
     }
 }
