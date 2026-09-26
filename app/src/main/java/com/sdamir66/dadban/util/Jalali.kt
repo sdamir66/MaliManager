@@ -55,10 +55,7 @@ object Jalali {
 
     fun toJalaliPublic(millis: Long): IntArray = toJalali(millis)
 
-    /**
-     * ✅ تبدیل مستقیم میلادی به جلالی (بدون TimeZone)
-     * برای تبدیل تاریخ‌های ثابت (مثل دیتای رسمی قمری)
-     */
+    // ✅ تبدیل مستقیم میلادی به جلالی (بدون TimeZone)
     fun gregorianToJalaliDirect(gy: Int, gm: Int, gd: Int): IntArray {
         return gregorianToJalali(gy, gm, gd)
     }
