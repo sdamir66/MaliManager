@@ -6,10 +6,6 @@ import java.util.Locale
 import java.util.TimeZone
 
 object Jalali {
-
-    // ✅ TimeZone گوشی (برای همه‌ی تبدیل‌ها)
-    private val DEVICE_TZ: TimeZone = TimeZone.getDefault()
-
     private val monthNames = arrayOf(
         "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
         "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
@@ -37,10 +33,6 @@ object Jalali {
         return toGregorian(y, m, d)
     }
 
-    /**
-     * تاریخ شمسی رو می‌گیره و ساعت فعلی سیستم رو بهش اضافه می‌کنه.
-     * اینطوری اگه چند تراکنش توی یه روز ثبت بشن، به ترتیب ساعت مرتب می‌شن.
-     */
     fun parseWithCurrentTime(s: String): Long? {
         val dateMillis = parse(s) ?: return null
         val now = Calendar.getInstance()
@@ -61,10 +53,6 @@ object Jalali {
 
     fun startOfJalaliMonth(y: Int, m: Int): Long = toGregorian(y, m, 1)
 
-    /**
-     * ✅ تابع عمومی برای تبدیل millis به تاریخ شمسی
-     * (برای استفاده در TxEditor و جاهای دیگه)
-     */
     fun toJalaliPublic(millis: Long): IntArray = toJalali(millis)
 
     private fun isLeap(y: Int): Boolean {
@@ -72,19 +60,19 @@ object Jalali {
         return r in intArrayOf(1, 5, 9, 13, 17, 22, 26, 30)
     }
 
-    // ✅ تبدیل با TimeZone گوشی
+    // ✅ TimeZone داینامیک (هر بار از گوشی خونده می‌شه)
     private fun toJalali(millis: Long): IntArray {
-        val cal = GregorianCalendar(DEVICE_TZ).apply { timeInMillis = millis }
+        val cal = GregorianCalendar(TimeZone.getDefault()).apply { timeInMillis = millis }
         val gy = cal.get(Calendar.YEAR)
         val gm = cal.get(Calendar.MONTH) + 1
         val gd = cal.get(Calendar.DAY_OF_MONTH)
         return gregorianToJalali(gy, gm, gd)
     }
 
-    // ✅ تبدیل با TimeZone گوشی
+    // ✅ TimeZone داینامیک
     private fun toGregorian(jy: Int, jm: Int, jd: Int): Long {
         val g = jalaliToGregorian(jy, jm, jd)
-        val cal = GregorianCalendar(DEVICE_TZ)
+        val cal = GregorianCalendar(TimeZone.getDefault())
         cal.set(g[0], g[1] - 1, g[2], 0, 0, 0)
         cal.set(Calendar.MILLISECOND, 0)
         return cal.timeInMillis
