@@ -1,10 +1,11 @@
 package com.sdamir66.dadban.calendar.data
 
 import android.content.Context
+import com.sdamir66.dadban.util.AppTimeZone
 import com.sdamir66.dadban.util.Jalali
 import java.util.Calendar
+import java.util.GregorianCalendar
 import java.util.Locale
-import java.util.TimeZone
 
 object HijriOfficialData {
 
@@ -81,7 +82,7 @@ object HijriOfficialData {
         }
     }
 
-    // ✅ TimeZone داینامیک (هر بار از گوشی خونده می‌شه)
+    // ✅ از همون GregorianCalendar + TimeZone مشترک استفاده کن
     private fun convertMiladiToJalali(miladi: String): String? {
         return try {
             val parts = miladi.split("-")
@@ -90,8 +91,8 @@ object HijriOfficialData {
             val gm = parts[1].toInt()
             val gd = parts[2].toInt()
 
-            // ✅ هر بار TimeZone رو دوباره از گوشی بگیر
-            val cal = Calendar.getInstance(TimeZone.getDefault()).apply {
+            // ✅ از همون GregorianCalendar و TimeZone مشترک
+            val cal = GregorianCalendar(AppTimeZone.instance).apply {
                 set(gy, gm - 1, gd, 0, 0, 0)
                 set(Calendar.MILLISECOND, 0)
             }
