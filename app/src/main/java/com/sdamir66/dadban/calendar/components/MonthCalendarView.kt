@@ -37,7 +37,6 @@ fun MonthCalendarView(
     onDayClick: (Date) -> Unit,
     onDateChange: (Date) -> Unit
 ) {
-    // ✅ baseMonth با کلید primaryCalendar بازسازی می‌شه
     val baseMonth = remember(primaryCalendar) {
         normalizeToMonthStart(currentDate, primaryCalendar)
     }
@@ -51,16 +50,13 @@ fun MonthCalendarView(
 
     fun pageToDate(page: Int): Date = addMonths(baseMonth, page - startPage)
 
-    // ✅ وقتی page عوض می‌شه، currentDate رو آپدیت کن
     LaunchedEffect(pagerState.currentPage, primaryCalendar) {
         val newDate = pageToDate(pagerState.currentPage)
-        // چک کن که تاریخ جدید با currentDate فرق داشته باشه
         if (!isSameMonth(newDate, currentDate, primaryCalendar, settings)) {
             onDateChange(newDate)
         }
     }
 
-    // ✅ وقتی currentDate از بیرون عوض می‌شه، pager رو بچرخون
     LaunchedEffect(currentDate, primaryCalendar) {
         val offset = monthsBetween(baseMonth, normalizeToMonthStart(currentDate, primaryCalendar))
         val targetPage = startPage + offset
@@ -174,8 +170,9 @@ private fun isSameMonth(d1: Date, d2: Date, type: CalendarType, settings: Calend
             c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) && c1.get(Calendar.MONTH) == c2.get(Calendar.MONTH)
         }
         CalendarType.HIJRI -> {
-            val h1 = getHijriFromCacheOrFallback(d1, settings, hijriCacheMap = emptyMap())
-            val h2 = getHijriFromCacheOrFallback(d2, settings, hijriCacheMap = emptyMap())
+            // ✅ اصلاح: بدون نام‌گذاری پارامتر
+            val h1 = getHijriFromCacheOrFallback(d1, settings, emptyMap())
+            val h2 = getHijriFromCacheOrFallback(d2, settings, emptyMap())
             h1[0] == h2[0] && h1[1] == h2[1]
         }
     }
