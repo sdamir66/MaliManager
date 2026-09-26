@@ -37,7 +37,6 @@ fun MonthCalendarView(
     onDayClick: (Date) -> Unit,
     onDateChange: (Date) -> Unit
 ) {
-    // ✅ برای HIJRI، baseMonth = اول ماه قمری
     val baseMonth = remember(primaryCalendar, currentDate, hijriCacheMap) {
         normalizeToMonthStart(currentDate, primaryCalendar, hijriCacheMap)
     }
@@ -167,7 +166,6 @@ private fun addMonths(
 ): Date {
     return when (type) {
         CalendarType.HIJRI -> {
-            // ✅ برای قمری: از تعداد روزهای ماه فعلی استفاده کن
             var result = date
             val direction = if (months >= 0) 1 else -1
             val absMonths = kotlin.math.abs(months)
@@ -276,8 +274,8 @@ private fun getDateForDay(currentDate: Date, dayNumber: Int, type: CalendarType)
             time = currentDate; set(Calendar.DAY_OF_MONTH, dayNumber)
         }.time
         CalendarType.HIJRI -> {
-            // ✅ currentDate = اول ماه قمری (میلادی)
-            // پس dayNumber-1 روز بهش اضافه کن
+            // ✅ currentDate = اول ماه قمری (به‌عنوان میلادی)
+            // dayNumber - 1 روز بهش اضافه کن
             Calendar.getInstance().apply {
                 time = currentDate
                 add(Calendar.DAY_OF_MONTH, dayNumber - 1)
