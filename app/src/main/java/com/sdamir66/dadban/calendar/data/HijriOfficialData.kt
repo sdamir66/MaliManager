@@ -7,7 +7,7 @@ import java.util.Locale
 object HijriOfficialData {
 
     private const val ASSET_FILE = "hijri_official.txt"
-    const val MAX_ASSET_YEAR = 1404
+    const val MAX_ASSET_YEAR = 1405   // ✅ قبلاً 1404 بود — الان 1405
 
     @Volatile
     private var loaded = false
@@ -31,7 +31,17 @@ object HijriOfficialData {
         }
     }
 
+    private data class HijriStart(
+        val hijriYear: Int,
+        val hijriMonth: Int,
+        val jalaliDate: String,
+        val jalaliMillis: Long
+    )
+
     private fun parseAndFill(text: String) {
+        // ═══ مرحله ۱: جمع‌آوری شروع همه‌ی ماه‌ها ═══
+        val starts = mutableListOf<HijriStart>()
+
         for (rawLine in text.lineSequence()) {
             val line = rawLine.trim()
             if (line.isEmpty() || line.startsWith("#")) continue
@@ -48,38 +58,56 @@ object HijriOfficialData {
             val hijriMonth = hijriParts[1].toIntOrNull() ?: continue
 
             val jalaliDate = convertMiladiToJalali(miladiDate) ?: continue
-
             val jalaliParts = jalaliDate.split("/")
             if (jalaliParts.size != 3) continue
             val jy = jalaliParts[0].toIntOrNull() ?: continue
-            val jm = jalaliParts[1].toIntOrNull() ?: continue
-            val jd = jalaliParts[2].toIntOrNull() ?: continue
 
             if (jy > MAX_ASSET_YEAR) continue
 
-            startsByHijriKey[hijriKey] = jalaliDate
+            val jalaliMillis = Jalali.parse(jalaliDate) ?: continue
+
+            starts.add(HijriStart(hijriYear, hijriMonth, jalaliDate, jalaliMillis))
+            startsByHijriKey["$hijriYear/$hijriMonth"] = jalaliDate
             availableHijriYears.add(hijriYear)
             availableJalaliYears.add(jy)
+        }
 
-            val monthName = hijriMonthName(hijriMonth)
+        // ═══ مرحله ۲: تولید همه‌ی روزهای هر ماه ═══
+        for (i in starts.indices) {
+            val start = starts[i]
 
-            val cache = HijriCache(
-                id = 0,
-                jalaliDate = jalaliDate,
-                jalaliYear = jy,
-                jalaliMonth = jm,
-                jalaliDay = jd,
-                hijriDay = 1,
-                hijriMonth = monthName,
-                hijriYear = hijriYear,
-                isHoliday = false,
-                eventsJson = "[]"
-            )
-            byJalaliDate[jalaliDate] = cache
+            // محاسبه‌ی تعداد روزهای این ماه
+            val daysInMonth = if (i + 1 < starts.size) {
+                val nextStart = starts[i + 1]
+                val diff = nextStart.jalaliMillis - start.jalaliMillis
+                (diff / 86_400_000L).toInt().coerceIn(29, 30)
+            } else {
+                // آخرین ماه: قاعده‌ی فرد ۳۰، زوج ۲۹
+                if (start.hijriMonth % 2 == 1) 30 else 29
+            }
+
+            for (d in 1..daysInMonth) {
+                val currentMillis = start.jalaliMillis + (d - 1).toLong() * 86_400_000L
+                val j = Jalali.toJalaliPublic(currentMillis)
+                val date = String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], j[2])
+
+                byJalaliDate[date] = HijriCache(
+                    id = 0,
+                    jalaliDate = date,
+                    jalaliYear = j[0],
+                    jalaliMonth = j[1],
+                    jalaliDay = j[2],
+                    hijriDay = d,
+                    hijriMonth = hijriMonthName(start.hijriMonth),
+                    hijriYear = start.hijriYear,
+                    isHoliday = false,
+                    eventsJson = "[]"
+                )
+            }
         }
     }
 
-    // ✅ تبدیل مستقیم میلادی به جلالی (بدون TimeZone)
+    // ✅ تبدیل مستقیم (بدون TimeZone)
     private fun convertMiladiToJalali(miladi: String): String? {
         return try {
             val parts = miladi.split("-")
@@ -88,7 +116,6 @@ object HijriOfficialData {
             val gm = parts[1].toInt()
             val gd = parts[2].toInt()
 
-            // ✅ تبدیل مستقیم — بدون TimeZone
             val j = Jalali.gregorianToJalaliDirect(gy, gm, gd)
             String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], j[2])
         } catch (e: Exception) {
