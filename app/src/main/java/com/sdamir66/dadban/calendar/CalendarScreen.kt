@@ -3,7 +3,6 @@ package com.sdamir66.dadban.calendar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,14 +32,18 @@ fun CalendarScreen(db: AppDb) {
         settings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
     }
 
-    // ✅ بارگذاری cache تقویم قمری — اولویت: دیتابیس → asset
+    // ✅ بارگذاری cache برای ۳ سال (سال جاری ± 1)
     LaunchedEffect(settings, refreshTrigger) {
         if (settings != null) {
             withContext(Dispatchers.IO) {
-                val year = Jalali.nowJalali()[0]
+                val currentYear = Jalali.nowJalali()[0]
+                val years = (currentYear - 1)..(currentYear + 1)
 
                 // ۱. دیتابیس
-                val dbItems = db.hijriCacheDao().getAllForYear(year)
+                val dbItems = mutableListOf<HijriCache>()
+                for (y in years) {
+                    dbItems.addAll(db.hijriCacheDao().getAllForYear(y))
+                }
 
                 // ۲. اگه دیتابیس خالی بود، از asset
                 val finalItems = if (dbItems.isNotEmpty()) {
@@ -48,7 +51,7 @@ fun CalendarScreen(db: AppDb) {
                 } else {
                     HijriOfficialData.ensureLoaded(context)
                     HijriOfficialData.getAllCaches()
-                        .filter { it.jalaliYear == year }
+                        .filter { it.jalaliYear in years }
                 }
 
                 hijriCacheMap = finalItems.associateBy { it.jalaliDate }
@@ -96,7 +99,6 @@ fun CalendarScreen(db: AppDb) {
     }
 
     LazyColumn(Modifier.fillMaxSize().background(BgLight)) {
-        // هدر
         item {
             CalendarHeader(
                 currentDate = currentDate,
@@ -108,7 +110,6 @@ fun CalendarScreen(db: AppDb) {
             )
         }
 
-        // تقویم ماهانه
         item {
             MonthCalendarView(
                 currentDate = currentDate,
@@ -125,7 +126,6 @@ fun CalendarScreen(db: AppDb) {
             )
         }
 
-        // اوقات شرعی
         if (settings!!.showPrayerTimes && prayerTimes != null) {
             item {
                 Box(Modifier.offset(y = 8.dp)) {
@@ -134,7 +134,6 @@ fun CalendarScreen(db: AppDb) {
             }
         }
 
-        // رویدادهای روز
         item {
             Box(Modifier.offset(y = if (settings!!.showPrayerTimes) 18.dp else 8.dp)) {
                 EventsSection(
