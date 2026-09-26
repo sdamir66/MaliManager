@@ -37,7 +37,8 @@ fun MonthCalendarView(
     onDayClick: (Date) -> Unit,
     onDateChange: (Date) -> Unit
 ) {
-    val baseMonth = remember(primaryCalendar, currentDate, hijriCacheMap) {
+    // ✅ baseMonth فقط با primaryCalendar بازسازی می‌شه (نه currentDate)
+    val baseMonth = remember(primaryCalendar) {
         normalizeToMonthStart(currentDate, primaryCalendar, hijriCacheMap)
     }
     val pageCount = 2400
@@ -48,29 +49,44 @@ fun MonthCalendarView(
         pageCount = { pageCount }
     )
 
-    fun pageToDate(page: Int): Date = addMonths(baseMonth, page - startPage, primaryCalendar, hijriCacheMap)
+    // ✅ فلگ برای جلوگیری از حلقه
+    var isInternalChange by remember { mutableStateOf(false) }
 
+    // ✅ وقتی کاربر swipe می‌کنه
     LaunchedEffect(pagerState.currentPage, primaryCalendar) {
-        val newDate = pageToDate(pagerState.currentPage)
-        if (!isSameMonth(newDate, currentDate, primaryCalendar, hijriCacheMap)) {
+        val newDate = addMonths(baseMonth, pagerState.currentPage - startPage, primaryCalendar, hijriCacheMap)
+        if (!isSameDay(newDate, currentDate)) {
+            isInternalChange = true
             onDateChange(newDate)
         }
     }
 
+    // ✅ وقتی currentDate از بیرون عوض می‌شه
     LaunchedEffect(currentDate, primaryCalendar) {
-        val offset = monthsBetween(
+        if (isInternalChange) {
+            isInternalChange = false
+            return@LaunchedEffect
+        }
+        val targetOffset = monthsBetween(
             baseMonth,
             normalizeToMonthStart(currentDate, primaryCalendar, hijriCacheMap),
             primaryCalendar
         )
-        val targetPage = startPage + offset
+        val targetPage = startPage + targetOffset
         if (targetPage != pagerState.currentPage && targetPage in 0 until pageCount) {
             pagerState.scrollToPage(targetPage)
         }
     }
 
-    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth(), pageSpacing = 0.dp) { page ->
-        val monthDate = pageToDate(page)
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxWidth(),
+        pageSpacing = 0.dp
+    ) { page ->
+        val monthDate = addMonths(baseMonth, page - startPage, primaryCalendar, hijriCacheMap)
+
+        // ✅ فقط صفحه‌های نزدیک به صفحه‌ی فعلی render می‌شن
+        val shouldRender = kotlin.math.abs(page - pagerState.currentPage) <= 1
 
         Card(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(380.dp),
@@ -81,51 +97,78 @@ fun MonthCalendarView(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
-            Column(Modifier.padding(8.dp).fillMaxHeight()) {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Row(Modifier.fillMaxWidth()) {
-                        listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
-                            Text(day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72),
-                                fontSize = 13.sp)
-                        }
-                    }
+            if (shouldRender) {
+                CalendarMonthContent(
+                    monthDate = monthDate,
+                    primaryCalendar = primaryCalendar,
+                    settings = settings,
+                    hijriCacheMap = hijriCacheMap,
+                    events = events,
+                    selectedDay = selectedDay,
+                    onDayClick = onDayClick
+                )
+            } else {
+                // صفحه‌ی خالی برای صرفه‌جویی در منابع
+                Box(Modifier.fillMaxSize())
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarMonthContent(
+    monthDate: Date,
+    primaryCalendar: CalendarType,
+    settings: CalendarSettings?,
+    hijriCacheMap: Map<String, HijriCache>,
+    events: List<Event>,
+    selectedDay: Date?,
+    onDayClick: (Date) -> Unit
+) {
+    Column(Modifier.padding(8.dp).fillMaxHeight()) {
+        // هدر روزهای هفته
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Row(Modifier.fillMaxWidth()) {
+                listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
+                    Text(day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72),
+                        fontSize = 13.sp)
                 }
+            }
+        }
 
-                Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(4.dp))
 
-                val daysInMonth = getDaysInMonth(monthDate, primaryCalendar, hijriCacheMap)
-                val firstDayOfWeek = getFirstDayOfWeek(monthDate, primaryCalendar)
-                val rows = 6
+        val daysInMonth = getDaysInMonth(monthDate, primaryCalendar, hijriCacheMap)
+        val firstDayOfWeek = getFirstDayOfWeek(monthDate, primaryCalendar)
+        val rows = 6
 
-                for (row in 0 until rows) {
-                    Row(Modifier.fillMaxWidth().weight(1f)) {
-                        for (col in 0 until 7) {
-                            val cellIndex = row * 7 + col
-                            val dayNumber = cellIndex - firstDayOfWeek + 1
-                            if (dayNumber in 1..daysInMonth) {
-                                val date = getDateForDay(monthDate, dayNumber, primaryCalendar)
-                                val isSelected = selectedDay?.let { isSameDay(it, date) } ?: false
-                                val isToday = isSameDay(Date(), date)
-                                val isFriday = col == 6
-                                val dayEvents = getEventsForDay(events, date, settings, hijriCacheMap)
-                                val hasHoliday = dayEvents.any { it.isHoliday }
+        for (row in 0 until rows) {
+            Row(Modifier.fillMaxWidth().weight(1f)) {
+                for (col in 0 until 7) {
+                    val cellIndex = row * 7 + col
+                    val dayNumber = cellIndex - firstDayOfWeek + 1
+                    if (dayNumber in 1..daysInMonth) {
+                        val date = getDateForDay(monthDate, dayNumber, primaryCalendar)
+                        val isSelected = selectedDay?.let { isSameDay(it, date) } ?: false
+                        val isToday = isSameDay(Date(), date)
+                        val isFriday = col == 6
+                        val dayEvents = getEventsForDay(events, date, settings, hijriCacheMap)
+                        val hasHoliday = dayEvents.any { it.isHoliday }
 
-                                DayCell(
-                                    day = dayNumber, date = date,
-                                    isSelected = isSelected, isToday = isToday,
-                                    isFriday = isFriday, hasHoliday = hasHoliday,
-                                    primaryCalendar = primaryCalendar, settings = settings,
-                                    hijriCacheMap = hijriCacheMap,
-                                    onClick = { onDayClick(date) },
-                                    modifier = Modifier.weight(1f).fillMaxHeight()
-                                )
-                            } else {
-                                Box(Modifier.weight(1f).fillMaxHeight())
-                            }
-                        }
+                        DayCell(
+                            day = dayNumber, date = date,
+                            isSelected = isSelected, isToday = isToday,
+                            isFriday = isFriday, hasHoliday = hasHoliday,
+                            primaryCalendar = primaryCalendar, settings = settings,
+                            hijriCacheMap = hijriCacheMap,
+                            onClick = { onDayClick(date) },
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                        )
+                    } else {
+                        Box(Modifier.weight(1f).fillMaxHeight())
                     }
                 }
             }
@@ -274,8 +317,6 @@ private fun getDateForDay(currentDate: Date, dayNumber: Int, type: CalendarType)
             time = currentDate; set(Calendar.DAY_OF_MONTH, dayNumber)
         }.time
         CalendarType.HIJRI -> {
-            // ✅ currentDate = اول ماه قمری (به‌عنوان میلادی)
-            // dayNumber - 1 روز بهش اضافه کن
             Calendar.getInstance().apply {
                 time = currentDate
                 add(Calendar.DAY_OF_MONTH, dayNumber - 1)
