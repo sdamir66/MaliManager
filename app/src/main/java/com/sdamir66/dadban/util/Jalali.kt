@@ -17,7 +17,7 @@ object Jalali {
 
     fun format(millis: Long): String {
         val j = toJalali(millis)
-        val cal = Calendar.getInstance().apply { timeInMillis = millis }
+        val cal = Calendar.getInstance(AppTimeZone.instance).apply { timeInMillis = millis }
         val h = cal.get(Calendar.HOUR_OF_DAY)
         val min = cal.get(Calendar.MINUTE)
         return "%04d/%02d/%02d %02d:%02d".format(Locale.US, j[0], j[1], j[2], h, min)
@@ -35,8 +35,8 @@ object Jalali {
 
     fun parseWithCurrentTime(s: String): Long? {
         val dateMillis = parse(s) ?: return null
-        val now = Calendar.getInstance()
-        val dateCal = Calendar.getInstance().apply { timeInMillis = dateMillis }
+        val now = Calendar.getInstance(AppTimeZone.instance)
+        val dateCal = Calendar.getInstance(AppTimeZone.instance).apply { timeInMillis = dateMillis }
         dateCal.set(Calendar.HOUR_OF_DAY, now.get(Calendar.HOUR_OF_DAY))
         dateCal.set(Calendar.MINUTE, now.get(Calendar.MINUTE))
         dateCal.set(Calendar.SECOND, now.get(Calendar.SECOND))
@@ -60,19 +60,19 @@ object Jalali {
         return r in intArrayOf(1, 5, 9, 13, 17, 22, 26, 30)
     }
 
-    // ✅ TimeZone داینامیک (هر بار از گوشی خونده می‌شه)
+    // ✅ TimeZone مشترک
     private fun toJalali(millis: Long): IntArray {
-        val cal = GregorianCalendar(TimeZone.getDefault()).apply { timeInMillis = millis }
+        val cal = GregorianCalendar(AppTimeZone.instance).apply { timeInMillis = millis }
         val gy = cal.get(Calendar.YEAR)
         val gm = cal.get(Calendar.MONTH) + 1
         val gd = cal.get(Calendar.DAY_OF_MONTH)
         return gregorianToJalali(gy, gm, gd)
     }
 
-    // ✅ TimeZone داینامیک
+    // ✅ TimeZone مشترک
     private fun toGregorian(jy: Int, jm: Int, jd: Int): Long {
         val g = jalaliToGregorian(jy, jm, jd)
-        val cal = GregorianCalendar(TimeZone.getDefault())
+        val cal = GregorianCalendar(AppTimeZone.instance)
         cal.set(g[0], g[1] - 1, g[2], 0, 0, 0)
         cal.set(Calendar.MILLISECOND, 0)
         return cal.timeInMillis
