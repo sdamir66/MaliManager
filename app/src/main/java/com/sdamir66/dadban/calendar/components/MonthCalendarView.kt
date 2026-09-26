@@ -50,9 +50,9 @@ fun MonthCalendarView(
 
     fun pageToDate(page: Int): Date = addMonths(baseMonth, page - startPage)
 
-    LaunchedEffect(pagerState.currentPage, primaryCalendar) {
+    LaunchedEffect(pagerState.currentPage, primaryCalendar, hijriCacheMap) {
         val newDate = pageToDate(pagerState.currentPage)
-        if (!isSameMonth(newDate, currentDate, primaryCalendar, settings)) {
+        if (!isSameMonth(newDate, currentDate, primaryCalendar, settings, hijriCacheMap)) {
             onDateChange(newDate)
         }
     }
@@ -133,6 +133,7 @@ fun MonthCalendarView(
 }
 
 // ═══ کمک‌تابع‌ها ═══
+
 private fun normalizeToMonthStart(date: Date, type: CalendarType): Date {
     return when (type) {
         CalendarType.JALALI -> {
@@ -144,7 +145,7 @@ private fun normalizeToMonthStart(date: Date, type: CalendarType): Date {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.time
-        CalendarType.HIJRI -> date
+        CalendarType.HIJRI -> date  // ✅ مثل قبل
     }
 }
 
@@ -158,7 +159,12 @@ private fun monthsBetween(from: Date, to: Date): Int {
             (c2.get(Calendar.MONTH) - c1.get(Calendar.MONTH))
 }
 
-private fun isSameMonth(d1: Date, d2: Date, type: CalendarType, settings: CalendarSettings?): Boolean {
+// ✅ فقط این تابع تغییر کرده (hijriCacheMap اضافه شد)
+private fun isSameMonth(
+    d1: Date, d2: Date, type: CalendarType,
+    settings: CalendarSettings?,
+    hijriCacheMap: Map<String, HijriCache>
+): Boolean {
     return when (type) {
         CalendarType.JALALI -> {
             val j1 = Jalali.toJalaliPublic(d1.time); val j2 = Jalali.toJalaliPublic(d2.time)
@@ -170,9 +176,9 @@ private fun isSameMonth(d1: Date, d2: Date, type: CalendarType, settings: Calend
             c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) && c1.get(Calendar.MONTH) == c2.get(Calendar.MONTH)
         }
         CalendarType.HIJRI -> {
-            // ✅ اصلاح: بدون نام‌گذاری پارامتر
-            val h1 = getHijriFromCacheOrFallback(d1, settings, emptyMap())
-            val h2 = getHijriFromCacheOrFallback(d2, settings, emptyMap())
+            // ✅ برای قمری: با hijriCacheMap چک کن
+            val h1 = getHijriFromCacheOrFallback(d1, settings, hijriCacheMap)
+            val h2 = getHijriFromCacheOrFallback(d2, settings, hijriCacheMap)
             h1[0] == h2[0] && h1[1] == h2[1]
         }
     }
