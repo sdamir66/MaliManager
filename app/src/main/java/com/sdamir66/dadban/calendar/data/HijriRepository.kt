@@ -15,9 +15,6 @@ object HijriRepository {
     @Volatile
     private var contractualStartHijriMonth: Int? = null
 
-    // ═══════════════════════════════════════════════════════════
-    //  init
-    // ═══════════════════════════════════════════════════════════
     suspend fun init(context: Context, db: AppDb) = withContext(Dispatchers.IO) {
         // ۱. بارگذاری asset (hijri_official.txt)
         HijriOfficialData.ensureLoaded(context)
@@ -25,7 +22,7 @@ object HijriRepository {
         // ۲. seed asset به دیتابیس
         seedAssetIfNeeded(db)
 
-        // ۳. بارگذاری calendar.json از asset (برای رویدادها)
+        // ۳. بارگذاری calendar.json از asset (برای ۱۴۰۵)
         seedCalendarJsonIfNeeded(context, db)
 
         // ۴. محاسبه‌ی نقطه‌ی شروع قراردادی
@@ -38,13 +35,21 @@ object HijriRepository {
         val allCaches = HijriOfficialData.getAllCaches()
         if (allCaches.isEmpty()) return
 
+        // ✅ چک کن که آیا همه‌ی روزها seed شدن
+        // اگه فقط شروع ماه‌ها ذخیره شده باشه، تعداد رکوردها ~300 هست
+        // اگه همه‌ی روزها ذخیره شده باشه، تعداد رکوردها ~9000 هست
         val minYear = allCaches.minOfOrNull { it.jalaliYear } ?: return
-        if (dao.countForYear(minYear) > 0) return
+        val existingCount = dao.countForYear(minYear)
 
-        dao.insertAll(allCaches)
+        // اگه تعداد رکوردهای سال اول کمتر از 300 باشه، یعنی فقط شروع ماه‌ها ذخیره شده
+        if (existingCount < 300) {
+            // پاک کردن دیتای قدیمی و ذخیره‌ی همه‌ی روزها
+            dao.clear()
+            dao.insertAll(allCaches)
+        }
     }
 
-    // ═══ seed calendar.json (فقط اگه دیتابیس خالیه) ═══
+    // ═══ seed calendar.json ═══
     private suspend fun seedCalendarJsonIfNeeded(context: Context, db: AppDb) {
         try {
             val jsonText = context.assets.open("calendar.json")
