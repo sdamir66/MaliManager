@@ -4,14 +4,6 @@ import android.content.Context
 import com.sdamir66.dadban.util.Jalali
 import java.util.Locale
 
-// ═══════════════════════════════════════════════════════════════
-//  HijriOfficialData
-//  داده‌های رسمی تقویم قمری ایران (مؤسسه ژئوفیزیک)
-//  منبع: hijri_official.txt (فرمت میلادی)
-//  تبدیل: gregorianToJalaliDirect (بدون TimeZone)
-//  بازه: 1380 تا 1404
-// ═══════════════════════════════════════════════════════════════
-
 object HijriOfficialData {
 
     private const val ASSET_FILE = "hijri_official.txt"
@@ -87,7 +79,7 @@ object HijriOfficialData {
         }
     }
 
-    // ✅ تبدیل مستقیم میلادی به جلالی (بدون Date و millis و TimeZone)
+    // ✅ تبدیل مستقیم میلادی به جلالی (بدون TimeZone)
     private fun convertMiladiToJalali(miladi: String): String? {
         return try {
             val parts = miladi.split("-")
