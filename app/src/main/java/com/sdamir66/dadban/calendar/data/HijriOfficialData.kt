@@ -1,11 +1,16 @@
 package com.sdamir66.dadban.calendar.data
 
 import android.content.Context
-import com.sdamir66.dadban.util.AppTimeZone
 import com.sdamir66.dadban.util.Jalali
-import java.util.Calendar
-import java.util.GregorianCalendar
 import java.util.Locale
+
+// ═══════════════════════════════════════════════════════════════
+//  HijriOfficialData
+//  داده‌های رسمی تقویم قمری ایران (مؤسسه ژئوفیزیک)
+//  منبع: hijri_official.txt (فرمت میلادی)
+//  تبدیل: gregorianToJalaliDirect (بدون TimeZone)
+//  بازه: 1380 تا 1404
+// ═══════════════════════════════════════════════════════════════
 
 object HijriOfficialData {
 
@@ -82,7 +87,7 @@ object HijriOfficialData {
         }
     }
 
-    // ✅ از همون GregorianCalendar + TimeZone مشترک استفاده کن
+    // ✅ تبدیل مستقیم میلادی به جلالی (بدون Date و millis و TimeZone)
     private fun convertMiladiToJalali(miladi: String): String? {
         return try {
             val parts = miladi.split("-")
@@ -91,14 +96,8 @@ object HijriOfficialData {
             val gm = parts[1].toInt()
             val gd = parts[2].toInt()
 
-            // ✅ از همون GregorianCalendar و TimeZone مشترک
-            val cal = GregorianCalendar(AppTimeZone.instance).apply {
-                set(gy, gm - 1, gd, 0, 0, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            val millis = cal.timeInMillis
-
-            val j = Jalali.toJalaliPublic(millis)
+            // ✅ تبدیل مستقیم — بدون TimeZone
+            val j = Jalali.gregorianToJalaliDirect(gy, gm, gd)
             String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], j[2])
         } catch (e: Exception) {
             null
