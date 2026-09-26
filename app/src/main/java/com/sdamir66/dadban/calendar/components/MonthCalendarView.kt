@@ -37,7 +37,10 @@ fun MonthCalendarView(
     onDayClick: (Date) -> Unit,
     onDateChange: (Date) -> Unit
 ) {
-    val baseMonth = remember { normalizeToMonthStart(currentDate, primaryCalendar) }
+    // ✅ برای HIJRI، baseMonth = اول ماه قمری
+    val baseMonth = remember(primaryCalendar, currentDate, hijriCacheMap) {
+        normalizeToMonthStart(currentDate, primaryCalendar, hijriCacheMap)
+    }
     val pageCount = 2400
     val startPage = pageCount / 2
 
@@ -46,26 +49,21 @@ fun MonthCalendarView(
         pageCount = { pageCount }
     )
 
-    fun pageToDate(page: Int): Date = addMonths(baseMonth, page - startPage)
+    fun pageToDate(page: Int): Date = addMonths(baseMonth, page - startPage, primaryCalendar, hijriCacheMap)
 
-    // ✅ اصلاح: برای HIJRI، onDateChange رو حتماً صدا بزن
     LaunchedEffect(pagerState.currentPage, primaryCalendar) {
         val newDate = pageToDate(pagerState.currentPage)
-        
-        if (primaryCalendar == CalendarType.HIJRI) {
-            // برای قمری: اگه روز فرق کرد، onDateChange رو صدا بزن
-            if (!isSameDay(newDate, currentDate)) {
-                onDateChange(newDate)
-            }
-        } else {
-            if (!isSameMonth(newDate, currentDate, primaryCalendar, settings)) {
-                onDateChange(newDate)
-            }
+        if (!isSameMonth(newDate, currentDate, primaryCalendar, hijriCacheMap)) {
+            onDateChange(newDate)
         }
     }
 
-    LaunchedEffect(currentDate) {
-        val offset = monthsBetween(baseMonth, normalizeToMonthStart(currentDate, primaryCalendar))
+    LaunchedEffect(currentDate, primaryCalendar) {
+        val offset = monthsBetween(
+            baseMonth,
+            normalizeToMonthStart(currentDate, primaryCalendar, hijriCacheMap),
+            primaryCalendar
+        )
         val targetPage = startPage + offset
         if (targetPage != pagerState.currentPage && targetPage in 0 until pageCount) {
             pagerState.scrollToPage(targetPage)
@@ -78,10 +76,8 @@ fun MonthCalendarView(
         Card(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(380.dp),
             shape = RoundedCornerShape(
-                topStart = 0.dp,
-                topEnd = 0.dp,
-                bottomStart = 20.dp,
-                bottomEnd = 20.dp
+                topStart = 0.dp, topEnd = 0.dp,
+                bottomStart = 20.dp, bottomEnd = 20.dp
             ),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -101,7 +97,7 @@ fun MonthCalendarView(
 
                 Spacer(Modifier.height(4.dp))
 
-                val daysInMonth = getDaysInMonth(monthDate, primaryCalendar)
+                val daysInMonth = getDaysInMonth(monthDate, primaryCalendar, hijriCacheMap)
                 val firstDayOfWeek = getFirstDayOfWeek(monthDate, primaryCalendar)
                 val rows = 6
 
@@ -139,7 +135,14 @@ fun MonthCalendarView(
 }
 
 // ═══ کمک‌تابع‌ها ═══
-private fun normalizeToMonthStart(date: Date, type: CalendarType): Date {
+
+/**
+ * برای HIJRI: برمی‌گردونه به اول ماه قمری (به‌عنوان Date میلادی)
+ */
+private fun normalizeToMonthStart(
+    date: Date, type: CalendarType,
+    hijriCacheMap: Map<String, HijriCache>
+): Date {
     return when (type) {
         CalendarType.JALALI -> {
             val j = Jalali.toJalaliPublic(date.time)
@@ -150,21 +153,78 @@ private fun normalizeToMonthStart(date: Date, type: CalendarType): Date {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.time
-        CalendarType.HIJRI -> date
+        CalendarType.HIJRI -> {
+            // ✅ برو عقب تا اول ماه قمری
+            val h = getHijriFromCacheOrFallback(date, null, hijriCacheMap)
+            val daysFromStart = h[2] - 1
+            Calendar.getInstance().apply {
+                time = date
+                add(Calendar.DAY_OF_MONTH, -daysFromStart)
+            }.time
+        }
     }
 }
 
-private fun addMonths(date: Date, months: Int): Date =
-    Calendar.getInstance().apply { time = date; add(Calendar.MONTH, months) }.time
+/**
+ * یه ماه اضافه/کم می‌کنه
+ */
+private fun addMonths(
+    date: Date, months: Int, type: CalendarType,
+    hijriCacheMap: Map<String, HijriCache>
+): Date {
+    return when (type) {
+        CalendarType.HIJRI -> {
+            // ✅ برای قمری: از تعداد روزهای ماه فعلی استفاده کن
+            var result = date
+            val direction = if (months >= 0) 1 else -1
+            val absMonths = kotlin.math.abs(months)
+            repeat(absMonths) {
+                val h = getHijriFromCacheOrFallback(result, null, hijriCacheMap)
+                val daysInMonth = getHijriMonthDays(result, h, hijriCacheMap)
+                Calendar.getInstance().apply {
+                    time = result
+                    add(Calendar.DAY_OF_MONTH, direction * daysInMonth)
+                }.time.also { result = it }
+            }
+            result
+        }
+        else -> Calendar.getInstance().apply { time = date; add(Calendar.MONTH, months) }.time
+    }
+}
 
-private fun monthsBetween(from: Date, to: Date): Int {
+/**
+ * تعداد روزهای ماه قمری
+ */
+private fun getHijriMonthDays(
+    date: Date, currentHijri: IntArray,
+    hijriCacheMap: Map<String, HijriCache>
+): Int {
+    val cal = Calendar.getInstance().apply { time = date }
+    for (i in 1..31) {
+        cal.add(Calendar.DAY_OF_MONTH, 1)
+        val h = getHijriFromCacheOrFallback(cal.time, null, hijriCacheMap)
+        if (h[0] != currentHijri[0] || h[1] != currentHijri[1]) {
+            return i
+        }
+    }
+    return 30
+}
+
+private fun monthsBetween(from: Date, to: Date, type: CalendarType): Int {
+    if (type == CalendarType.HIJRI) {
+        val days = ((to.time - from.time) / 86_400_000L).toInt()
+        return if (days >= 0) days / 30 else -((-days + 29) / 30)
+    }
     val c1 = Calendar.getInstance().apply { time = from }
     val c2 = Calendar.getInstance().apply { time = to }
     return (c2.get(Calendar.YEAR) - c1.get(Calendar.YEAR)) * 12 +
             (c2.get(Calendar.MONTH) - c1.get(Calendar.MONTH))
 }
 
-private fun isSameMonth(d1: Date, d2: Date, type: CalendarType, settings: CalendarSettings?): Boolean {
+private fun isSameMonth(
+    d1: Date, d2: Date, type: CalendarType,
+    hijriCacheMap: Map<String, HijriCache>
+): Boolean {
     return when (type) {
         CalendarType.JALALI -> {
             val j1 = Jalali.toJalaliPublic(d1.time); val j2 = Jalali.toJalaliPublic(d2.time)
@@ -175,16 +235,27 @@ private fun isSameMonth(d1: Date, d2: Date, type: CalendarType, settings: Calend
             val c2 = Calendar.getInstance().apply { time = d2 }
             c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) && c1.get(Calendar.MONTH) == c2.get(Calendar.MONTH)
         }
-        CalendarType.HIJRI -> true
+        CalendarType.HIJRI -> {
+            val h1 = getHijriFromCacheOrFallback(d1, null, hijriCacheMap)
+            val h2 = getHijriFromCacheOrFallback(d2, null, hijriCacheMap)
+            h1[0] == h2[0] && h1[1] == h2[1]
+        }
     }
 }
 
-private fun getDaysInMonth(date: Date, type: CalendarType): Int = when (type) {
+private fun getDaysInMonth(
+    date: Date, type: CalendarType,
+    hijriCacheMap: Map<String, HijriCache>
+): Int = when (type) {
     CalendarType.JALALI -> {
         val j = Jalali.toJalaliPublic(date.time); Jalali.daysInMonth(j[0], j[1])
     }
     CalendarType.GREGORIAN -> Calendar.getInstance().apply { time = date }.getActualMaximum(Calendar.DAY_OF_MONTH)
-    CalendarType.HIJRI -> 30
+    CalendarType.HIJRI -> {
+        // ✅ تعداد روزهای ماه قمری
+        val h = getHijriFromCacheOrFallback(date, null, hijriCacheMap)
+        getHijriMonthDays(date, h, hijriCacheMap)
+    }
 }
 
 private fun getFirstDayOfWeek(date: Date, type: CalendarType): Int {
@@ -216,7 +287,8 @@ private fun getDateForDay(currentDate: Date, dayNumber: Int, type: CalendarType)
             time = currentDate; set(Calendar.DAY_OF_MONTH, dayNumber)
         }.time
         CalendarType.HIJRI -> Calendar.getInstance().apply {
-            time = currentDate; set(Calendar.DAY_OF_MONTH, dayNumber)
+            time = currentDate
+            set(Calendar.DAY_OF_MONTH, dayNumber)
         }.time
     }
 }
