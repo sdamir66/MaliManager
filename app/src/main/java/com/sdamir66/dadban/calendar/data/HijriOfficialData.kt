@@ -6,21 +6,10 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-// ═══════════════════════════════════════════════════════════════
-//  HijriOfficialData
-//  داده‌های رسمی تقویم قمری ایران (مؤسسه ژئوفیزیک)
-//  منبع: hijri_official.txt (فرمت میلادی)
-//  تبدیل: با Jalali.kt + TimeZone گوشی (داینامیک)
-//  بازه: 1380 تا 1404
-// ═══════════════════════════════════════════════════════════════
-
 object HijriOfficialData {
 
     private const val ASSET_FILE = "hijri_official.txt"
     const val MAX_ASSET_YEAR = 1404
-
-    // ✅ TimeZone داینامیک (هر بار از گوشی خونده می‌شه)
-    private var deviceTz: TimeZone = TimeZone.getDefault()
 
     @Volatile
     private var loaded = false
@@ -30,16 +19,10 @@ object HijriOfficialData {
     private val availableHijriYears = mutableSetOf<Int>()
     private val availableJalaliYears = mutableSetOf<Int>()
 
-    // ═══════════════════════════════════════════════════════════
-    //  بارگذاری از asset
-    // ═══════════════════════════════════════════════════════════
     @Synchronized
     fun ensureLoaded(context: Context) {
         if (loaded) return
         try {
-            // ✅ TimeZone رو دوباره از گوشی بگیر
-            deviceTz = TimeZone.getDefault()
-
             val text = context.assets.open(ASSET_FILE)
                 .bufferedReader(Charsets.UTF_8)
                 .use { it.readText() }
@@ -50,9 +33,6 @@ object HijriOfficialData {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  پارس فایل و تبدیل میلادی به جلالی
-    // ═══════════════════════════════════════════════════════════
     private fun parseAndFill(text: String) {
         for (rawLine in text.lineSequence()) {
             val line = rawLine.trim()
@@ -69,7 +49,6 @@ object HijriOfficialData {
             val hijriYear = hijriParts[0].toIntOrNull() ?: continue
             val hijriMonth = hijriParts[1].toIntOrNull() ?: continue
 
-            // ═══ تبدیل میلادی به جلالی ═══
             val jalaliDate = convertMiladiToJalali(miladiDate) ?: continue
 
             val jalaliParts = jalaliDate.split("/")
@@ -102,9 +81,7 @@ object HijriOfficialData {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  تبدیل میلادی به جلالی (با TimeZone گوشی)
-    // ═══════════════════════════════════════════════════════════
+    // ✅ TimeZone داینامیک (هر بار از گوشی خونده می‌شه)
     private fun convertMiladiToJalali(miladi: String): String? {
         return try {
             val parts = miladi.split("-")
@@ -113,8 +90,8 @@ object HijriOfficialData {
             val gm = parts[1].toInt()
             val gd = parts[2].toInt()
 
-            // ✅ TimeZone گوشی + نیمه‌شب
-            val cal = Calendar.getInstance(deviceTz).apply {
+            // ✅ هر بار TimeZone رو دوباره از گوشی بگیر
+            val cal = Calendar.getInstance(TimeZone.getDefault()).apply {
                 set(gy, gm - 1, gd, 0, 0, 0)
                 set(Calendar.MILLISECOND, 0)
             }
@@ -127,7 +104,6 @@ object HijriOfficialData {
         }
     }
 
-    // ═══ API عمومی ═══
     fun hasJalaliYear(jalaliYear: Int): Boolean = availableJalaliYears.contains(jalaliYear)
     fun hasHijriYear(hijriYear: Int): Boolean = availableHijriYears.contains(hijriYear)
     fun hasJalaliDate(jalaliDate: String): Boolean = byJalaliDate.containsKey(jalaliDate)
