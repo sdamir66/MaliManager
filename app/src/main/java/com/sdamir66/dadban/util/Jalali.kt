@@ -13,28 +13,16 @@ object Jalali {
 
     fun monthName(m: Int): String = monthNames[(m - 1).coerceIn(0, 11)]
 
-    /**
-     * تاریخ امروز به جلالی
-     * - از TimeZone گوشی استفاده می‌کنه
-     */
-    fun nowJalali(): IntArray = toJalaliFromMillis(System.currentTimeMillis())
+    fun nowJalali(): IntArray = toJalali(System.currentTimeMillis())
 
-    /**
-     * فرمت تاریخ و ساعت (برای تراکنش‌ها)
-     * - از TimeZone گوشی استفاده می‌کنه
-     */
     fun format(millis: Long): String {
-        val cal = Calendar.getInstance().apply { timeInMillis = millis }
-        val j = toJalaliFromMillis(millis)
+        val j = toJalali(millis)
+        val cal = Calendar.getInstance(AppTimeZone.instance).apply { timeInMillis = millis }
         val h = cal.get(Calendar.HOUR_OF_DAY)
         val min = cal.get(Calendar.MINUTE)
         return "%04d/%02d/%02d %02d:%02d".format(Locale.US, j[0], j[1], j[2], h, min)
     }
 
-    /**
-     * تبدیل جلالی به millis
-     * - از TimeZone گوشی استفاده می‌کنه
-     */
     fun parse(s: String): Long? {
         val parts = s.trim().split("/")
         if (parts.size != 3) return null
@@ -42,16 +30,13 @@ object Jalali {
         val m = parts[1].toIntOrNull() ?: return null
         val d = parts[2].toIntOrNull() ?: return null
         if (m !in 1..12 || d !in 1..31) return null
-        return toMillisFromJalali(y, m, d)
+        return toGregorian(y, m, d)
     }
 
-    /**
-     * تاریخ شمسی + ساعت فعلی (برای تراکنش‌ها)
-     */
     fun parseWithCurrentTime(s: String): Long? {
         val dateMillis = parse(s) ?: return null
-        val now = Calendar.getInstance()
-        val dateCal = Calendar.getInstance().apply { timeInMillis = dateMillis }
+        val now = Calendar.getInstance(AppTimeZone.instance)
+        val dateCal = Calendar.getInstance(AppTimeZone.instance).apply { timeInMillis = dateMillis }
         dateCal.set(Calendar.HOUR_OF_DAY, now.get(Calendar.HOUR_OF_DAY))
         dateCal.set(Calendar.MINUTE, now.get(Calendar.MINUTE))
         dateCal.set(Calendar.SECOND, now.get(Calendar.SECOND))
@@ -66,13 +51,9 @@ object Jalali {
         else -> 30
     }
 
-    fun startOfJalaliMonth(y: Int, m: Int): Long = toMillisFromJalali(y, m, 1)
+    fun startOfJalaliMonth(y: Int, m: Int): Long = toGregorian(y, m, 1)
 
-    /**
-     * تبدیل millis به جلالی
-     * - از TimeZone گوشی استفاده می‌کنه
-     */
-    fun toJalaliPublic(millis: Long): IntArray = toJalaliFromMillis(millis)
+    fun toJalaliPublic(millis: Long): IntArray = toJalali(millis)
 
     /**
      * ✅ تبدیل مستقیم میلادی به جلالی (بدون TimeZone)
@@ -87,23 +68,17 @@ object Jalali {
         return r in intArrayOf(1, 5, 9, 13, 17, 22, 26, 30)
     }
 
-    /**
-     * تبدیل millis به جلالی (بر اساس TimeZone گوشی)
-     */
-    private fun toJalaliFromMillis(millis: Long): IntArray {
-        val cal = GregorianCalendar(TimeZone.getDefault()).apply { timeInMillis = millis }
+    private fun toJalali(millis: Long): IntArray {
+        val cal = GregorianCalendar(AppTimeZone.instance).apply { timeInMillis = millis }
         val gy = cal.get(Calendar.YEAR)
         val gm = cal.get(Calendar.MONTH) + 1
         val gd = cal.get(Calendar.DAY_OF_MONTH)
         return gregorianToJalali(gy, gm, gd)
     }
 
-    /**
-     * تبدیل جلالی به millis (بر اساس TimeZone گوشی)
-     */
-    private fun toMillisFromJalali(jy: Int, jm: Int, jd: Int): Long {
+    private fun toGregorian(jy: Int, jm: Int, jd: Int): Long {
         val g = jalaliToGregorian(jy, jm, jd)
-        val cal = GregorianCalendar(TimeZone.getDefault())
+        val cal = GregorianCalendar(AppTimeZone.instance)
         cal.set(g[0], g[1] - 1, g[2], 0, 0, 0)
         cal.set(Calendar.MILLISECOND, 0)
         return cal.timeInMillis
