@@ -37,7 +37,10 @@ fun MonthCalendarView(
     onDayClick: (Date) -> Unit,
     onDateChange: (Date) -> Unit
 ) {
-    val baseMonth = remember { normalizeToMonthStart(currentDate, primaryCalendar) }
+    // ✅ baseMonth با کلید primaryCalendar بازسازی می‌شه
+    val baseMonth = remember(primaryCalendar) {
+        normalizeToMonthStart(currentDate, primaryCalendar)
+    }
     val pageCount = 2400
     val startPage = pageCount / 2
 
@@ -48,14 +51,17 @@ fun MonthCalendarView(
 
     fun pageToDate(page: Int): Date = addMonths(baseMonth, page - startPage)
 
-    LaunchedEffect(pagerState.currentPage) {
+    // ✅ وقتی page عوض می‌شه، currentDate رو آپدیت کن
+    LaunchedEffect(pagerState.currentPage, primaryCalendar) {
         val newDate = pageToDate(pagerState.currentPage)
+        // چک کن که تاریخ جدید با currentDate فرق داشته باشه
         if (!isSameMonth(newDate, currentDate, primaryCalendar, settings)) {
             onDateChange(newDate)
         }
     }
 
-    LaunchedEffect(currentDate) {
+    // ✅ وقتی currentDate از بیرون عوض می‌شه، pager رو بچرخون
+    LaunchedEffect(currentDate, primaryCalendar) {
         val offset = monthsBetween(baseMonth, normalizeToMonthStart(currentDate, primaryCalendar))
         val targetPage = startPage + offset
         if (targetPage != pagerState.currentPage && targetPage in 0 until pageCount) {
@@ -78,7 +84,7 @@ fun MonthCalendarView(
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             Column(Modifier.padding(8.dp).fillMaxHeight()) {
-                // ═══ هدر روزهای هفته (force LTR) ═══
+                // ═══ هدر روزهای هفته ═══
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Row(Modifier.fillMaxWidth()) {
                         listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
@@ -98,7 +104,6 @@ fun MonthCalendarView(
                 val rows = 6
 
                 for (row in 0 until rows) {
-                    // ❌ CompositionLocalProvider حذف شد (نباید دور Row روزها باشه)
                     Row(Modifier.fillMaxWidth().weight(1f)) {
                         for (col in 0 until 7) {
                             val cellIndex = row * 7 + col
@@ -168,7 +173,11 @@ private fun isSameMonth(d1: Date, d2: Date, type: CalendarType, settings: Calend
             val c2 = Calendar.getInstance().apply { time = d2 }
             c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) && c1.get(Calendar.MONTH) == c2.get(Calendar.MONTH)
         }
-        CalendarType.HIJRI -> true
+        CalendarType.HIJRI -> {
+            val h1 = getHijriFromCacheOrFallback(d1, settings, hijriCacheMap = emptyMap())
+            val h2 = getHijriFromCacheOrFallback(d2, settings, hijriCacheMap = emptyMap())
+            h1[0] == h2[0] && h1[1] == h2[1]
+        }
     }
 }
 
@@ -246,7 +255,6 @@ fun getHijriFromCacheOrFallback(
     date: Date, settings: CalendarSettings?, cache: Map<String, HijriCache>
 ): IntArray {
     val j = Jalali.toJalaliPublic(date.time)
-    // ✅ Locale.US برای اطمینان از اعداد لاتین
     val key = String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], j[2])
     val cached = cache[key]
     if (cached != null) {
