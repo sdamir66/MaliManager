@@ -26,26 +26,26 @@ fun CalendarScreen(db: AppDb) {
 
     var settings by remember { mutableStateOf<CalendarSettings?>(null) }
     var hijriCacheMap by remember { mutableStateOf<Map<String, HijriCache>>(emptyMap()) }
+    // ✅ map دوم: کلیدش hijriYear/hijriMonth/hijriDay
+    var hijriCacheByHijriDate by remember { mutableStateOf<Map<String, HijriCache>>(emptyMap()) }
     var refreshTrigger by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         settings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
     }
 
-    // ✅ بارگذاری cache برای ۳ سال (سال جاری ± 1)
+    // ✅ بارگذاری cache برای ۳ سال
     LaunchedEffect(settings, refreshTrigger) {
         if (settings != null) {
             withContext(Dispatchers.IO) {
                 val currentYear = Jalali.nowJalali()[0]
                 val years = (currentYear - 1)..(currentYear + 1)
 
-                // ۱. دیتابیس
                 val dbItems = mutableListOf<HijriCache>()
                 for (y in years) {
                     dbItems.addAll(db.hijriCacheDao().getAllForYear(y))
                 }
 
-                // ۲. اگه دیتابیس خالی بود، از asset
                 val finalItems = if (dbItems.isNotEmpty()) {
                     dbItems
                 } else {
@@ -54,7 +54,14 @@ fun CalendarScreen(db: AppDb) {
                         .filter { it.jalaliYear in years }
                 }
 
+                // ✅ map اول (کلید jalaliDate)
                 hijriCacheMap = finalItems.associateBy { it.jalaliDate }
+
+                // ✅ map دوم (کلید hijriYear/hijriMonth/hijriDay)
+                hijriCacheByHijriDate = finalItems.associateBy {
+                    val monthNum = hijriMonthNameToNumber(it.hijriMonth)
+                    "${it.hijriYear}/$monthNum/${it.hijriDay}"
+                }
             }
         }
     }
@@ -116,6 +123,7 @@ fun CalendarScreen(db: AppDb) {
                 primaryCalendar = primaryCalendar,
                 settings = settings,
                 hijriCacheMap = hijriCacheMap,
+                hijriCacheByHijriDate = hijriCacheByHijriDate,
                 events = visibleEvents,
                 selectedDay = selectedDay,
                 onDayClick = { date ->
