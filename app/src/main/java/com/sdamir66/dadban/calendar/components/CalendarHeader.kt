@@ -36,7 +36,6 @@ fun CalendarHeader(
 ) {
     var showYearPicker by remember { mutableStateOf(false) }
 
-    // ✅ ماه و سال به‌صورت state (با تغییر currentDate آپدیت می‌شن)
     val monthName = remember(currentDate, primaryCalendar) {
         getMonthName(currentDate, primaryCalendar, hijriCacheMap)
     }
@@ -88,7 +87,6 @@ fun CalendarHeader(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.Bottom
                 ) {
-                    // ─── میلادی (چپ) ───
                     CalendarTypeChip(
                         label = getChipLabel(currentDate, CalendarType.GREGORIAN, hijriCacheMap, primaryCalendar),
                         isSelected = primaryCalendar == CalendarType.GREGORIAN,
@@ -96,7 +94,6 @@ fun CalendarHeader(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // ─── جلالی (وسط) ───
                     CalendarTypeChip(
                         label = getChipLabel(currentDate, CalendarType.JALALI, hijriCacheMap, primaryCalendar),
                         isSelected = primaryCalendar == CalendarType.JALALI,
@@ -104,7 +101,6 @@ fun CalendarHeader(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // ─── قمری (راست) ───
                     CalendarTypeChip(
                         label = getChipLabel(currentDate, CalendarType.HIJRI, hijriCacheMap, primaryCalendar),
                         isSelected = primaryCalendar == CalendarType.HIJRI,
@@ -140,10 +136,8 @@ private fun CalendarTypeChip(
         color = if (isSelected) Color.White else Color.White.copy(alpha = 0.2f),
         shape = if (isSelected) {
             RoundedCornerShape(
-                topStart = 14.dp,
-                topEnd = 14.dp,
-                bottomStart = 0.dp,
-                bottomEnd = 0.dp
+                topStart = 14.dp, topEnd = 14.dp,
+                bottomStart = 0.dp, bottomEnd = 0.dp
             )
         } else {
             RoundedCornerShape(14.dp)
@@ -241,12 +235,9 @@ private fun getChipLabel(
             getMonthRangeForPrimary(date, primaryCalendar, CalendarType.GREGORIAN, cache)
         }
         CalendarType.HIJRI -> {
-            // ✅ برای HIJRI، ماه وسط ماه جلالی رو بگیر (نه بازه)
-            val midMonth = Calendar.getInstance().apply {
-                time = date
-                set(Calendar.DAY_OF_MONTH, 15)
-            }.time
-            val h = getHijriFromCache(midMonth, cache) ?: getHijriDate(midMonth, null)
+            // ✅ اصلاح: از date مستقیم استفاده کن (نه midMonth)
+            // چون date برای HIJRI = اول ماه قمری هست
+            val h = getHijriFromCache(date, cache) ?: getHijriDate(date, null)
             "${h[0]}/${h[1].toString().padStart(2, '0')}/${h[2].toString().padStart(2, '0')}\n" +
             hijriMonthName(h[1])
         }
@@ -283,12 +274,8 @@ private fun getMonthRangeForPrimary(
             }
         }
         CalendarType.HIJRI -> {
-            // ✅ برای HIJRI، فقط ماه وسط ماه جلالی رو نشون بده
-            val midMonth = Calendar.getInstance().apply {
-                time = date
-                set(Calendar.DAY_OF_MONTH, 15)
-            }.time
-            val h = getHijriFromCache(midMonth, cache) ?: getHijriDate(midMonth, null)
+            // ✅ اصلاح: از date مستقیم استفاده کن
+            val h = getHijriFromCache(date, cache) ?: getHijriDate(date, null)
             hijriMonthName(h[1])
         }
     }
