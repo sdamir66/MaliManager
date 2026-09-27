@@ -2,6 +2,7 @@ package com.sdamir66.dadban.calendar.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -26,6 +27,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+private const val PAGE_COUNT = 2400
+private const val START_PAGE = PAGE_COUNT / 2
+
 @Composable
 fun MonthCalendarView(
     currentDate: Date,
@@ -37,50 +41,51 @@ fun MonthCalendarView(
     onDayClick: (Date) -> Unit,
     onDateChange: (Date) -> Unit
 ) {
-    // ✅ baseMonth = اول ماه فعلی
-    val baseMonth = remember(primaryCalendar) {
+    // ✅ anchorMonth = اول ماهِ فعلی (ثابت برای هر primaryCalendar)
+    val anchorMonth = remember(primaryCalendar) {
         normalizeToMonthStart(currentDate, primaryCalendar, hijriCacheMap)
     }
-    val pageCount = 2400
-    val startPage = pageCount / 2
 
-    val pagerState = rememberPagerState(
-        initialPage = startPage,
-        pageCount = { pageCount }
-    )
-
-    // ✅ وقتی primaryCalendar عوض می‌شه، pagerState رو ریست کن
-    LaunchedEffect(primaryCalendar) {
-        pagerState.scrollToPage(startPage)
+    // ✅ روزِ ماه (برای حفظ در swipe)
+    var dayOfMonth by remember(primaryCalendar) {
+        mutableIntStateOf(getDayOfMonth(currentDate, primaryCalendar, hijriCacheMap))
     }
 
-    // ✅ فلگ برای جلوگیری از حلقه
-    var isInternalChange by remember { mutableStateOf(false) }
+    // ✅ pagerState با key(primaryCalendar) — تقویم که عوض شه، ریست می‌شه
+    val pagerState: PagerState = key(primaryCalendar) {
+        rememberPagerState(
+            initialPage = START_PAGE,
+            pageCount = { PAGE_COUNT }
+        )
+    }
 
-    // ✅ وقتی کاربر swipe می‌کنه
-    LaunchedEffect(pagerState.currentPage, primaryCalendar) {
-        val offset = pagerState.currentPage - startPage
-        // ✅ روز ماه رو حفظ کن
-        val newDate = changeMonthPreservingDay(currentDate, offset, primaryCalendar, hijriCacheMap)
+    // ✅ وقتی کاربر روزی رو می‌زنه، dayOfMonth آپدیت شه
+    LaunchedEffect(currentDate, primaryCalendar) {
+        val newDay = getDayOfMonth(currentDate, primaryCalendar, hijriCacheMap)
+        if (newDay != dayOfMonth) {
+            dayOfMonth = newDay
+        }
+    }
+
+    // ✅ وقتی کاربر swipe می‌کنه، currentDate آپدیت شه
+    LaunchedEffect(pagerState.currentPage, primaryCalendar, dayOfMonth) {
+        val offset = pagerState.currentPage - START_PAGE
+        val newMonthStart = addMonths(anchorMonth, offset, primaryCalendar, hijriCacheMap)
+        val newDate = applyDay(newMonthStart, dayOfMonth, primaryCalendar, hijriCacheMap)
         if (!isSameDay(newDate, currentDate)) {
-            isInternalChange = true
             onDateChange(newDate)
         }
     }
 
     // ✅ وقتی currentDate از بیرون عوض می‌شه
     LaunchedEffect(currentDate, primaryCalendar) {
-        if (isInternalChange) {
-            isInternalChange = false
-            return@LaunchedEffect
-        }
-        val targetOffset = monthsBetween(
-            baseMonth,
+        val offset = monthsBetween(
+            anchorMonth,
             normalizeToMonthStart(currentDate, primaryCalendar, hijriCacheMap),
             primaryCalendar
         )
-        val targetPage = startPage + targetOffset
-        if (targetPage != pagerState.currentPage && targetPage in 0 until pageCount) {
+        val targetPage = START_PAGE + offset
+        if (targetPage != pagerState.currentPage && targetPage in 0 until PAGE_COUNT) {
             pagerState.scrollToPage(targetPage)
         }
     }
@@ -90,7 +95,10 @@ fun MonthCalendarView(
         modifier = Modifier.fillMaxWidth(),
         pageSpacing = 0.dp
     ) { page ->
-        val monthDate = addMonths(baseMonth, page - startPage, primaryCalendar, hijriCacheMap)
+        // ✅ کش کردن تاریخ هر صفحه
+        val monthDate = remember(page, anchorMonth, primaryCalendar) {
+            addMonths(anchorMonth, page - START_PAGE, primaryCalendar, hijriCacheMap)
+        }
 
         Card(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(380.dp),
@@ -124,6 +132,14 @@ private fun CalendarMonthContent(
     selectedDay: Date?,
     onDayClick: (Date) -> Unit
 ) {
+    // ✅ کش کردن مقادیر ثابت ماه
+    val daysInMonth = remember(monthDate, primaryCalendar, hijriCacheMap) {
+        getDaysInMonth(monthDate, primaryCalendar, hijriCacheMap)
+    }
+    val firstDayOfWeek = remember(monthDate, primaryCalendar) {
+        getFirstDayOfWeek(monthDate, primaryCalendar)
+    }
+
     Column(Modifier.padding(8.dp).fillMaxHeight()) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Row(Modifier.fillMaxWidth()) {
@@ -139,11 +155,7 @@ private fun CalendarMonthContent(
 
         Spacer(Modifier.height(4.dp))
 
-        val daysInMonth = getDaysInMonth(monthDate, primaryCalendar, hijriCacheMap)
-        val firstDayOfWeek = getFirstDayOfWeek(monthDate, primaryCalendar)
-        val rows = 6
-
-        for (row in 0 until rows) {
+        for (row in 0 until 6) {
             Row(Modifier.fillMaxWidth().weight(1f)) {
                 for (col in 0 until 7) {
                     val cellIndex = row * 7 + col
@@ -153,8 +165,9 @@ private fun CalendarMonthContent(
                         val isSelected = selectedDay?.let { isSameDay(it, date) } ?: false
                         val isToday = isSameDay(Date(), date)
                         val isFriday = col == 6
-                        val dayEvents = getEventsForDay(events, date, settings, hijriCacheMap)
-                        val hasHoliday = dayEvents.any { it.isHoliday }
+                        val hasHoliday = remember(date, events, hijriCacheMap) {
+                            getEventsForDay(events, date, settings, hijriCacheMap).any { it.isHoliday }
+                        }
 
                         DayCell(
                             day = dayNumber, date = date,
@@ -177,53 +190,45 @@ private fun CalendarMonthContent(
 // ═══ کمک‌تابع‌ها ═══
 
 /**
- * ✅ تغییر ماه با حفظ روز
- * مثلاً اگه currentDate = 5 مهر، offset = -1 → 5 شهریور
+ * روزِ ماه رو برمی‌گردونه (۱ تا ۳۱)
  */
-private fun changeMonthPreservingDay(
-    currentDate: Date, offset: Int,
+private fun getDayOfMonth(
+    date: Date, type: CalendarType,
+    hijriCacheMap: Map<String, HijriCache>
+): Int {
+    return when (type) {
+        CalendarType.JALALI -> Jalali.toJalaliPublic(date.time)[2]
+        CalendarType.GREGORIAN -> Calendar.getInstance().apply { time = date }.get(Calendar.DAY_OF_MONTH)
+        CalendarType.HIJRI -> getHijriFromCacheOrFallback(date, null, hijriCacheMap)[2]
+    }
+}
+
+/**
+ * روز رو توی ماه تنظیم می‌کنه (اگه ماه کوتاه‌تر بود، به آخرین روز)
+ */
+private fun applyDay(
+    monthStart: Date, day: Int,
     type: CalendarType,
     hijriCacheMap: Map<String, HijriCache>
 ): Date {
-    if (type == CalendarType.JALALI) {
-        val j = Jalali.toJalaliPublic(currentDate.time)
-        var newYear = j[0]
-        var newMonth = j[1] + offset
-        while (newMonth > 12) { newMonth -= 12; newYear++ }
-        while (newMonth < 1) { newMonth += 12; newYear-- }
-        val newDay = j[2].coerceAtMost(Jalali.daysInMonth(newYear, newMonth))
-        val newJalali = String.format(Locale.US, "%04d/%02d/%02d", newYear, newMonth, newDay)
-        return Date(Jalali.parse(newJalali) ?: currentDate.time)
-    } else if (type == CalendarType.GREGORIAN) {
-        val cal = Calendar.getInstance().apply {
-            time = currentDate
-            add(Calendar.MONTH, offset)
+    return when (type) {
+        CalendarType.JALALI -> {
+            val j = Jalali.toJalaliPublic(monthStart.time)
+            val actualDay = day.coerceAtMost(Jalali.daysInMonth(j[0], j[1]))
+            Date(Jalali.parse(String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], actualDay)) ?: monthStart.time)
         }
-        return cal.time
-    } else { // HIJRI
-        val h = getHijriFromCacheOrFallback(currentDate, null, hijriCacheMap)
-        val daysFromStart = h[2] - 1
-        val firstOfMonth = Calendar.getInstance().apply {
-            time = currentDate
-            add(Calendar.DAY_OF_MONTH, -daysFromStart)
-        }.time
-
-        var result = firstOfMonth
-        val direction = if (offset >= 0) 1 else -1
-        repeat(kotlin.math.abs(offset)) {
-            val hh = getHijriFromCacheOrFallback(result, null, hijriCacheMap)
-            val days = getHijriMonthDays(result, hh, hijriCacheMap)
+        CalendarType.GREGORIAN -> {
+            val cal = Calendar.getInstance().apply { time = monthStart }
+            val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+            cal.set(Calendar.DAY_OF_MONTH, day.coerceAtMost(maxDay))
+            cal.time
+        }
+        CalendarType.HIJRI -> {
             Calendar.getInstance().apply {
-                time = result
-                add(Calendar.DAY_OF_MONTH, direction * days)
-            }.time.also { result = it }
+                time = monthStart
+                add(Calendar.DAY_OF_MONTH, day - 1)
+            }.time
         }
-
-        // ✅ return اضافه شد
-        return Calendar.getInstance().apply {
-            time = result
-            add(Calendar.DAY_OF_MONTH, daysFromStart)
-        }.time
     }
 }
 
