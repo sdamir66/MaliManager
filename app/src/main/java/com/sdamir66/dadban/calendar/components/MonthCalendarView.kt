@@ -201,7 +201,6 @@ private fun changeMonthPreservingDay(
         }
         return cal.time
     } else { // HIJRI
-        // برای قمری: روز رو حفظ کن و offset ماه رو اعمال کن
         val h = getHijriFromCacheOrFallback(currentDate, null, hijriCacheMap)
         val daysFromStart = h[2] - 1
         val firstOfMonth = Calendar.getInstance().apply {
@@ -209,7 +208,6 @@ private fun changeMonthPreservingDay(
             add(Calendar.DAY_OF_MONTH, -daysFromStart)
         }.time
 
-        // offset ماه قمری: برو به اول ماه بعد/قبل
         var result = firstOfMonth
         val direction = if (offset >= 0) 1 else -1
         repeat(kotlin.math.abs(offset)) {
@@ -221,8 +219,8 @@ private fun changeMonthPreservingDay(
             }.time.also { result = it }
         }
 
-        // اضافه کردن روز اصلی
-        Calendar.getInstance().apply {
+        // ✅ return اضافه شد
+        return Calendar.getInstance().apply {
             time = result
             add(Calendar.DAY_OF_MONTH, daysFromStart)
         }.time
