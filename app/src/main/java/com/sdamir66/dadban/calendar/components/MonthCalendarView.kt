@@ -49,6 +49,9 @@ fun MonthCalendarView(
         initialPage = startPage,
         pageCount = { pageCount }
     )
+    LaunchedEffect(primaryCalendar) {
+    pagerState.scrollToPage(startPage)
+}
 
     // ✅ pageToDate رو کش کن
     val pageDateCache = remember(primaryCalendar, baseMonth) {
