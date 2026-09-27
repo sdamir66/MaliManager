@@ -22,6 +22,10 @@ import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.calendar.data.Event
 import com.sdamir66.dadban.calendar.data.HijriCache
 import com.sdamir66.dadban.util.Jalali
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.snapshotFlow
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -29,6 +33,7 @@ import java.util.Locale
 private const val PAGE_COUNT = 2400
 private const val START_PAGE = PAGE_COUNT / 2
 
+@OptIn(FlowPreview::class)
 @Composable
 fun MonthCalendarView(
     currentDate: Date,
@@ -95,16 +100,22 @@ fun MonthCalendarView(
 
     var isInternalChange by remember { mutableStateOf(false) }
 
-    // ✅ تغییر اصلی: settledPage به جای currentPage
-    LaunchedEffect(pagerState.settledPage, primaryCalendar, dayOfMonth) {
-        val monthStart = getPageDate(pagerState.settledPage)
-        val newDate = applyDay(monthStart, dayOfMonth, primaryCalendar, hijriCacheMap)
-        if (!isSameDay(newDate, currentDate)) {
-            isInternalChange = true
-            onDateChange(newDate)
-        }
+    // ✅ فقط بعد از توقف کامل swipe، currentDate رو آپدیت کن
+    LaunchedEffect(pagerState, primaryCalendar) {
+        snapshotFlow { pagerState.settledPage to dayOfMonth }
+            .distinctUntilChanged()
+            .debounce(150L)
+            .collect { (page, day) ->
+                val monthStart = getPageDate(page)
+                val newDate = applyDay(monthStart, day, primaryCalendar, hijriCacheMap)
+                if (!isSameDay(newDate, currentDate)) {
+                    isInternalChange = true
+                    onDateChange(newDate)
+                }
+            }
     }
 
+    // ✅ وقتی currentDate از بیرون عوض می‌شه
     LaunchedEffect(currentDate, primaryCalendar) {
         if (isInternalChange) {
             isInternalChange = false
@@ -121,6 +132,7 @@ fun MonthCalendarView(
         }
     }
 
+    // ✅ وقتی currentDate از بیرون عوض شد، dayOfMonth رو آپدیت کن
     LaunchedEffect(currentDate, primaryCalendar) {
         val newDay = getDayOfMonth(currentDate, primaryCalendar, hijriCacheMap)
         if (newDay != dayOfMonth) {
