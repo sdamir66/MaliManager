@@ -9,7 +9,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -23,9 +22,6 @@ import com.sdamir66.dadban.calendar.data.CalendarType
 import com.sdamir66.dadban.calendar.data.Event
 import com.sdamir66.dadban.calendar.data.HijriCache
 import com.sdamir66.dadban.util.Jalali
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -33,7 +29,6 @@ import java.util.Locale
 private const val PAGE_COUNT = 2400
 private const val START_PAGE = PAGE_COUNT / 2
 
-@OptIn(FlowPreview::class)
 @Composable
 fun MonthCalendarView(
     currentDate: Date,
@@ -100,19 +95,17 @@ fun MonthCalendarView(
 
     var isInternalChange by remember { mutableStateOf(false) }
 
-    // ✅ فقط بعد از توقف کامل swipe، currentDate رو آپدیت کن
-    LaunchedEffect(pagerState, primaryCalendar) {
-        snapshotFlow { pagerState.settledPage to dayOfMonth }
-            .distinctUntilChanged()
-            .debounce(150L)
-            .collect { (page, day) ->
-                val monthStart = getPageDate(page)
-                val newDate = applyDay(monthStart, day, primaryCalendar, hijriCacheMap)
-                if (!isSameDay(newDate, currentDate)) {
-                    isInternalChange = true
-                    onDateChange(newDate)
-                }
-            }
+    // ✅ فقط وقتی scroll کاملاً تموم شد، currentDate رو آپدیت کن
+    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress, primaryCalendar, dayOfMonth) {
+        // اگه در حال scroll هستیم، صبر کن
+        if (pagerState.isScrollInProgress) return@LaunchedEffect
+
+        val monthStart = getPageDate(pagerState.currentPage)
+        val newDate = applyDay(monthStart, dayOfMonth, primaryCalendar, hijriCacheMap)
+        if (!isSameDay(newDate, currentDate)) {
+            isInternalChange = true
+            onDateChange(newDate)
+        }
     }
 
     // ✅ وقتی currentDate از بیرون عوض می‌شه
