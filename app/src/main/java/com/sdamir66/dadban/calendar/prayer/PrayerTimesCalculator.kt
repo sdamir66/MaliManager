@@ -9,15 +9,15 @@ object PrayerTimesCalculator {
     /**
      * محاسبه اوقات شرعی به روش رسمی مؤسسه ژئوفیزیک دانشگاه تهران
      *
-     * پارامترها (مستقل از کشور):
+     * پارامترها:
      * - Fajr Angle: 17.7 درجه
      * - Isha Angle: 14 درجه
      * - Maghrib Angle: 4.5 درجه (ذهاب حمره مشرقیه)
      * - Midnight: Jafari
      * - Asr: Shafii (ضریب سایه = 1)
      *
-     * منطقه زمانی: از گوشی کاربر گرفته میشه (TimeZone.getDefault())
-     * پس برای هر کشور و هر نقطه‌ی دنیا دقیق کار می‌کنه.
+     * ✅ Method.TEHRAN خودش این پارامترها رو تنظیم می‌کنه.
+     * پس نباید دستی override بشن.
      */
     fun calculate(
         latitude: Double,
@@ -41,29 +41,21 @@ object PrayerTimesCalculator {
         )
 
         // ═══ ۴. روش محاسبه: Tehran (مؤسسه ژئوفیزیک) ═══
+        // ✅ Method.TEHRAN خودش:
+        //    - Fajr = 17.7
+        //    - Maghrib = 4.5
+        //    - Isha = 14
+        //    - Midnight = Jafari
+        //    - Asr = Standard
         prayTimes.setMethod(Method.TEHRAN)
 
-        // ═══ ۵. اسر شافعی (جعفری) ═══
-        prayTimes.setAsrJuristic(Constants.JURISTIC_STANDARD)
-
-        // ═══ ۶. نیمه‌شب جعفری ═══
-        prayTimes.setMidnightMode(Constants.MIDNIGHT_JAFARI)
-
-        // ═══ ۷. ✅ منطقه‌ی زمانی دستگاه کاربر ═══
-        // این خط باعث میشه اپ در هر کشوری که کاربر هست،
-        // اوقات رو بر اساس ساعت محلی همون کشور نمایش بده.
+        // ═══ ۵. ✅ منطقه‌ی زمانی دستگاه کاربر ═══
         prayTimes.setTimezone(TimeZone.getDefault())
 
-        // ═══ ۸. تنظیم عرض‌های بالا ═══
+        // ═══ ۶. تنظیم عرض‌های بالا ═══
         prayTimes.setHighLatsAdjustment(Constants.HIGHLAT_ANGLEBASED)
 
-        // ═══ ۹. تنظیم زاویه فجر به 18 درجه (هماهنگ با time.ir) ═══
-        prayTimes.setFajrDegrees(18.0)
-
-        // ═══ ۱۰. تنظیم اذان مغرب به 4.5 درجه (ذهاب حمره مشرقیه) ═══
-        prayTimes.setMaghribTime(4.5, false)
-
-        // ═══ ۱۱. استخراج اوقات ═══
+        // ═══ ۷. استخراج اوقات ═══
         val fajr = prayTimes.getTime(Constants.TIMES_FAJR)
         val sunrise = prayTimes.getTime(Constants.TIMES_SUNRISE)
         val dhuhr = prayTimes.getTime(Constants.TIMES_DHUHR)
