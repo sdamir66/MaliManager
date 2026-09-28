@@ -3,7 +3,6 @@ package com.sdamir66.dadban.calendar.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -29,9 +28,6 @@ import org.json.JSONArray
 import java.util.Calendar
 import java.util.Date
 
-/**
- * داده‌ی یه رویداد برای نمایش (چه از cache، چه از دیتابیس)
- */
 data class DisplayEvent(
     val title: String,
     val isHoliday: Boolean,
@@ -47,33 +43,8 @@ fun EventsSection(
     settings: CalendarSettings?,
     hijriCacheMap: Map<String, HijriCache>
 ) {
-    // ═══ اول از cache چک کن ═══
-    val j = Jalali.toJalaliPublic(selectedDate.time)
-    val key = "%04d/%02d/%02d".format(j[0], j[1], j[2])
-    val cached = hijriCacheMap[key]
-
-    // ═══ استخراج رویدادها از cache (اگه بود) ═══
-    val cachedEvents: List<DisplayEvent> = remember(cached) {
-        if (cached == null) emptyList()
-        else {
-            try {
-                val arr = JSONArray(cached.eventsJson)
-                (0 until arr.length()).map { i ->
-                    val o = arr.getJSONObject(i)
-                    DisplayEvent(
-                        title = o.optString("text", ""),
-                        isHoliday = o.optBoolean("isHoliday", false),
-                        category = if (o.optBoolean("isHoliday", false))
-                            EventCategory.NATIONAL
-                        else EventCategory.RELIGIOUS
-                    )
-                }
-            } catch (e: Exception) { emptyList() }
-        }
-    }
-
-    // ═══ رویدادهای دیتابیس (fallback یا رویدادهای کاربر) ═══
-    val dbEvents = remember(events, selectedDate, hijriCacheMap) {
+    // ✅ رویدادها فقط از دیتابیس (Room) خوانده می‌شن
+    val finalEvents = remember(events, selectedDate, hijriCacheMap) {
         val cal = Calendar.getInstance().apply { time = selectedDate }
         val gM = cal.get(Calendar.MONTH) + 1
         val gD = cal.get(Calendar.DAY_OF_MONTH)
@@ -96,11 +67,6 @@ fun EventsSection(
             )
         }
     }
-
-    // ✅ اگه cache داشتیم، از cache استفاده کن؛ وگرنه از دیتابیس
-    val finalEvents = if (cachedEvents.isNotEmpty()) cachedEvents
-                      else if (cached != null) cachedEvents  // cache خالی = بدون رویداد
-                      else dbEvents
 
     Column(Modifier.padding(horizontal = 16.dp)) {
         Text(
