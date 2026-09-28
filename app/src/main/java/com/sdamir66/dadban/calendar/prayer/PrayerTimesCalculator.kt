@@ -9,15 +9,15 @@ object PrayerTimesCalculator {
     /**
      * محاسبه اوقات شرعی به روش رسمی مؤسسه ژئوفیزیک دانشگاه تهران
      *
-     * پارامترها:
+     * پارامترهای Method.TEHRAN (از Parameters.java):
      * - Fajr Angle: 17.7 درجه
      * - Isha Angle: 14 درجه
      * - Maghrib Angle: 4.5 درجه (ذهاب حمره مشرقیه)
      * - Midnight: Jafari
      * - Asr: Shafii (ضریب سایه = 1)
      *
-     * ✅ Method.TEHRAN خودش این پارامترها رو تنظیم می‌کنه.
-     * پس نباید دستی override بشن.
+     * ⚠️ هیچ‌کدوم از این پارامترها نباید دستی override بشن،
+     * چون Parameters.setMethod خودش تنظیمشون می‌کنه.
      */
     fun calculate(
         latitude: Double,
@@ -26,7 +26,7 @@ object PrayerTimesCalculator {
         cityName: String = ""
     ): PrayerTimesData {
 
-        // ═══ ۱. ساخت نمونه PrayTimes ═══
+        // ═══ ۱. ساخت PrayTimes (constructor خودش Method.TEHRAN رو اعمال می‌کنه) ═══
         val prayTimes = PrayTimes()
 
         // ═══ ۲. تنظیم مختصات ═══
@@ -41,18 +41,14 @@ object PrayerTimesCalculator {
         )
 
         // ═══ ۴. روش محاسبه: Tehran (مؤسسه ژئوفیزیک) ═══
-        // ✅ Method.TEHRAN خودش:
-        //    - Fajr = 17.7
-        //    - Maghrib = 4.5
-        //    - Isha = 14
-        //    - Midnight = Jafari
-        //    - Asr = Standard
+        // ✅ این خط تکراریه (چون constructor خودش TEHRAN داره)
+        //    ولی برای اطمینان می‌ذاریمش.
         prayTimes.setMethod(Method.TEHRAN)
 
         // ═══ ۵. ✅ منطقه‌ی زمانی دستگاه کاربر ═══
         prayTimes.setTimezone(TimeZone.getDefault())
 
-        // ═══ ۶. تنظیم عرض‌های بالا ═══
+        // ═══ ۶. تنظیم عرض‌های بالا (برای شهرهای شمالی) ═══
         prayTimes.setHighLatsAdjustment(Constants.HIGHLAT_ANGLEBASED)
 
         // ═══ ۷. استخراج اوقات ═══
