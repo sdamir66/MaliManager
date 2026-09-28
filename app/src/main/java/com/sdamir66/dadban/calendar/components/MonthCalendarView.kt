@@ -63,7 +63,7 @@ fun MonthCalendarView(
         val offset = pagerState.settledPage - START_PAGE
         val newDate = getDateForOffset(
             anchorMonth, offset, dayOfMonth,
-            primaryCalendar, hijriCacheByHijriDate
+            primaryCalendar, hijriCacheMap, hijriCacheByHijriDate
         )
         if (!isSameDay(newDate, currentDate)) {
             isInternalChange = true
@@ -104,7 +104,7 @@ fun MonthCalendarView(
     ) { page ->
         val offset = page - START_PAGE
         val monthDate = getMonthStartForOffset(
-            anchorMonth, offset, primaryCalendar, hijriCacheByHijriDate
+            anchorMonth, offset, primaryCalendar, hijriCacheMap, hijriCacheByHijriDate
         )
 
         Card(
@@ -141,10 +141,10 @@ private fun CalendarMonthContent(
     selectedDay: Date?,
     onDayClick: (Date) -> Unit
 ) {
-    // ✅ برای HIJRI: تمام ۳۰ روز از دیتابیس cache
+    // ✅ برای HIJRI: ۳۰ روز از cache
     val hijriDates: List<Date>? = if (primaryCalendar == CalendarType.HIJRI) {
-        remember(monthDate, hijriCacheByHijriDate) {
-            val h = hijriCacheMap[formatJalaliDate(monthDate)] ?: return@remember null
+        remember(monthDate, hijriCacheByHijriDate, hijriCacheMap) {
+            val h = getHijriFromJalali(monthDate, hijriCacheMap) ?: return@remember null
             val monthNum = hijriMonthNameToNumber(h.hijriMonth)
             (1..30).mapNotNull { d ->
                 val cache = hijriCacheByHijriDate["${h.hijriYear}/$monthNum/$d"]
@@ -153,7 +153,7 @@ private fun CalendarMonthContent(
         }
     } else null
 
-    val daysInMonth = remember(monthDate, primaryCalendar, hijriCacheByHijriDate) {
+    val daysInMonth = remember(monthDate, primaryCalendar, hijriDates) {
         if (primaryCalendar == CalendarType.HIJRI) {
             hijriDates?.size ?: 0
         } else {
@@ -223,34 +223,39 @@ private fun CalendarMonthContent(
 
 // ═══ کمک‌تابع‌ها ═══
 
-private fun formatJalaliDate(date: Date): String {
-    val j = Jalali.toJalaliPublic(date.time)
-    return String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], j[2])
-}
-
 private fun jalaliDateToDate(jalaliDate: String): Date? {
     val millis = Jalali.parse(jalaliDate) ?: return null
     return Date(millis)
 }
 
 /**
+ * ✅ گرفتن HijriCache از روی Date (کلید jalaliDate)
+ */
+private fun getHijriFromJalali(
+    date: Date, hijriCacheMap: Map<String, HijriCache>
+): HijriCache? {
+    val j = Jalali.toJalaliPublic(date.time)
+    val key = String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], j[2])
+    return hijriCacheMap[key]
+}
+
+/**
  * ✅ Date برای (ماه شروع + offset + روز)
- * برای HIJRI از hijriCacheByHijriDate استفاده می‌کنه
  */
 private fun getDateForOffset(
     anchorMonth: Date, offset: Int, day: Int,
     type: CalendarType,
+    hijriCacheMap: Map<String, HijriCache>,
     hijriCacheByHijriDate: Map<String, HijriCache>
 ): Date {
     if (type == CalendarType.HIJRI) {
-        // از anchorMonth برو به ماه بعد/قبل با استفاده از cache
-        val anchorHijri = getHijriFromCacheOrFallbackStatic(anchorMonth, hijriCacheByHijriDate)
+        // ✅ گرفتن ماه فعلی از hijriCacheMap (کلید jalaliDate)
+        val anchorCache = getHijriFromJalali(anchorMonth, hijriCacheMap)
             ?: return anchorMonth
-        val monthNum = anchorHijri[1]
-        var year = anchorHijri[0]
+        val monthNum = hijriMonthNameToNumber(anchorCache.hijriMonth)
+        var year = anchorCache.hijriYear
         var newMonth = monthNum + offset
 
-        // اصلاح سال
         while (newMonth > 12) { newMonth -= 12; year++ }
         while (newMonth < 1) { newMonth += 12; year-- }
 
@@ -263,36 +268,36 @@ private fun getDateForOffset(
             time = anchorMonth
             add(Calendar.MONTH, offset)
         }
-        // ✅ set روز
-        when (type) {
+        return when (type) {
             CalendarType.JALALI -> {
                 val j = Jalali.toJalaliPublic(cal.time.time)
                 val actualDay = day.coerceAtMost(Jalali.daysInMonth(j[0], j[1]))
-                return jalaliDateToDate(String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], actualDay)) ?: cal.time
+                jalaliDateToDate(String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], actualDay)) ?: cal.time
             }
             CalendarType.GREGORIAN -> {
                 val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
                 cal.set(Calendar.DAY_OF_MONTH, day.coerceAtMost(maxDay))
-                return cal.time
+                cal.time
             }
-            else -> return cal.time
+            else -> cal.time
         }
     }
 }
 
 /**
- * ✅ شروع ماه برای offset (فقط برای نمایش)
+ * ✅ شروع ماه برای offset
  */
 private fun getMonthStartForOffset(
     anchorMonth: Date, offset: Int,
     type: CalendarType,
+    hijriCacheMap: Map<String, HijriCache>,
     hijriCacheByHijriDate: Map<String, HijriCache>
 ): Date {
     if (type == CalendarType.HIJRI) {
-        val anchorHijri = getHijriFromCacheOrFallbackStatic(anchorMonth, hijriCacheByHijriDate)
+        val anchorCache = getHijriFromJalali(anchorMonth, hijriCacheMap)
             ?: return anchorMonth
-        val monthNum = anchorHijri[1]
-        var year = anchorHijri[0]
+        val monthNum = hijriMonthNameToNumber(anchorCache.hijriMonth)
+        var year = anchorCache.hijriYear
         var newMonth = monthNum + offset
         while (newMonth > 12) { newMonth -= 12; year++ }
         while (newMonth < 1) { newMonth += 12; year-- }
@@ -305,15 +310,6 @@ private fun getMonthStartForOffset(
             add(Calendar.MONTH, offset)
         }.time
     }
-}
-
-private fun getHijriFromCacheOrFallbackStatic(
-    date: Date, cache: Map<String, HijriCache>
-): IntArray? {
-    val j = Jalali.toJalaliPublic(date.time)
-    val key = String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], j[2])
-    val cached = cache[key] ?: return null
-    return intArrayOf(cached.hijriYear, hijriMonthNameToNumber(cached.hijriMonth), cached.hijriDay)
 }
 
 private fun getDayOfMonth(
