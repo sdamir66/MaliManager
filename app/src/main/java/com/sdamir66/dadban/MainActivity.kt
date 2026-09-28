@@ -128,53 +128,46 @@ class MainActivity : ComponentActivity() {
     private lateinit var db: AppDb
     private val backupScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-override fun onCreate(b: Bundle?) {
-    super.onCreate(b)
-    db = AppDb.build(applicationContext)
+    override fun onCreate(b: Bundle?) {
+        super.onCreate(b)
+        db = AppDb.build(applicationContext)
 
-    window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
-    window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
+        window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
+        window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
 
-    // ✅ راه‌اندازی تقویم قمری + تنظیمات پیش‌فرض
-    backupScope.launch {
-        delay(500L)
+        backupScope.launch {
+            delay(500L)
+            HijriRepository.init(applicationContext, db)
 
-        // ═══ راه‌اندازی تقویم قمری ═══
-        // این کار hijri_official.txt (1380-1404) و calendar.json (1405) رو
-        // توی دیتابیس seed می‌کنه
-        HijriRepository.init(applicationContext, db)
-
-        // ═══ تنظیمات پیش‌فرض ═══
-        val current = db.calendarSettingsDao().getNow()
-        if (current == null) {
-            db.calendarSettingsDao().insert(CalendarSettings())
-        } else {
-            if (!current.showReligiousNonHoliday &&
-                !current.showNationalNonHoliday &&
-                !current.showGlobalEvents) {
-                db.calendarSettingsDao().insert(
-                    current.copy(
-                        showReligiousNonHoliday = true,
-                        showNationalNonHoliday = true,
-                        showGlobalEvents = true
+            val current = db.calendarSettingsDao().getNow()
+            if (current == null) {
+                db.calendarSettingsDao().insert(CalendarSettings())
+            } else {
+                if (!current.showReligiousNonHoliday &&
+                    !current.showNationalNonHoliday &&
+                    !current.showGlobalEvents) {
+                    db.calendarSettingsDao().insert(
+                        current.copy(
+                            showReligiousNonHoliday = true,
+                            showNationalNonHoliday = true,
+                            showGlobalEvents = true
+                        )
                     )
-                )
+                }
             }
         }
-    }
 
-    // بکاپ خودکار
-    backupScope.launch {
-        while (true) {
-            delay(5_000L)
-            autoBackupToInternal(applicationContext, db)
+        backupScope.launch {
+            while (true) {
+                delay(5_000L)
+                autoBackupToInternal(applicationContext, db)
+            }
+        }
+
+        setContent {
+            MaliManagerTheme { DadbanApp(db) }
         }
     }
-
-    setContent {
-        MaliManagerTheme { DadbanApp(db) }
-    }
-}
 
     override fun onStop() {
         super.onStop()
@@ -249,7 +242,7 @@ private fun toMillis(y: Int, m: Int, d: Int): Long =
     Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, d)) ?: 0L
 
 // ═══════════════════════════════════════════════════════
-// FinanceApp (بدون تب تنظیمات — چون توی DadbanApp جداست)
+// FinanceApp
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -327,7 +320,7 @@ fun PageHeader(
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonsScreen (بدون چرخ‌دنده)
+// PersonsScreen
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1421,7 +1414,7 @@ fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCa
 }
 
 // ═══════════════════════════════════════════════════════
-// TxEditor (با اعشار)
+// TxEditor
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1587,7 +1580,7 @@ fun TxEditor(old: Transaction?, accountId: Long, onSave: (Transaction) -> Unit, 
 @Composable
 fun ProfitPeriodsScreen(db: AppDb, accountId: Long, accountName: String, close: () -> Unit) {
     val periodsRaw by db.profitPeriod().byAccount(accountId).collectAsState(emptyList())
-    val periods = periodsRaw.sortedByDescending { it.id }  // ✅ آخرین بازه بالا
+    val periods = periodsRaw.sortedByDescending { it.id }
     var addPeriod by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
     var deleteTarget by remember { mutableStateOf<ProfitPeriod?>(null) }
@@ -1766,6 +1759,7 @@ fun ProfitPeriodEditor(
     var isChecking by remember { mutableStateOf(false) }
 
     val allAccounts by db.accounts().all().collectAsState(emptyList())
+    val allPersons by db.persons().all().collectAsState(emptyList())
     val currentAccount = allAccounts.find { it.id == accountId }
     val currentUnit = currentAccount?.displayUnit() ?: ""
 
@@ -1974,6 +1968,7 @@ fun ProfitPeriodEditor(
                     }
                 }
 
+                // ✅ حساب مقصد سود — تفکیک‌شده
                 if (accountId != 0L && currentAccount != null) {
                     Column {
                         Text("حساب مقصد سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
@@ -1989,10 +1984,28 @@ fun ProfitPeriodEditor(
                             )
                             Text("همین حساب", color = textColor, fontSize = 13.sp)
                         }
-                        allAccounts
-                            .filter { it.id != accountId && it.displayUnit() == currentUnit }
-                            .take(5)
-                            .forEach { acc ->
+
+                        val samePersonAccounts = allAccounts.filter {
+                            it.id != accountId &&
+                            it.personId == currentAccount.personId &&
+                            it.displayUnit() == currentUnit
+                        }
+                        val otherPersonAccounts = allAccounts.filter {
+                            it.id != accountId &&
+                            it.personId != currentAccount.personId &&
+                            it.displayUnit() == currentUnit
+                        }
+
+                        if (samePersonAccounts.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "حساب‌های شخصی",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = labelColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            samePersonAccounts.forEach { acc ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     RadioButton(
                                         selected = destinationAccountId == acc.id,
@@ -2005,6 +2018,32 @@ fun ProfitPeriodEditor(
                                     Text(acc.name, color = textColor, fontSize = 13.sp)
                                 }
                             }
+                        }
+
+                        if (otherPersonAccounts.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "حساب‌های دیگران",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = labelColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            otherPersonAccounts.forEach { acc ->
+                                val personName = allPersons.find { it.id == acc.personId }?.name ?: "?"
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    RadioButton(
+                                        selected = destinationAccountId == acc.id,
+                                        onClick = { destinationAccountId = acc.id },
+                                        colors = RadioButtonDefaults.colors(
+                                            selectedColor = HeaderBlue,
+                                            unselectedColor = labelColor
+                                        )
+                                    )
+                                    Text("${acc.name} — $personName", color = textColor, fontSize = 13.sp)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -2469,7 +2508,18 @@ object ProfitEngine {
                 val periodEndMillis = payoutMillis - 86400000L
                 val effectiveStart = maxOf(periodStartMillis, overallStartMillis)
 
-                val daysForRate = prevMonthDays
+                // ✅ اگه دوره خالیه، skip کن
+                if (effectiveStart > periodEndMillis) {
+                    cm++; if (cm > 12) { cm = 1; cy++ }
+                    continue
+                }
+
+                // ✅ تعداد روزهای واقعی دوره (برای محاسبه‌ی نرخ ماهانه)
+                val daysForRate = if (activePeriod.type == "ANNUAL") {
+                    365
+                } else {
+                    ((periodEndMillis - effectiveStart) / 86400000L).toInt() + 1
+                }
 
                 var totalProfit = 0.0
                 var currentMillis = effectiveStart
