@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Divider
 import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.HijriRepository
 import com.sdamir66.dadban.data.*
@@ -1765,7 +1768,11 @@ fun ProfitPeriodEditor(
     var conflictError by remember { mutableStateOf<String?>(null) }
     var isChecking by remember { mutableStateOf(false) }
 
+    // ✅ تب بازشو برای حساب مقصد (null | "self" | "others")
+    var expandedTab by remember { mutableStateOf<String?>(null) }
+
     val allAccounts by db.accounts().all().collectAsState(emptyList())
+    val allPersons by db.persons().all().collectAsState(emptyList())
     val currentAccount = allAccounts.find { it.id == accountId }
     val currentUnit = currentAccount?.displayUnit() ?: ""
 
@@ -1786,8 +1793,16 @@ fun ProfitPeriodEditor(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // ✅ اسکرول کلی برای کل دیالوگ
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
 
+                // ═══ نوع سود ═══
                 Column {
                     Text("نوع سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(6.dp))
@@ -1840,6 +1855,7 @@ fun ProfitPeriodEditor(
                     }
                 }
 
+                // ═══ نرخ ═══
                 Column {
                     Text(
                         if (type == "ANNUAL") "نرخ سالانه" else "نرخ ماهانه",
@@ -1871,6 +1887,7 @@ fun ProfitPeriodEditor(
                     }
                 }
 
+                // ═══ دوره ═══
                 Column {
                     Text("دوره", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(6.dp))
@@ -1932,6 +1949,7 @@ fun ProfitPeriodEditor(
                     }
                 }
 
+                // ═══ روز واریز سود ═══
                 Column {
                     Text("روز واریز سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(6.dp))
@@ -1974,40 +1992,198 @@ fun ProfitPeriodEditor(
                     }
                 }
 
+                // ═══ حساب مقصد سود — تفکیک‌شده با تب‌های بازشو ═══
                 if (accountId != 0L && currentAccount != null) {
                     Column {
-                        Text("حساب مقصد سود", style = MaterialTheme.typography.labelLarge, color = labelColor, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(
-                                selected = destinationAccountId == null,
-                                onClick = { destinationAccountId = null },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = HeaderBlue,
-                                    unselectedColor = labelColor
-                                )
-                            )
-                            Text("همین حساب", color = textColor, fontSize = 13.sp)
+                        Text(
+                            "حساب مقصد سود",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = labelColor,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(6.dp))
+
+                        // ─── تب ۱: حساب شخص ───
+                        val samePersonAccounts = allAccounts.filter {
+                            it.id != accountId &&
+                            it.personId == currentAccount.personId &&
+                            it.displayUnit() == currentUnit
                         }
-                        allAccounts
-                            .filter { it.id != accountId && it.displayUnit() == currentUnit }
-                            .take(5)
-                            .forEach { acc ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    RadioButton(
-                                        selected = destinationAccountId == acc.id,
-                                        onClick = { destinationAccountId = acc.id },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = HeaderBlue,
-                                            unselectedColor = labelColor
-                                        )
+
+                        Card(
+                            Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F1F7)),
+                            border = BorderStroke(1.dp, HeaderBlue.copy(alpha = 0.3f))
+                        ) {
+                            Column {
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable { expandedTab = if (expandedTab == "self") null else "self" }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        if (expandedTab == "self") "▲ حساب شخص" else "▼ حساب شخص",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = HeaderBlue,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                    Text(acc.name, color = textColor, fontSize = 13.sp)
+                                    Text(
+                                        "${samePersonAccounts.size + 1} حساب",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = labelColor
+                                    )
+                                }
+
+                                if (expandedTab == "self") {
+                                    HorizontalDivider(color = HeaderBlue.copy(alpha = 0.2f))
+                                    Column(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 180.dp)
+                                            .verticalScroll(rememberScrollState())
+                                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                                    ) {
+                                        // «همین حساب» — اولین گزینه
+                                        Row(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .clickable { destinationAccountId = null }
+                                                .padding(vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            RadioButton(
+                                                selected = destinationAccountId == null,
+                                                onClick = { destinationAccountId = null },
+                                                colors = RadioButtonDefaults.colors(
+                                                    selectedColor = HeaderBlue,
+                                                    unselectedColor = labelColor
+                                                )
+                                            )
+                                            Text("همین حساب", color = textColor, fontSize = 13.sp)
+                                        }
+
+                                        // بقیه‌ی حساب‌های همین شخص
+                                        samePersonAccounts.forEach { acc ->
+                                            Row(
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable { destinationAccountId = acc.id }
+                                                    .padding(vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = destinationAccountId == acc.id,
+                                                    onClick = { destinationAccountId = acc.id },
+                                                    colors = RadioButtonDefaults.colors(
+                                                        selectedColor = HeaderBlue,
+                                                        unselectedColor = labelColor
+                                                    )
+                                                )
+                                                Text(acc.name, color = textColor, fontSize = 13.sp)
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+
+                        // ─── تب ۲: حساب دیگران ───
+                        val otherPersonAccounts = allAccounts.filter {
+                            it.id != accountId &&
+                            it.personId != currentAccount.personId &&
+                            it.displayUnit() == currentUnit
+                        }
+
+                        if (otherPersonAccounts.isNotEmpty()) {
+                            val groupedByPerson = otherPersonAccounts.groupBy { it.personId }
+
+                            Card(
+                                Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F1F7)),
+                                border = BorderStroke(1.dp, HeaderBlue.copy(alpha = 0.3f))
+                            ) {
+                                Column {
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clickable { expandedTab = if (expandedTab == "others") null else "others" }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            if (expandedTab == "others") "▲ حساب دیگران" else "▼ حساب دیگران",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = HeaderBlue,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            "${groupedByPerson.size} شخص",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = labelColor
+                                        )
+                                    }
+
+                                    if (expandedTab == "others") {
+                                        HorizontalDivider(color = HeaderBlue.copy(alpha = 0.2f))
+                                        Column(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 220.dp)
+                                                .verticalScroll(rememberScrollState())
+                                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                                        ) {
+                                            groupedByPerson.forEach { (personId, accounts) ->
+                                                val personName = allPersons.find { it.id == personId }?.name ?: "?"
+
+                                                Text(
+                                                    "👤 $personName",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = HeaderBlue,
+                                                    modifier = Modifier.padding(
+                                                        start = 4.dp,
+                                                        top = 6.dp,
+                                                        bottom = 2.dp
+                                                    )
+                                                )
+
+                                                accounts.forEach { acc ->
+                                                    Row(
+                                                        Modifier
+                                                            .fillMaxWidth()
+                                                            .clickable { destinationAccountId = acc.id }
+                                                            .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        RadioButton(
+                                                            selected = destinationAccountId == acc.id,
+                                                            onClick = { destinationAccountId = acc.id },
+                                                            colors = RadioButtonDefaults.colors(
+                                                                selectedColor = HeaderBlue,
+                                                                unselectedColor = labelColor
+                                                            )
+                                                        )
+                                                        Text(acc.name, color = textColor, fontSize = 13.sp)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
+                // ═══ خطا ═══
                 if (error.isNotBlank()) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
@@ -2402,136 +2578,167 @@ object ProfitEngine {
         }
     }
 
-    suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
-        if (periods.isEmpty()) return
+   suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
+    if (periods.isEmpty()) return
 
-        val base = db.tx().byAccountNow(accountId)
-            .filter { !it.isAutoProfit }
-            .sortedBy { it.dateMillis }
-            .toMutableList()
+    val base = db.tx().byAccountNow(accountId)
+        .filter { !it.isAutoProfit }
+        .sortedBy { it.dateMillis }
+        .toMutableList()
 
-        val today = Jalali.nowJalali()
-        val todayMillis = System.currentTimeMillis()
+    val today = Jalali.nowJalali()
+    val todayMillis = System.currentTimeMillis()
 
-        db.tx().deleteAutoByPrefix(accountId.toString())
+    db.tx().deleteAutoByPrefix(accountId.toString())
 
-        val sortedByStart = periods.sortedWith(
-            compareBy({ it.startYear }, { it.startMonth }, { it.startDay })
-        )
-        val firstPeriod = sortedByStart.first()
-        val overallStartMillis = toMillis(
-            firstPeriod.startYear, firstPeriod.startMonth, firstPeriod.startDay
-        )
+    val sortedByStart = periods.sortedWith(
+        compareBy({ it.startYear }, { it.startMonth }, { it.startDay })
+    )
+    val firstPeriod = sortedByStart.first()
+    val overallStartMillis = toMillis(
+        firstPeriod.startYear, firstPeriod.startMonth, firstPeriod.startDay
+    )
 
-        val out = mutableListOf<Transaction>()
+    val out = mutableListOf<Transaction>()
 
-        var cy = firstPeriod.startYear
-        var cm = firstPeriod.startMonth
+    var cy = firstPeriod.startYear
+    var cm = firstPeriod.startMonth
 
-        while (true) {
-            if (cy > today[0] || (cy == today[0] && cm > today[1])) break
+    while (true) {
+        if (cy > today[0] || (cy == today[0] && cm > today[1])) break
 
-            val daysInMonth = Jalali.daysInMonth(cy, cm)
+        val daysInMonth = Jalali.daysInMonth(cy, cm)
 
-            val activePeriod = periods.find { period ->
-                val payoutDayForPeriod = if (period.payoutDay == 0) daysInMonth
-                                         else period.payoutDay.coerceIn(1, daysInMonth)
-                val monthStart = toMillis(cy, cm, 1)
-                val monthEnd = toMillis(cy, cm, payoutDayForPeriod)
+        // ✅ ۱. پیدا کردن بازه‌ی سود فعال برای این ماه
+        //    معیار: بازه‌ی سود با دوره‌ی محاسبه‌ی این ماه همپوشانی داشته باشه
+        val activePeriod = periods.find { period ->
+            // روز واریز این بازه در این ماه
+            val payoutDayForPeriod = if (period.payoutDay <= 0) daysInMonth
+                                     else period.payoutDay.coerceIn(1, daysInMonth)
+            val payoutMillis = toMillis(cy, cm, payoutDayForPeriod)
 
-                val pStart = toMillis(period.startYear, period.startMonth, period.startDay)
-                val pEnd = if (period.endYear != null && period.endMonth != null && period.endDay != null) {
-                    toMillis(period.endYear, period.endMonth, period.endDay)
-                } else {
-                    Long.MAX_VALUE
-                }
+            // دوره‌ی محاسبه: از روز واریز در ماه قبل، تا روز قبل از روز واریز
+            val prevY: Int
+            val prevM: Int
+            if (cm == 1) { prevY = cy - 1; prevM = 12 } else { prevY = cy; prevM = cm - 1 }
+            val prevMonthDays = Jalali.daysInMonth(prevY, prevM)
+            val startDayInPrevMonth = payoutDayForPeriod.coerceAtMost(prevMonthDays)
+            val calcStartMillis = toMillis(prevY, prevM, startDayInPrevMonth)
+            val calcEndMillis = payoutMillis - 86400000L
 
-                monthStart <= pEnd && pStart <= monthEnd
+            // بازه سود
+            val pStart = toMillis(period.startYear, period.startMonth, period.startDay)
+            val pEnd = if (period.endYear != null && period.endMonth != null && period.endDay != null) {
+                toMillis(period.endYear, period.endMonth, period.endDay)
+            } else {
+                Long.MAX_VALUE
             }
 
-            if (activePeriod != null) {
-                val payoutDayActual = if (activePeriod.payoutDay <= 0) daysInMonth
-                                      else activePeriod.payoutDay.coerceIn(1, daysInMonth)
-                val payoutMillis = toMillis(cy, cm, payoutDayActual)
-
-                if (payoutMillis > todayMillis) {
-                    cm++; if (cm > 12) { cm = 1; cy++ }
-                    continue
-                }
-
-                val prevY: Int
-                val prevM: Int
-                if (cm == 1) { prevY = cy - 1; prevM = 12 } else { prevY = cy; prevM = cm - 1 }
-                val prevMonthDays = Jalali.daysInMonth(prevY, prevM)
-                val startDayInPrevMonth = payoutDayActual.coerceAtMost(prevMonthDays)
-                val periodStartMillis = toMillis(prevY, prevM, startDayInPrevMonth)
-
-                val periodEndMillis = payoutMillis - 86400000L
-                val effectiveStart = maxOf(periodStartMillis, overallStartMillis)
-
-                val daysForRate = prevMonthDays
-
-                var totalProfit = 0.0
-                var currentMillis = effectiveStart
-
-                while (currentMillis <= periodEndMillis) {
-                    val dayStartMillis = currentMillis
-                    val dayEndMillis = currentMillis + 86399000L
-
-                    val minBalance = calculateMinBalanceInDay(
-                        base = base,
-                        dayStartMillis = dayStartMillis,
-                        dayEndMillis = dayEndMillis
-                    )
-
-                    if (minBalance > 0.0) {
-                        val dailyRate = if (activePeriod.type == "ANNUAL") {
-                            activePeriod.rate / 100.0 / 365.0
-                        } else {
-                            activePeriod.rate / 100.0 / daysForRate
-                        }
-                        totalProfit += minBalance * dailyRate
-                    }
-
-                    currentMillis += 86400000L
-                }
-
-                val roundedProfit = totalProfit
-                if (roundedProfit > 0.0) {
-                    val dest = activePeriod.destinationAccountId ?: accountId
-                    val typeLabel = if (activePeriod.type == "ANNUAL") "سالانه" else "ماهانه"
-                    val rateDisplay = if (activePeriod.rate % 1.0 == 0.0) {
-                        activePeriod.rate.toLong().toString()
-                    } else {
-                        activePeriod.rate.toString()
-                    }
-                    val text = "واریز سود با نرخ $rateDisplay درصد $typeLabel"
-
-                    val profitTx = Transaction(
-                        id = 0,
-                        accountId = dest,
-                        dateMillis = payoutMillis,
-                        type = "بستانکار",
-                        amount = roundedProfit,
-                        note = text,
-                        isAutoProfit = true,
-                        profitKey = "$accountId:$cy:$cm"
-                    )
-
-                    out.add(profitTx)
-
-                    if (dest == accountId) {
-                        base.add(profitTx)
-                        base.sortBy { it.dateMillis }
-                    }
-                }
-            }
-
-            cm++; if (cm > 12) { cm = 1; cy++ }
+            // ✅ همپوشانی: آیا دوره‌ی محاسبه با بازه سود اشتراک داره؟
+            calcStartMillis <= pEnd && pStart <= calcEndMillis
         }
 
-        db.tx().insertAll(out)
+        if (activePeriod != null) {
+            val payoutDayActual = if (activePeriod.payoutDay <= 0) daysInMonth
+                                  else activePeriod.payoutDay.coerceIn(1, daysInMonth)
+            val payoutMillis = toMillis(cy, cm, payoutDayActual)
+
+            if (payoutMillis > todayMillis) {
+                cm++; if (cm > 12) { cm = 1; cy++ }
+                continue
+            }
+
+            // دوره‌ی محاسبه
+            val prevY: Int
+            val prevM: Int
+            if (cm == 1) { prevY = cy - 1; prevM = 12 } else { prevY = cy; prevM = cm - 1 }
+            val prevMonthDays = Jalali.daysInMonth(prevY, prevM)
+            val startDayInPrevMonth = payoutDayActual.coerceAtMost(prevMonthDays)
+            val calcStartMillis = toMillis(prevY, prevM, startDayInPrevMonth)
+            val calcEndMillis = payoutMillis - 86400000L
+
+            // بازه سود
+            val pStartMillis = toMillis(activePeriod.startYear, activePeriod.startMonth, activePeriod.startDay)
+            val pEndMillis = if (activePeriod.endYear != null && activePeriod.endMonth != null && activePeriod.endDay != null) {
+                toMillis(activePeriod.endYear, activePeriod.endMonth, activePeriod.endDay)
+            } else {
+                Long.MAX_VALUE
+            }
+
+            // ✅ بازه‌ی مؤثر = همپوشانی دوره‌ی محاسبه با بازه سود
+            val effectiveStart = maxOf(calcStartMillis, pStartMillis, overallStartMillis)
+            val effectiveEnd = minOf(calcEndMillis, pEndMillis)
+
+            // ✅ اگه دوره خالیه، skip کن
+            if (effectiveStart > effectiveEnd) {
+                cm++; if (cm > 12) { cm = 1; cy++ }
+                continue
+            }
+
+            // ✅ تعداد روزهای واقعی دوره
+            val totalDays = ((effectiveEnd - effectiveStart) / 86400000L).toInt() + 1
+
+            var totalProfit = 0.0
+            var currentMillis = effectiveStart
+
+            while (currentMillis <= effectiveEnd) {
+                val dayStartMillis = currentMillis
+                val dayEndMillis = currentMillis + 86399000L
+
+                val minBalance = calculateMinBalanceInDay(
+                    base = base,
+                    dayStartMillis = dayStartMillis,
+                    dayEndMillis = dayEndMillis
+                )
+
+                if (minBalance > 0.0) {
+                    val dailyRate = if (activePeriod.type == "ANNUAL") {
+                        activePeriod.rate / 100.0 / 365.0
+                    } else {
+                        activePeriod.rate / 100.0 / totalDays
+                    }
+                    totalProfit += minBalance * dailyRate
+                }
+
+                currentMillis += 86400000L
+            }
+
+            val roundedProfit = totalProfit
+            if (roundedProfit > 0.0) {
+                val dest = activePeriod.destinationAccountId ?: accountId
+                val typeLabel = if (activePeriod.type == "ANNUAL") "سالانه" else "ماهانه"
+                val rateDisplay = if (activePeriod.rate % 1.0 == 0.0) {
+                    activePeriod.rate.toLong().toString()
+                } else {
+                    activePeriod.rate.toString()
+                }
+                val text = "واریز سود با نرخ $rateDisplay درصد $typeLabel"
+
+                val profitTx = Transaction(
+                    id = 0,
+                    accountId = dest,
+                    dateMillis = payoutMillis,
+                    type = "بستانکار",
+                    amount = roundedProfit,
+                    note = text,
+                    isAutoProfit = true,
+                    profitKey = "$accountId:$cy:$cm"
+                )
+
+                out.add(profitTx)
+
+                if (dest == accountId) {
+                    base.add(profitTx)
+                    base.sortBy { it.dateMillis }
+                }
+            }
+        }
+
+        cm++; if (cm > 12) { cm = 1; cy++ }
     }
+
+    db.tx().insertAll(out)
+}
 
     private fun calculateMinBalanceInDay(
         base: MutableList<Transaction>,
