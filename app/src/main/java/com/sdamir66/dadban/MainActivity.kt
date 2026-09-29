@@ -2578,7 +2578,7 @@ object ProfitEngine {
         }
     }
 
-   suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
+suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
     if (periods.isEmpty()) return
 
     val base = db.tx().byAccountNow(accountId)
@@ -2609,15 +2609,11 @@ object ProfitEngine {
 
         val daysInMonth = Jalali.daysInMonth(cy, cm)
 
-        // ✅ ۱. پیدا کردن بازه‌ی سود فعال برای این ماه
-        //    معیار: بازه‌ی سود با دوره‌ی محاسبه‌ی این ماه همپوشانی داشته باشه
         val activePeriod = periods.find { period ->
-            // روز واریز این بازه در این ماه
             val payoutDayForPeriod = if (period.payoutDay <= 0) daysInMonth
                                      else period.payoutDay.coerceIn(1, daysInMonth)
             val payoutMillis = toMillis(cy, cm, payoutDayForPeriod)
 
-            // دوره‌ی محاسبه: از روز واریز در ماه قبل، تا روز قبل از روز واریز
             val prevY: Int
             val prevM: Int
             if (cm == 1) { prevY = cy - 1; prevM = 12 } else { prevY = cy; prevM = cm - 1 }
@@ -2626,7 +2622,6 @@ object ProfitEngine {
             val calcStartMillis = toMillis(prevY, prevM, startDayInPrevMonth)
             val calcEndMillis = payoutMillis - 86400000L
 
-            // بازه سود
             val pStart = toMillis(period.startYear, period.startMonth, period.startDay)
             val pEnd = if (period.endYear != null && period.endMonth != null && period.endDay != null) {
                 toMillis(period.endYear, period.endMonth, period.endDay)
@@ -2634,7 +2629,6 @@ object ProfitEngine {
                 Long.MAX_VALUE
             }
 
-            // ✅ همپوشانی: آیا دوره‌ی محاسبه با بازه سود اشتراک داره؟
             calcStartMillis <= pEnd && pStart <= calcEndMillis
         }
 
@@ -2648,7 +2642,6 @@ object ProfitEngine {
                 continue
             }
 
-            // دوره‌ی محاسبه
             val prevY: Int
             val prevM: Int
             if (cm == 1) { prevY = cy - 1; prevM = 12 } else { prevY = cy; prevM = cm - 1 }
@@ -2657,7 +2650,6 @@ object ProfitEngine {
             val calcStartMillis = toMillis(prevY, prevM, startDayInPrevMonth)
             val calcEndMillis = payoutMillis - 86400000L
 
-            // بازه سود
             val pStartMillis = toMillis(activePeriod.startYear, activePeriod.startMonth, activePeriod.startDay)
             val pEndMillis = if (activePeriod.endYear != null && activePeriod.endMonth != null && activePeriod.endDay != null) {
                 toMillis(activePeriod.endYear, activePeriod.endMonth, activePeriod.endDay)
@@ -2665,18 +2657,13 @@ object ProfitEngine {
                 Long.MAX_VALUE
             }
 
-            // ✅ بازه‌ی مؤثر = همپوشانی دوره‌ی محاسبه با بازه سود
             val effectiveStart = maxOf(calcStartMillis, pStartMillis, overallStartMillis)
             val effectiveEnd = minOf(calcEndMillis, pEndMillis)
 
-            // ✅ اگه دوره خالیه، skip کن
             if (effectiveStart > effectiveEnd) {
                 cm++; if (cm > 12) { cm = 1; cy++ }
                 continue
             }
-
-            // ✅ تعداد روزهای واقعی دوره
-            val totalDays = ((effectiveEnd - effectiveStart) / 86400000L).toInt() + 1
 
             var totalProfit = 0.0
             var currentMillis = effectiveStart
@@ -2692,10 +2679,14 @@ object ProfitEngine {
                 )
 
                 if (minBalance > 0.0) {
+                    // ✅ نرخ روزانه بر اساس نوع و ماه
                     val dailyRate = if (activePeriod.type == "ANNUAL") {
                         activePeriod.rate / 100.0 / 365.0
                     } else {
-                        activePeriod.rate / 100.0 / totalDays
+                        // ✅ برای ماهانه: بر اساس تعداد روزهای ماه این روز
+                        val dayJalali = Jalali.toJalaliPublic(currentMillis)
+                        val daysInThisMonth = Jalali.daysInMonth(dayJalali[0], dayJalali[1])
+                        activePeriod.rate / 100.0 / daysInThisMonth
                     }
                     totalProfit += minBalance * dailyRate
                 }
