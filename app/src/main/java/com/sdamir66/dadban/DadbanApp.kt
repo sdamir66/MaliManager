@@ -3,6 +3,7 @@ package com.sdamir66.dadban
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.CalendarScreen
 import com.sdamir66.dadban.data.AppDb
+import com.sdamir66.dadban.tools.ui.ToolsScreen
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 
 enum class DadbanTab(
@@ -25,6 +27,7 @@ enum class DadbanTab(
 ) {
     CALENDAR("تقویم", Icons.Default.DateRange),
     FINANCE("مالی", Icons.Default.AccountBalance),
+    TOOLS("ابزارها", Icons.Default.Build),
     SETTINGS("تنظیمات", Icons.Default.Settings)
 }
 
@@ -79,6 +82,7 @@ fun DadbanApp(db: AppDb) {
                 when (currentTab) {
                     DadbanTab.CALENDAR -> CalendarScreen(db)
                     DadbanTab.FINANCE -> FinanceApp(db)
+                    DadbanTab.TOOLS -> ToolsScreen()
                     DadbanTab.SETTINGS -> SettingsScreen(db) { currentTab = DadbanTab.CALENDAR }
                 }
             }
