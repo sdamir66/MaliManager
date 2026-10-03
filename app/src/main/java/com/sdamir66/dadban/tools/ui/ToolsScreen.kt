@@ -1,15 +1,13 @@
 package com.sdamir66.dadban.tools.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,11 +17,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.sdamir66.dadban.tools.PriceCategory
+import com.sdamir66.dadban.tools.PriceCatalog
 import com.sdamir66.dadban.tools.TgjuPrice
 import com.sdamir66.dadban.tools.ToolsPreferences
 import com.sdamir66.dadban.tools.ToolsRepository
 import com.sdamir66.dadban.ui.theme.BgLight
+import com.sdamir66.dadban.ui.theme.CreditGreen
+import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -33,20 +33,16 @@ fun ToolsScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // ═══ State ═══
     var allPrices by remember { mutableStateOf<List<TgjuPrice>>(emptyList()) }
-    var selectedKeys by remember {
-        mutableStateOf(ToolsPreferences.getSelectedKeys(context))
-    }
+    var selectedKeys by remember { mutableStateOf(ToolsPreferences.getSelectedKeys(context)) }
     var isExpanded by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // ═══ تابع دریافت قیمت‌ها ═══
     suspend fun refreshPrices() {
         isLoading = true
         errorMessage = null
-        val result = ToolsRepository.fetchPrices(PriceCategory.ALL_KEYS)
+        val result = ToolsRepository.fetchPrices(PriceCatalog.ALL_ORDERED)
         isLoading = false
         result.fold(
             onSuccess = { allPrices = it },
@@ -54,35 +50,40 @@ fun ToolsScreen() {
         )
     }
 
-    // ═══ دریافت اولیه + هر ۵ دقیقه ═══
     LaunchedEffect(Unit) {
         refreshPrices()
         while (true) {
-            delay(5 * 60 * 1000L)  // ۵ دقیقه
+            delay(5 * 60 * 1000L)
             refreshPrices()
         }
     }
 
-    // ═══ ذخیره‌ی انتخاب‌شده‌ها ═══
-    fun toggleKey(key: String) {
-        val newList = if (key in selectedKeys) {
-            selectedKeys - key
-        } else {
-            selectedKeys + key
+    fun addToTop(key: String) {
+        if (key !in selectedKeys) {
+            selectedKeys = selectedKeys + key
+            ToolsPreferences.saveSelectedKeys(context, selectedKeys)
         }
-        selectedKeys = newList
-        ToolsPreferences.saveSelectedKeys(context, newList)
     }
 
-    // ═══ تاپ‌لیست ═══
-    val topList = selectedKeys.mapNotNull { key ->
+    fun removeFromTop(key: String) {
+        selectedKeys = selectedKeys - key
+        ToolsPreferences.saveSelectedKeys(context, selectedKeys)
+    }
+
+    // ═══ تاپ‌لیست (مرتب‌شده) ═══
+    val topList = PriceCatalog.sortForTopList(selectedKeys).mapNotNull { key ->
+        allPrices.find { it.key == key }
+    }
+
+    // ═══ لیست کامل (بدون انتخاب‌شده‌ها، مرتب‌شده) ═══
+    val allList = PriceCatalog.sortForAllList(
+        PriceCatalog.ALL_ORDERED.filter { it !in selectedKeys }
+    ).mapNotNull { key ->
         allPrices.find { it.key == key }
     }
 
     Column(
-        Modifier
-            .fillMaxSize()
-            .background(BgLight)
+        Modifier.fillMaxSize().background(BgLight)
     ) {
         // ═══ هدر ═══
         Box(
@@ -141,8 +142,6 @@ fun ToolsScreen() {
                                 color = Color(0xFF1B1B1F),
                                 modifier = Modifier.weight(1f)
                             )
-
-                            // دکمه‌ی به‌روزرسانی
                             IconButton(
                                 onClick = { scope.launch { refreshPrices() } },
                                 enabled = !isLoading,
@@ -177,7 +176,7 @@ fun ToolsScreen() {
                         }
 
                         // ─── تاپ‌لیست ───
-                        if (topList.isEmpty() && allPrices.isNotEmpty()) {
+                        if (topList.isEmpty()) {
                             Text(
                                 "هنوز چیزی انتخاب نکردی",
                                 style = MaterialTheme.typography.bodySmall,
@@ -186,11 +185,11 @@ fun ToolsScreen() {
                             )
                         } else {
                             topList.forEach { price ->
-                                PriceItem(
+                                SwipeableTopItem(
                                     price = price,
-                                    isSelected = true,
-                                    onToggle = { toggleKey(price.key) }
+                                    onRemove = { removeFromTop(price.key) }
                                 )
+                                HorizontalDivider(color = Color(0xFFEEEEEE))
                             }
                         }
 
@@ -202,35 +201,135 @@ fun ToolsScreen() {
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    if (isExpanded) "▲ بستن لیست کامل"
-                                    else "▼ لیست کامل (${allPrices.size} آیتم)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = HeaderBlue,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                            Text(
+                                if (isExpanded) "▲ بستن لیست کامل"
+                                else "▼ لیست کامل (${allList.size} آیتم)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = HeaderBlue,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
 
                         // ─── لیست کامل ───
                         if (isExpanded) {
                             HorizontalDivider(color = Color(0xFFEEEEEE))
-
-                            allPrices.forEach { price ->
-                                PriceItem(
+                            allList.forEach { price ->
+                                SwipeableAllItem(
                                     price = price,
-                                    isSelected = price.key in selectedKeys,
-                                    onToggle = { toggleKey(price.key) }
+                                    onAdd = { addToTop(price.key) }
                                 )
+                                HorizontalDivider(color = Color(0xFFEEEEEE))
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Swipeable item برای تاپ‌لیست (سوایپ ← حذف)
+// ═══════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableTopItem(
+    price: TgjuPrice,
+    onRemove: () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onRemove()
+                true
+            } else false
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(DebitRed.copy(alpha = 0.15f))
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "حذف از تاپ",
+                        tint = DebitRed,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "حذف از تاپ",
+                        color = DebitRed,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    ) {
+        PriceItem(price)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Swipeable item برای لیست کامل (سوایپ ← افزودن به تاپ)
+// ═══════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableAllItem(
+    price: TgjuPrice,
+    onAdd: () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onAdd()
+                true
+            } else false
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(CreditGreen.copy(alpha = 0.15f))
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "افزودن به تاپ",
+                        tint = CreditGreen,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "افزودن به تاپ",
+                        color = CreditGreen,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    ) {
+        PriceItem(price)
     }
 }
