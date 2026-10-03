@@ -17,13 +17,14 @@ data class TgjuPrice(
 )
 
 // ═══════════════════════════════════════════════════════════════
-//  PriceCatalog — دسته‌بندی، ترتیب، mapping
+//  PriceCatalog
+//  تمام mapping ها و ترتیب‌ها
 // ═══════════════════════════════════════════════════════════════
 
 object PriceCatalog {
 
     // ═══ ترتیب کامل نمایش در لیست کلی ═══
-    // طلا → سکه‌ها → ارزها → رمزارزها
+    // طلا → سکه‌ها (امامی، بهار، قدیمی‌ها، گرمی) → ارزها → رمزارزها
     val ALL_ORDERED: List<String> = listOf(
         // ─── طلا ───
         "geram18",          // طلای ۱۸ عیار
@@ -32,17 +33,15 @@ object PriceCatalog {
         "gold_ounce",       // انس طلا
         "silver_ounce",     // انس نقره
 
-        // ─── سکه‌ها (به ترتیب اهمیت) ───
+        // ─── سکه‌ها ───
         "sekee",            // سکه امامی
         "sekeb",            // سکه بهار آزادی
+        "137142",           // تمام سکه (قبل ۸۶)
         "nim",              // نیم‌سکه
+        "137143",           // نیم‌سکه (قبل ۸۶)
         "rob",              // ربع‌سکه
+        "137144",           // ربع‌سکه (قبل ۸۶)
         "gerami",           // سکه گرمی
-
-        // ─── سکه‌های قدیمی (تاریخ پایین) ───
-        "137142",           // سکه قدیم ۱
-        "137143",           // سکه قدیم ۲
-        "137144",           // سکه قدیم ۳
 
         // ─── ارزها ───
         "price_dollar_rl",  // دلار
@@ -74,7 +73,6 @@ object PriceCatalog {
     )
 
     // ═══ تاپ‌لیست پیش‌فرض ═══
-    // دلار → تتر → یورو → سکه‌ها → بیت کوین
     val DEFAULT_SELECTED: List<String> = listOf(
         "price_dollar_rl",  // دلار
         "137138",           // تتر
@@ -133,35 +131,6 @@ object PriceCatalog {
         "137123" to "مونرو"
     )
 
-    // ═══ عنوان‌های پیش‌فرض (برای قبل از لود) ═══
-    val DEFAULT_TITLES: Map<String, String> = mapOf(
-        // ارزها
-        "price_dollar_rl" to "دلار آمریکا",
-        "price_eur" to "یورو",
-        "price_gbp" to "پوند",
-        "price_aed" to "درهم امارات",
-        "price_try" to "لیر ترکیه",
-        "price_iqd" to "دینار عراق",
-        "price_rub" to "روبل روسیه",
-        "price_kwd" to "دینار کویت",
-        // طلا
-        "geram18" to "طلای ۱۸ عیار",
-        "geram24" to "طلای ۲۴ عیار",
-        "mesghal" to "مثقال طلا",
-        "gold_ounce" to "انس طلا",
-        "silver_ounce" to "انس نقره",
-        // سکه‌ها
-        "sekee" to "سکه امامی",
-        "sekeb" to "سکه بهار آزادی",
-        "nim" to "نیم‌سکه",
-        "rob" to "ربع‌سکه",
-        "gerami" to "سکه گرمی",
-        // سکه‌های قدیمی
-        "137142" to "سکه قدیم ۱",
-        "137143" to "سکه قدیم ۲",
-        "137144" to "سکه قدیم ۳"
-    )
-
     // ═══ ترتیب نمایش در تاپ‌لیست ═══
     fun sortForTopList(keys: List<String>): List<String> {
         return keys.sortedBy { key ->
@@ -177,4 +146,32 @@ object PriceCatalog {
             if (index >= 0) index else Int.MAX_VALUE
         }
     }
+
+    // ═══ عنوان فارسی پیش‌فرض (قبل از لود از API) ═══
+    val DEFAULT_TITLES: Map<String, String> = mapOf(
+        // طلا
+        "geram18" to "طلای ۱۸ عیار",
+        "geram24" to "طلای ۲۴ عیار",
+        "mesghal" to "مثقال طلا",
+        "gold_ounce" to "انس طلا",
+        "silver_ounce" to "انس نقره",
+        // سکه
+        "sekee" to "سکه امامی",
+        "sekeb" to "سکه بهار آزادی",
+        "137142" to "تمام سکه (قبل ۸۶)",
+        "nim" to "نیم‌سکه",
+        "137143" to "نیم‌سکه (قبل ۸۶)",
+        "rob" to "ربع‌سکه",
+        "137144" to "ربع‌سکه (قبل ۸۶)",
+        "gerami" to "سکه گرمی",
+        // ارز
+        "price_dollar_rl" to "دلار آمریکا",
+        "price_eur" to "یورو",
+        "price_gbp" to "پوند",
+        "price_aed" to "درهم امارات",
+        "price_try" to "لیر ترکیه",
+        "price_iqd" to "دینار عراق",
+        "price_rub" to "روبل روسیه",
+        "price_kwd" to "دینار کویت"
+    )
 }
