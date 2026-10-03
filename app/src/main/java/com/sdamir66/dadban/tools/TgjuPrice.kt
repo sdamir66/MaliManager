@@ -18,120 +18,127 @@ data class TgjuPrice(
 
 // ═══════════════════════════════════════════════════════════════
 //  PriceCatalog
-//  تمام mapping ها و ترتیب‌ها
 // ═══════════════════════════════════════════════════════════════
 
 object PriceCatalog {
 
-    // ═══ ترتیب کامل نمایش در لیست کلی ═══
-    // طلا → سکه‌ها (امامی، بهار، قدیمی‌ها، گرمی) → ارزها → رمزارزها
-    val ALL_ORDERED: List<String> = listOf(
-        // ─── طلا ───
-        "geram18",          // طلای ۱۸ عیار
-        "geram24",          // طلای ۲۴ عیار
-        "mesghal",          // مثقال طلا
-        "gold_ounce",       // انس طلا
-        "silver_ounce",     // انس نقره
+    // ═══════════════════════════════════════════════════════════
+    //  رمزارزها — با پیشوند crypto_ که با tgju تداخل نکنن
+    //  چون item_idهای عددی tgju برای سکه‌ها با رمزارزها قاطی می‌شن
+    // ═══════════════════════════════════════════════════════════
 
-        // ─── سکه‌ها ───
-        "sekee",            // سکه امامی
-        "sekeb",            // سکه بهار آزادی
-        "137142",           // تمام سکه (قبل ۸۶)
-        "nim",              // نیم‌سکه
-        "137143",           // نیم‌سکه (قبل ۸۶)
-        "rob",              // ربع‌سکه
-        "137144",           // ربع‌سکه (قبل ۸۶)
-        "gerami",           // سکه گرمی
-
-        // ─── ارزها ───
-        "price_dollar_rl",  // دلار
-        "price_eur",        // یورو
-        "price_gbp",        // پوند
-        "price_aed",        // درهم
-        "price_try",        // لیر ترکیه
-        "price_iqd",        // دینار عراق
-        "price_rub",        // روبل
-        "price_kwd",        // دینار کویت
-
-        // ─── رمزارزها ───
-        "398096",           // بیت کوین
-        "137138",           // تتر
-        "398097",           // اتریوم
-        "137203",           // بایننس کوین
-        "137205",           // ریپل
-        "137140",           // سولانا
-        "137137",           // کاردانو
-        "137139",           // دوج کوین
-        "137141",           // ترون
-        "137206",           // پولکادات
-        "137207",           // پالیگان
-        "137222",           // شیبا اینو
-        "137121",           // لایت کوین
-        "137122",           // بیت کوین کش
-        "137119",           // استلار
-        "137123"            // مونرو
-    )
-
-    // ═══ تاپ‌لیست پیش‌فرض ═══
-    val DEFAULT_SELECTED: List<String> = listOf(
-        "price_dollar_rl",  // دلار
-        "137138",           // تتر
-        "price_eur",        // یورو
-        "sekee",            // سکه امامی
-        "sekeb",            // سکه بهار آزادی
-        "nim",              // نیم‌سکه
-        "rob",              // ربع‌سکه
-        "398096"            // بیت کوین
-    )
-
-    // ═══ رمزارزها (برای API نوبیتکس) ═══
     val CRYPTO_KEYS: Set<String> = setOf(
-        "398096", "398097", "137138", "137203", "137205", "137137",
-        "137139", "137140", "137141", "137206", "137207", "137222",
-        "137121", "137122", "137119", "137123"
+        "crypto_btc", "crypto_eth", "crypto_usdt", "crypto_bnb",
+        "crypto_xrp", "crypto_ada", "crypto_doge", "crypto_sol",
+        "crypto_trx", "crypto_dot", "crypto_matic", "crypto_shib",
+        "crypto_ltc", "crypto_bch", "crypto_xlm", "crypto_xmr"
     )
 
-    // ═══ mapping item_id → نماد نوبیتکس ═══
+    // ═══ mapping کلید رمزارز → نماد نوبیتکس ═══
     val CRYPTO_SYMBOLS: Map<String, String> = mapOf(
-        "398096" to "btc",
-        "398097" to "eth",
-        "137138" to "usdt",
-        "137203" to "bnb",
-        "137205" to "xrp",
-        "137137" to "ada",
-        "137139" to "doge",
-        "137140" to "sol",
-        "137141" to "trx",
-        "137206" to "dot",
-        "137207" to "matic",
-        "137222" to "shib",
-        "137121" to "ltc",
-        "137122" to "bch",
-        "137119" to "xlm",
-        "137123" to "xmr"
+        "crypto_btc"   to "btc",
+        "crypto_eth"   to "eth",
+        "crypto_usdt"  to "usdt",
+        "crypto_bnb"   to "bnb",
+        "crypto_xrp"   to "xrp",
+        "crypto_ada"   to "ada",
+        "crypto_doge"  to "doge",
+        "crypto_sol"   to "sol",
+        "crypto_trx"   to "trx",
+        "crypto_dot"   to "dot",
+        "crypto_matic" to "matic",
+        "crypto_shib"  to "shib",
+        "crypto_ltc"   to "ltc",
+        "crypto_bch"   to "bch",
+        "crypto_xlm"   to "xlm",
+        "crypto_xmr"   to "xmr"
     )
 
     // ═══ عنوان فارسی هر رمزارز ═══
     val CRYPTO_TITLES: Map<String, String> = mapOf(
-        "398096" to "بیت کوین",
-        "398097" to "اتریوم",
-        "137138" to "تتر",
-        "137203" to "بایننس کوین",
-        "137205" to "ریپل",
-        "137137" to "کاردانو",
-        "137139" to "دوج کوین",
-        "137140" to "سولانا",
-        "137141" to "ترون",
-        "137206" to "پولکادات",
-        "137207" to "پالیگان",
-        "137222" to "شیبا اینو",
-        "137121" to "لایت کوین",
-        "137122" to "بیت کوین کش",
-        "137119" to "استلار",
-        "137123" to "مونرو"
+        "crypto_btc"   to "بیت کوین",
+        "crypto_eth"   to "اتریوم",
+        "crypto_usdt"  to "تتر",
+        "crypto_bnb"   to "بایننس کوین",
+        "crypto_xrp"   to "ریپل",
+        "crypto_ada"   to "کاردانو",
+        "crypto_doge"  to "دوج کوین",
+        "crypto_sol"   to "سولانا",
+        "crypto_trx"   to "ترون",
+        "crypto_dot"   to "پولکادات",
+        "crypto_matic" to "پالیگان",
+        "crypto_shib"  to "شیبا اینو",
+        "crypto_ltc"   to "لایت کوین",
+        "crypto_bch"   to "بیت کوین کش",
+        "crypto_xlm"   to "استلار",
+        "crypto_xmr"   to "مونرو"
     )
 
-    // ═══ ترتیب نمایش در تاپ‌لیست ═══
+    // ═══════════════════════════════════════════════════════════
+    //  ترتیب کامل لیست
+    //  ۱) طلا
+    //  ۲) سکه‌ها: امامی → بهار → نیم → ربع → گرمی
+    //  ۳) ارزها
+    //  ۴) رمزارزها
+    // ═══════════════════════════════════════════════════════════
+
+    val ALL_ORDERED: List<String> = listOf(
+        // ─── ۱. طلا ───
+        "geram18",
+        "geram24",
+        "mesghal",
+        "gold_ounce",
+        "silver_ounce",
+
+        // ─── ۲. سکه‌ها ───
+        "sekee",       // سکه امامی
+        "sekeb",       // سکه بهار آزادی
+        "nim",         // نیم سکه
+        "rob",         // ربع سکه
+        "gerami",      // سکه گرمی
+
+        // ─── ۳. ارزها ───
+        "price_dollar_rl",
+        "price_eur",
+        "price_gbp",
+        "price_aed",
+        "price_try",
+        "price_iqd",
+        "price_rub",
+        "price_kwd",
+
+        // ─── ۴. رمزارزها ───
+        "crypto_btc",
+        "crypto_usdt",
+        "crypto_eth",
+        "crypto_bnb",
+        "crypto_xrp",
+        "crypto_sol",
+        "crypto_ada",
+        "crypto_doge",
+        "crypto_trx",
+        "crypto_dot",
+        "crypto_matic",
+        "crypto_shib",
+        "crypto_ltc",
+        "crypto_bch",
+        "crypto_xlm",
+        "crypto_xmr"
+    )
+
+    // ═══ تاپ‌لیست پیش‌فرض: دلار → تتر → یورو → سکه‌ها → بیت‌کوین ═══
+    val DEFAULT_SELECTED: List<String> = listOf(
+        "price_dollar_rl",  // دلار
+        "crypto_usdt",      // تتر
+        "price_eur",        // یورو
+        "sekee",            // سکه امامی
+        "sekeb",            // سکه بهار آزادی
+        "nim",              // نیم سکه
+        "rob",              // ربع سکه
+        "crypto_btc"        // بیت کوین
+    )
+
+    // ═══ ترتیب تاپ‌لیست ═══
     fun sortForTopList(keys: List<String>): List<String> {
         return keys.sortedBy { key ->
             val index = DEFAULT_SELECTED.indexOf(key)
@@ -139,7 +146,7 @@ object PriceCatalog {
         }
     }
 
-    // ═══ ترتیب نمایش در لیست کلی ═══
+    // ═══ ترتیب لیست کلی ═══
     fun sortForAllList(keys: List<String>): List<String> {
         return keys.sortedBy { key ->
             val index = ALL_ORDERED.indexOf(key)
@@ -147,7 +154,7 @@ object PriceCatalog {
         }
     }
 
-    // ═══ عنوان فارسی پیش‌فرض (قبل از لود از API) ═══
+    // ═══ عنوان فارسی پیش‌فرض ═══
     val DEFAULT_TITLES: Map<String, String> = mapOf(
         // طلا
         "geram18" to "طلای ۱۸ عیار",
@@ -158,11 +165,8 @@ object PriceCatalog {
         // سکه
         "sekee" to "سکه امامی",
         "sekeb" to "سکه بهار آزادی",
-        "137142" to "تمام سکه (قبل ۸۶)",
-        "nim" to "نیم‌سکه",
-        "137143" to "نیم‌سکه (قبل ۸۶)",
-        "rob" to "ربع‌سکه",
-        "137144" to "ربع‌سکه (قبل ۸۶)",
+        "nim" to "نیم سکه",
+        "rob" to "ربع سکه",
         "gerami" to "سکه گرمی",
         // ارز
         "price_dollar_rl" to "دلار آمریکا",
