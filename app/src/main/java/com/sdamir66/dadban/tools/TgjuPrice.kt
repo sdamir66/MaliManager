@@ -2,86 +2,178 @@ package com.sdamir66.dadban.tools
 
 // ═══════════════════════════════════════════════════════════════
 //  TgjuPrice
-//  مدل داده برای هر آیتم قیمت (ارز، طلا، سکه، رمزارز)
 // ═══════════════════════════════════════════════════════════════
 
 data class TgjuPrice(
-    val key: String,             // "price_dollar_rl" یا "398096"
-    val title: String,           // "دلار آمریکا"
-    val price: Double,           // 1053883974.67
-    val change: Double,          // تغییر
-    val changePercent: Double,   // درصد تغییر
-    val direction: String,       // "high" | "low" | ""
-    val low: Double,             // کمترین
-    val high: Double,            // بیشترین
-    val time: String             // زمان به‌روزرسانی (رشته)
+    val key: String,
+    val title: String,
+    val price: Double,
+    val change: Double,
+    val changePercent: Double,
+    val direction: String,
+    val low: Double,
+    val high: Double,
+    val time: String
 )
 
 // ═══════════════════════════════════════════════════════════════
-//  دسته‌بندی‌ها
+//  دسته‌بندی و ترتیب
 // ═══════════════════════════════════════════════════════════════
 
-enum class PriceCategory(val label: String, val keys: List<String>) {
-    CURRENCY("ارز", listOf(
-        "price_dollar_rl",  // دلار
-        "price_eur",        // یورو
-        "price_gbp",        // پوند
-        "price_aed",        // درهم امارات
-        "price_try",        // لیر ترکیه
-        "price_iqd",        // دینار عراق
-        "price_rub",        // روبل روسیه
-        "price_kwd"         // دینار کویت
-    )),
+object PriceCatalog {
 
-    GOLD_COIN("طلا و سکه", listOf(
+    // ═══ ترتیب کامل نمایش در لیست کلی ═══
+    // طلا → سکه‌ها (به ترتیب اهمیت) → ارزها → رمزارزها
+    val ALL_ORDERED: List<String> = listOf(
+        // ─── طلا ───
         "geram18",          // طلای ۱۸ عیار
         "geram24",          // طلای ۲۴ عیار
         "mesghal",          // مثقال طلا
+        "gold_ounce",       // انس طلا
+        "silver_ounce",     // انس نقره
+
+        // ─── سکه‌ها ───
         "sekee",            // سکه امامی
         "sekeb",            // سکه بهار آزادی
         "nim",              // نیم‌سکه
         "rob",              // ربع‌سکه
-        "gerami"            // سکه گرمی
-    )),
+        "gerami",           // سکه گرمی
+        "sekec",            // سکه قدیم (قبل از ۸۶)
 
-    CRYPTO("رمزارز", listOf(
-        "398096",   // بیت کوین
-        "398097",   // اتریوم
-        "137138",   // تتر
-        "137203",   // بایننس کوین
-        "137205",   // ریپل
-        "137137",   // کاردانو
-        "137139",   // دوج کوین
-        "137140",   // سولانا
-        "137141",   // ترون
-        "137206",   // پولکادات
-        "137207",   // پالیگان
-        "137222",   // شیبا اینو
-        "137121",   // لایت کوین
-        "137122",   // بیت کوین کش
-        "137119",   // استلار
-        "137123",   // مونرو
-        "137142",   // ایاس
-        "137143",   // تزوس
-        "137144"    // فایل کوین
-    ));
+        // ─── ارزها ───
+        "price_dollar_rl",  // دلار
+        "price_eur",        // یورو
+        "price_gbp",        // پوند
+        "price_aed",        // درهم
+        "price_try",        // لیر ترکیه
+        "price_iqd",        // دینار عراق
+        "price_rub",        // روبل
+        "price_kwd",        // دینار کویت
 
-    companion object {
-        val DEFAULT_SELECTED = listOf(
-            "price_dollar_rl",  // دلار
-            "price_eur",        // یورو
-            "geram18",          // طلای ۱۸ عیار
-            "sekee",            // سکه امامی
-            "nim",              // نیم‌سکه
-            "rob"               // ربع‌سکه
-        )
+        // ─── رمزارزها ───
+        "398096",           // بیت کوین
+        "137138",           // تتر
+        "398097",           // اتریوم
+        "137203",           // بایننس کوین
+        "137205",           // ریپل
+        "137140",           // سولانا
+        "137137",           // کاردانو
+        "137139",           // دوج کوین
+        "137141",           // ترون
+        "137206",           // پولکادات
+        "137207",           // پالیگان
+        "137222",           // شیبا اینو
+        "137121",           // لایت کوین
+        "137122",           // بیت کوین کش
+        "137119",           // استلار
+        "137123",           // مونرو
+        "137142",           // ایاس
+        "137143",           // تزوس
+        "137144"            // فایل کوین
+    )
 
-        // ✅ همه‌ی key ها به ترتیب: ارز → طلا → سکه → رمزارز
-        val ALL_KEYS: List<String> = CURRENCY.keys + GOLD_COIN.keys + CRYPTO.keys
+    // ═══ تاپ‌لیست پیش‌فرض ═══
+    val DEFAULT_SELECTED: List<String> = listOf(
+        "price_dollar_rl",  // دلار
+        "137138",           // تتر
+        "price_eur",        // یورو
+        "sekee",            // سکه امامی
+        "sekeb",            // سکه بهار آزادی
+        "nim",              // نیم‌سکه
+        "rob",              // ربع‌سکه
+        "398096"            // بیت کوین
+    )
 
-        // ✅ دسته‌ی هر key
-        fun categoryOf(key: String): PriceCategory? {
-            return entries.find { key in it.keys }
+    // ═══ رمزارزها (برای API نوبیتکس) ═══
+    val CRYPTO_KEYS: Set<String> = setOf(
+        "398096", "398097", "137138", "137203", "137205", "137137",
+        "137139", "137140", "137141", "137206", "137207", "137222",
+        "137121", "137122", "137119", "137123", "137142", "137143",
+        "137144"
+    )
+
+    // ═══ mapping item_id → نماد نوبیتکس ═══
+    val CRYPTO_SYMBOLS: Map<String, String> = mapOf(
+        "398096" to "btc",
+        "398097" to "eth",
+        "137138" to "usdt",
+        "137203" to "bnb",
+        "137205" to "xrp",
+        "137137" to "ada",
+        "137139" to "doge",
+        "137140" to "sol",
+        "137141" to "trx",
+        "137206" to "dot",
+        "137207" to "matic",
+        "137222" to "shib",
+        "137121" to "ltc",
+        "137122" to "bch",
+        "137119" to "xlm",
+        "137123" to "xmr",
+        "137142" to "eos",
+        "137143" to "xtz",
+        "137144" to "fil"
+    )
+
+    // ═══ عنوان فارسی هر رمزارز ═══
+    val CRYPTO_TITLES: Map<String, String> = mapOf(
+        "398096" to "بیت کوین",
+        "398097" to "اتریوم",
+        "137138" to "تتر",
+        "137203" to "بایننس کوین",
+        "137205" to "ریپل",
+        "137137" to "کاردانو",
+        "137139" to "دوج کوین",
+        "137140" to "سولانا",
+        "137141" to "ترون",
+        "137206" to "پولکادات",
+        "137207" to "پالیگان",
+        "137222" to "شیبا اینو",
+        "137121" to "لایت کوین",
+        "137122" to "بیت کوین کش",
+        "137119" to "استلار",
+        "137123" to "مونرو",
+        "137142" to "ایاس",
+        "137143" to "تزوس",
+        "137144" to "فایل کوین"
+    )
+
+    // ═══ ترتیب نمایش در تاپ‌لیست ═══
+    fun sortForTopList(keys: List<String>): List<String> {
+        return keys.sortedBy { key ->
+            val index = DEFAULT_SELECTED.indexOf(key)
+            if (index >= 0) index else Int.MAX_VALUE
         }
     }
+
+    // ═══ ترتیب نمایش در لیست کلی ═══
+    fun sortForAllList(keys: List<String>): List<String> {
+        return keys.sortedBy { key ->
+            val index = ALL_ORDERED.indexOf(key)
+            if (index >= 0) index else Int.MAX_VALUE
+        }
+    }
+
+    // ═══ عنوان فارسی برای هر key (برای تاپ‌لیست قبل از لود) ═══
+    val DEFAULT_TITLES: Map<String, String> = mapOf(
+        "price_dollar_rl" to "دلار آمریکا",
+        "price_eur" to "یورو",
+        "price_gbp" to "پوند",
+        "price_aed" to "درهم امارات",
+        "price_try" to "لیر ترکیه",
+        "price_iqd" to "دینار عراق",
+        "price_rub" to "روبل روسیه",
+        "price_kwd" to "دینار کویت",
+        "geram18" to "طلای ۱۸ عیار",
+        "geram24" to "طلای ۲۴ عیار",
+        "mesghal" to "مثقال طلا",
+        "gold_ounce" to "انس طلا",
+        "silver_ounce" to "انس نقره",
+        "sekee" to "سکه امامی",
+        "sekeb" to "سکه بهار آزادی",
+        "nim" to "نیم‌سکه",
+        "rob" to "ربع‌سکه",
+        "gerami" to "سکه گرمی",
+        "sekec" to "سکه قدیم (قبل ۸۶)"
+    )
 }
