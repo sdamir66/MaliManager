@@ -23,7 +23,7 @@ data class TgjuPrice(
 object PriceCatalog {
 
     // ═══════════════════════════════════════════════════════════
-    //  رمزارزها — با پیشوند crypto_ که با item_idهای tgju قاطی نشن
+    //  رمزارزها — با پیشوند crypto_
     // ═══════════════════════════════════════════════════════════
 
     val CRYPTO_KEYS: Set<String> = setOf(
@@ -33,7 +33,6 @@ object PriceCatalog {
         "crypto_ltc", "crypto_bch", "crypto_xlm", "crypto_xmr"
     )
 
-    // ═══ mapping کلید رمزارز → نماد نوبیتکس ═══
     val CRYPTO_SYMBOLS: Map<String, String> = mapOf(
         "crypto_btc"   to "btc",
         "crypto_eth"   to "eth",
@@ -53,7 +52,6 @@ object PriceCatalog {
         "crypto_xmr"   to "xmr"
     )
 
-    // ═══ عنوان فارسی هر رمزارز ═══
     val CRYPTO_TITLES: Map<String, String> = mapOf(
         "crypto_btc"   to "بیت کوین",
         "crypto_eth"   to "اتریوم",
@@ -74,7 +72,7 @@ object PriceCatalog {
     )
 
     // ═══════════════════════════════════════════════════════════
-    //  ترتیب کامل لیست
+    //  ترتیب کامل لیست:
     //  ۱) طلا
     //  ۲) سکه‌ها: امامی → بهار → نیم → ربع → گرمی → قدیم‌ها
     //  ۳) ارزها
@@ -140,7 +138,6 @@ object PriceCatalog {
         "crypto_btc"        // بیت کوین
     )
 
-    // ═══ ترتیب تاپ‌لیست ═══
     fun sortForTopList(keys: List<String>): List<String> {
         return keys.sortedBy { key ->
             val index = DEFAULT_SELECTED.indexOf(key)
@@ -148,7 +145,6 @@ object PriceCatalog {
         }
     }
 
-    // ═══ ترتیب لیست کلی ═══
     fun sortForAllList(keys: List<String>): List<String> {
         return keys.sortedBy { key ->
             val index = ALL_ORDERED.indexOf(key)
@@ -156,7 +152,6 @@ object PriceCatalog {
         }
     }
 
-    // ═══ عنوان فارسی پیش‌فرض ═══
     val DEFAULT_TITLES: Map<String, String> = mapOf(
         // طلا
         "geram18" to "طلای ۱۸ عیار",
