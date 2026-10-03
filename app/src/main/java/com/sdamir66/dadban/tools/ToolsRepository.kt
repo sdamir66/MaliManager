@@ -13,7 +13,7 @@ object ToolsRepository {
     private const val TAG = "ToolsRepository"
     private const val TGJU_URL = "https://api.tgju.org/v1/widget/tmp"
     private const val NOBITEX_URL = "https://apiv2.nobitex.ir/market/stats"
-    private const val TIMEOUT_MS = 15_000
+    private const val TIMEOUT_MS = 20_000
 
     suspend fun fetchPrices(keys: List<String>): Result<List<TgjuPrice>> =
         withContext(Dispatchers.IO) {
@@ -24,37 +24,31 @@ object ToolsRepository {
 
             Log.d(TAG, "fetchPrices: total=${keys.size}, fiat=${fiatKeys.size}, crypto=${cryptoKeys.size}")
 
-            // ═══ ۱. tgju — دسته‌ای ۳ تایی با delay برای جلوگیری از rate-limit ═══
-            val chunks = fiatKeys.chunked(3)
-            chunks.forEachIndexed { idx, chunk ->
+            // ═══ ۱. tgju — یک درخواست با همه کلیدها ═══
+            if (fiatKeys.isNotEmpty()) {
                 try {
-                    val url = "$TGJU_URL?keys=${chunk.joinToString(",")}"
-                    Log.d(TAG, "tgju[$idx] URL: $url")
+                    val url = "$TGJU_URL?keys=${fiatKeys.joinToString(",")}"
+                    Log.d(TAG, "tgju URL: $url")
                     val json = fetchUrlWithRetry(url)
                     val parsed = parseTgjuJson(json)
-                    Log.d(TAG, "tgju[$idx] parsed=${parsed.size}, keys=${parsed.map { it.key }}")
+                    Log.d(TAG, "tgju parsed=${parsed.size}")
+                    Log.d(TAG, "tgju keys=${parsed.map { it.key }}")
                     result.addAll(parsed)
 
                     val returned = parsed.map { it.key }.toSet()
-                    val missing = chunk.filter { it !in returned }
+                    val missing = fiatKeys.filter { it !in returned }
                     if (missing.isNotEmpty()) {
-                        Log.w(TAG, "tgju[$idx] MISSING: $missing")
+                        Log.w(TAG, "tgju MISSING: $missing")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "tgju[$idx] failed", e)
-                }
-
-                // ═══ بین درخواست‌ها فاصله بذار ═══
-                if (idx < chunks.size - 1) {
-                    delay(700)
+                    Log.e(TAG, "tgju failed", e)
                 }
             }
 
-            // ═══ ۲. نوبیتکس — رمزارزها (با retry) ═══
+            // ═══ ۲. نوبیتکس — رمزارزها ═══
             if (cryptoKeys.isNotEmpty()) {
                 try {
                     val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
-                    Log.d(TAG, "crypto symbols to fetch: $symbols")
                     if (symbols.isNotEmpty()) {
                         val url = "$NOBITEX_URL?srcCurrency=${symbols.joinToString(",")}&dstCurrency=rls"
                         Log.d(TAG, "nobitex URL: $url")
@@ -72,9 +66,6 @@ object ToolsRepository {
             Result.success(result)
         }
 
-    /**
-     * fetch با retry — اگه خطا داد، تا ۳ بار تلاش می‌کنه
-     */
     private suspend fun fetchUrlWithRetry(urlStr: String, maxRetries: Int = 3): String {
         var lastException: Exception? = null
         repeat(maxRetries) { attempt ->
@@ -82,8 +73,8 @@ object ToolsRepository {
                 return fetchUrl(urlStr)
             } catch (e: Exception) {
                 lastException = e
-                Log.w(TAG, "fetch attempt ${attempt + 1} failed for $urlStr: ${e.message}")
-                if (attempt < maxRetries - 1) delay(1000L * (attempt + 1))
+                Log.w(TAG, "fetch attempt ${attempt + 1} failed: ${e.message}")
+                if (attempt < maxRetries - 1) delay(1500L * (attempt + 1))
             }
         }
         throw lastException ?: java.io.IOException("fetch failed: $urlStr")
@@ -96,7 +87,7 @@ object ToolsRepository {
         conn.connectTimeout = TIMEOUT_MS
         conn.readTimeout = TIMEOUT_MS
         conn.setRequestProperty("Accept", "application/json")
-        conn.setRequestProperty("User-Agent", "Mozilla/5.0 Dadban/1.0")
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Dadban/1.0")
 
         return try {
             val code = conn.responseCode
@@ -115,6 +106,8 @@ object ToolsRepository {
         val result = mutableListOf<TgjuPrice>()
         for (i in 0 until indicators.length()) {
             val obj = indicators.optJSONObject(i) ?: continue
+
+            // ─── استفاده از item_id ───
             val itemIdRaw = obj.opt("item_id")
             val itemId = when (itemIdRaw) {
                 is Number -> itemIdRaw.toLong().toString()
@@ -144,10 +137,6 @@ object ToolsRepository {
         return result
     }
 
-    /**
-     * نوبیتکس برمی‌گردونه: "btc-rls": { ... }
-     * پس "btc-rls" → "crypto_btc"
-     */
     private fun parseNobitexJson(
         jsonText: String,
         requestedKeys: List<String>
