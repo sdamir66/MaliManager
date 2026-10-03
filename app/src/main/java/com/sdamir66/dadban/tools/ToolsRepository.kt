@@ -1,5 +1,6 @@
 package com.sdamir66.dadban.tools
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -8,6 +9,7 @@ import java.net.URL
 
 object ToolsRepository {
 
+    private const val TAG = "ToolsRepository"
     private const val TGJU_URL = "https://api.tgju.org/v1/widget/tmp"
     private const val NOBITEX_URL = "https://apiv2.nobitex.ir/market/stats"
     private const val TIMEOUT_MS = 15_000
@@ -25,9 +27,18 @@ object ToolsRepository {
                     try {
                         val tgjuUrl = "$TGJU_URL?keys=${fiatKeys.joinToString(",")}"
                         val tgjuJson = fetchUrl(tgjuUrl)
-                        result.addAll(parseTgjuJson(tgjuJson))
+                        val parsed = parseTgjuJson(tgjuJson)
+                        Log.d(TAG, "tgju: requested=${fiatKeys.size}, parsed=${parsed.size}")
+                        result.addAll(parsed)
+
+                        // ─── لاگ کلیدهایی که tgju نداده ───
+                        val returnedIds = parsed.map { it.key }.toSet()
+                        val missing = fiatKeys.filter { it !in returnedIds }
+                        if (missing.isNotEmpty()) {
+                            Log.w(TAG, "tgju missing keys: $missing")
+                        }
                     } catch (e: Exception) {
-                        // اگه tgju خطا داد، ادامه بده
+                        Log.e(TAG, "tgju fetch failed", e)
                     }
                 }
 
@@ -41,15 +52,19 @@ object ToolsRepository {
                             val symbolsParam = cryptoSymbols.joinToString(",")
                             val nobitexUrl = "$NOBITEX_URL?srcCurrency=$symbolsParam&dstCurrency=rls"
                             val nobitexJson = fetchUrl(nobitexUrl)
-                            result.addAll(parseNobitexJson(nobitexJson, cryptoKeys))
+                            val parsed = parseNobitexJson(nobitexJson, cryptoKeys)
+                            Log.d(TAG, "nobitex: requested=${cryptoKeys.size}, parsed=${parsed.size}")
+                            result.addAll(parsed)
                         }
                     } catch (e: Exception) {
-                        // اگه نوبیتکس خطا داد، ادامه بده
+                        Log.e(TAG, "nobitex fetch failed", e)
                     }
                 }
 
+                Log.d(TAG, "fetchPrices total=${result.size}")
                 Result.success(result)
             } catch (e: Exception) {
+                Log.e(TAG, "fetchPrices fatal", e)
                 Result.failure(e)
             }
         }
@@ -116,6 +131,17 @@ object ToolsRepository {
         return result
     }
 
+    /**
+     * پاسخ نوبیتکس به این شکله:
+     * {
+     *   "stats": {
+     *     "btc-rls": { "latest": "...", "dayChange": "...", "dayLow": "...", "dayHigh": "..." },
+     *     "usdt-rls": { ... }
+     *   }
+     * }
+     *
+     * پس کلید «btc-rls» باید به «398096» map بشه.
+     */
     private fun parseNobitexJson(
         jsonText: String,
         requestedKeys: List<String>
@@ -123,15 +149,39 @@ object ToolsRepository {
         val root = JSONObject(jsonText)
         val stats = root.optJSONObject("stats") ?: return emptyList()
 
+        // ─── لاگ کلیدهای دریافتی برای دیباگ ───
+        Log.d(TAG, "nobitex stats keys: ${stats.keys().asSequence().toList()}")
+
+        // ─── ساخت map معکوس: "btc" و "btc-rls" → "398096" ───
+        val symbolToKey = mutableMapOf<String, String>()
+        PriceCatalog.CRYPTO_SYMBOLS.forEach { (key, sym) ->
+            val lower = sym.lowercase()
+            symbolToKey[lower] = key
+            symbolToKey["$lower-rls"] = key
+            symbolToKey["$lower-irt"] = key
+            symbolToKey["$lower-usdt"] = key
+        }
+
         val result = mutableListOf<TgjuPrice>()
 
         stats.keys().forEach { symbol ->
             val stat = stats.optJSONObject(symbol) ?: return@forEach
+            val lowerSymbol = symbol.lowercase()
 
-            val itemId = PriceCatalog.CRYPTO_SYMBOLS.entries
-                .find { it.value.equals(symbol, ignoreCase = true) }
-                ?.key
-                ?: return@forEach
+            // ─── پیدا کردن itemId ───
+            var itemId: String? = symbolToKey[lowerSymbol]
+
+            // ─── fallback: تطبیق با پیشوند ───
+            if (itemId == null) {
+                itemId = PriceCatalog.CRYPTO_SYMBOLS.entries
+                    .find { lowerSymbol.startsWith("${it.value.lowercase()}-") }
+                    ?.key
+            }
+
+            if (itemId == null) {
+                Log.w(TAG, "nobitex unknown symbol: $symbol")
+                return@forEach
+            }
 
             if (itemId !in requestedKeys) return@forEach
 
