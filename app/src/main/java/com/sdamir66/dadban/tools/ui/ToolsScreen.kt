@@ -69,6 +69,9 @@ fun ToolsScreen() {
             Log.d(TAG, "resetting preferences. old=$saved")
             ToolsPreferences.saveSelectedKeys(context, PriceCatalog.DEFAULT_SELECTED)
             selectedKeys = PriceCatalog.DEFAULT_SELECTED
+        } else {
+            // اگه معتبر بود، همون رو نگه دار
+            selectedKeys = validKeys
         }
 
         refreshPrices()
