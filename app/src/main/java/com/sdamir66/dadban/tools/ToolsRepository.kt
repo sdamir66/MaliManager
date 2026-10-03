@@ -26,6 +26,7 @@ object ToolsRepository {
                 if (fiatKeys.isNotEmpty()) {
                     try {
                         val tgjuUrl = "$TGJU_URL?keys=${fiatKeys.joinToString(",")}"
+                        Log.d(TAG, "tgju request: $tgjuUrl")
                         val tgjuJson = fetchUrl(tgjuUrl)
                         val parsed = parseTgjuJson(tgjuJson, fiatKeys)
                         Log.d(TAG, "tgju: requested=${fiatKeys.size}, parsed=${parsed.size}")
@@ -50,6 +51,7 @@ object ToolsRepository {
                         if (cryptoSymbols.isNotEmpty()) {
                             val symbolsParam = cryptoSymbols.joinToString(",")
                             val nobitexUrl = "$NOBITEX_URL?srcCurrency=$symbolsParam&dstCurrency=rls"
+                            Log.d(TAG, "nobitex request: $nobitexUrl")
                             val nobitexJson = fetchUrl(nobitexUrl)
                             val parsed = parseNobitexJson(nobitexJson, cryptoKeys)
                             Log.d(TAG, "nobitex: requested=${cryptoKeys.size}, parsed=${parsed.size}")
@@ -89,14 +91,12 @@ object ToolsRepository {
     }
 
     /**
-     * tgju فیلدهای مهمی که برمی‌گردونه:
-     *   name      → اسم واقعی (مثل "sekee", "nim", "price_dollar_rl")
-     *   item_id   → عدد داخلی tgju (قابل اعتماد نیست! ممکنه با رمزارزها قاطی شه)
-     *   title     → عنوان فارسی
-     *   p, h, l, d, dp, dt, t, updated_at
+     * tgju پاسخش ممکنه item_id عددی یا name متنی باشه.
+     * برای سکه‌های امروزی: name = "sekee", "sekeb", "nim", "rob", "gerami"
+     * برای سکه‌های قدیم: item_id = "137142", "137143", "137144"
      *
-     * پس ما از `name` استفاده می‌کنیم به عنوان key، نه item_id.
-     * اگه `name` خالی بود، fallback به item_id.
+     * استراتژی: هر کدوم که توی requestedKeys بود رو به عنوان key بگیر.
+     * اولویت با item_id هست چون دقیق‌تره.
      */
     private fun parseTgjuJson(
         jsonText: String,
@@ -111,28 +111,30 @@ object ToolsRepository {
         for (i in 0 until indicators.length()) {
             val obj = indicators.optJSONObject(i) ?: continue
 
-            // ─── اولویت: name → بعد item_id ───
             val name = obj.optString("name", "").trim()
             val itemIdRaw = obj.opt("item_id")
             val itemId = when (itemIdRaw) {
                 is Number -> itemIdRaw.toLong().toString()
-                is String -> itemIdRaw
+                is String -> itemIdRaw.trim()
                 else -> ""
             }
 
-            // ─── key نهایی: name اگه توی requestedKeys بود، وگرنه item_id ───
+            // ─── پیدا کردن key: هر کدوم که توی requestedKeys بود ───
             val key = when {
-                name.isNotBlank() && name in requestedKeys -> name
                 itemId.isNotBlank() && itemId in requestedKeys -> itemId
+                name.isNotBlank() && name in requestedKeys -> name
                 else -> {
-                    // شاید اسم با یه پیشوندی اومده باشه (مثل "price_dollar_rl_2")
-                    val matchedName = requestedKeys.find {
-                        name.equals(it, ignoreCase = true) ||
-                        name.startsWith("${it}_") ||
-                        name.startsWith("${it}-")
+                    // ─── fallback: تطبیق نسبی ───
+                    requestedKeys.find { req ->
+                        name.equals(req, ignoreCase = true) ||
+                        itemId.equals(req, ignoreCase = true) ||
+                        name.startsWith("${req}_") ||
+                        name.startsWith("${req}-")
                     }
-                    matchedName ?: continue
                 }
+            } ?: run {
+                Log.w(TAG, "tgju unmatched: name=$name, item_id=$itemId")
+                continue
             }
 
             val title = obj.optString("title", "").trim().ifBlank {
@@ -168,7 +170,6 @@ object ToolsRepository {
 
         Log.d(TAG, "nobitex stats keys: ${stats.keys().asSequence().toList()}")
 
-        // ─── map معکوس: "btc" / "btc-rls" → "398096" ───
         val symbolToKey = mutableMapOf<String, String>()
         PriceCatalog.CRYPTO_SYMBOLS.forEach { (key, sym) ->
             val lower = sym.lowercase()
