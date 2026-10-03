@@ -6,36 +6,54 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-// ═══════════════════════════════════════════════════════════════
-//  ToolsRepository
-//  دریافت قیمت‌ها از API tgju.org
-// ═══════════════════════════════════════════════════════════════
-
 object ToolsRepository {
 
-    private const val BASE_URL = "https://api.tgju.org/v1/widget/tmp"
+    private const val TGJU_URL = "https://api.tgju.org/v1/widget/tmp"
+    private const val NOBITEX_URL = "https://apiv2.nobitex.ir/market/stats"
     private const val TIMEOUT_MS = 15_000
 
-    // ═══════════════════════════════════════════════════════════
-    //  دریافت قیمت‌های چند key
-    // ═══════════════════════════════════════════════════════════
     suspend fun fetchPrices(keys: List<String>): Result<List<TgjuPrice>> =
         withContext(Dispatchers.IO) {
             try {
-                if (keys.isEmpty()) return@withContext Result.success(emptyList())
+                val result = mutableListOf<TgjuPrice>()
 
-                val urlStr = "$BASE_URL?keys=${keys.joinToString(",")}"
-                val jsonText = fetchUrl(urlStr)
-                val list = parseJson(jsonText)
-                Result.success(list)
+                val cryptoKeys = keys.filter { it in PriceCatalog.CRYPTO_KEYS }
+                val fiatKeys = keys.filter { it !in PriceCatalog.CRYPTO_KEYS }
+
+                // ═══ ۱. ارز، طلا، سکه (tgju) ═══
+                if (fiatKeys.isNotEmpty()) {
+                    try {
+                        val tgjuUrl = "$TGJU_URL?keys=${fiatKeys.joinToString(",")}"
+                        val tgjuJson = fetchUrl(tgjuUrl)
+                        result.addAll(parseTgjuJson(tgjuJson))
+                    } catch (e: Exception) {
+                        // اگه tgju خطا داد، ادامه بده
+                    }
+                }
+
+                // ═══ ۲. رمزارزها (نوبیتکس) ═══
+                if (cryptoKeys.isNotEmpty()) {
+                    try {
+                        val cryptoSymbols = cryptoKeys.mapNotNull { itemId ->
+                            PriceCatalog.CRYPTO_SYMBOLS[itemId]
+                        }
+                        if (cryptoSymbols.isNotEmpty()) {
+                            val symbolsParam = cryptoSymbols.joinToString(",")
+                            val nobitexUrl = "$NOBITEX_URL?srcCurrency=$symbolsParam&dstCurrency=rls"
+                            val nobitexJson = fetchUrl(nobitexUrl)
+                            result.addAll(parseNobitexJson(nobitexJson, cryptoKeys))
+                        }
+                    } catch (e: Exception) {
+                        // اگه نوبیتکس خطا داد، ادامه بده
+                    }
+                }
+
+                Result.success(result)
             } catch (e: Exception) {
                 Result.failure(e)
             }
         }
 
-    // ═══════════════════════════════════════════════════════════
-    //  HTTP GET
-    // ═══════════════════════════════════════════════════════════
     private fun fetchUrl(urlStr: String): String {
         val url = URL(urlStr)
         val conn = url.openConnection() as HttpURLConnection
@@ -56,10 +74,7 @@ object ToolsRepository {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  پارس JSON
-    // ═══════════════════════════════════════════════════════════
-    private fun parseJson(jsonText: String): List<TgjuPrice> {
+    private fun parseTgjuJson(jsonText: String): List<TgjuPrice> {
         val root = JSONObject(jsonText)
         val response = root.optJSONObject("response") ?: return emptyList()
         val indicators = response.optJSONArray("indicators") ?: return emptyList()
@@ -69,48 +84,91 @@ object ToolsRepository {
         for (i in 0 until indicators.length()) {
             val obj = indicators.optJSONObject(i) ?: continue
 
-            val itemId = obj.optString("item_id", "")
-            val title = obj.optString("title", "")
-            val priceStr = obj.optString("p", "0").replace(",", "")
-            val price = priceStr.toDoubleOrNull() ?: 0.0
-
-            // تغییر (مقدار)
-            val dStr = obj.optString("d", "0").replace(",", "")
-            val change = dStr.toDoubleOrNull() ?: 0.0
-
-            // درصد تغییر
-            val dpStr = obj.optString("dp", "0").replace(",", "")
-            val changePercent = dpStr.toDoubleOrNull() ?: 0.0
-
-            // جهت تغییر
-            val direction = obj.optString("dt", "")
-
-            // کمترین / بیشترین
-            val lowStr = obj.optString("l", "0").replace(",", "")
-            val highStr = obj.optString("h", "0").replace(",", "")
-            val low = lowStr.toDoubleOrNull() ?: 0.0
-            val high = highStr.toDoubleOrNull() ?: 0.0
-
-            // زمان
-            val time = obj.optString("t", "")
-
-            if (itemId.isNotBlank() && title.isNotBlank()) {
-                result.add(
-                    TgjuPrice(
-                        key = itemId,
-                        title = title,
-                        price = price,
-                        change = change,
-                        changePercent = changePercent,
-                        direction = direction,
-                        low = low,
-                        high = high,
-                        time = time
-                    )
-                )
+            val itemIdRaw = obj.opt("item_id")
+            val itemId = when (itemIdRaw) {
+                is Number -> itemIdRaw.toLong().toString()
+                is String -> itemIdRaw
+                else -> ""
             }
+            if (itemId.isBlank()) continue
+
+            val title = obj.optString("title", "").ifBlank {
+                PriceCatalog.DEFAULT_TITLES[itemId] ?: itemId
+            }
+
+            result.add(
+                TgjuPrice(
+                    key = itemId,
+                    title = title,
+                    price = parseDouble(obj.opt("p")),
+                    change = parseDouble(obj.opt("d")),
+                    changePercent = parseDouble(obj.opt("dp")),
+                    direction = obj.optString("dt", ""),
+                    low = parseDouble(obj.opt("l")),
+                    high = parseDouble(obj.opt("h")),
+                    time = obj.optString("updated_at", "").ifBlank {
+                        obj.optString("t", "")
+                    }
+                )
+            )
         }
 
         return result
+    }
+
+    private fun parseNobitexJson(
+        jsonText: String,
+        requestedKeys: List<String>
+    ): List<TgjuPrice> {
+        val root = JSONObject(jsonText)
+        val stats = root.optJSONObject("stats") ?: return emptyList()
+
+        val result = mutableListOf<TgjuPrice>()
+
+        stats.keys().forEach { symbol ->
+            val stat = stats.optJSONObject(symbol) ?: return@forEach
+
+            val itemId = PriceCatalog.CRYPTO_SYMBOLS.entries
+                .find { it.value.equals(symbol, ignoreCase = true) }
+                ?.key
+                ?: return@forEach
+
+            if (itemId !in requestedKeys) return@forEach
+
+            val title = PriceCatalog.CRYPTO_TITLES[itemId] ?: symbol
+
+            val price = parseDouble(stat.opt("latest"))
+            val changePercent = parseDouble(stat.opt("dayChange"))
+            val change = price * changePercent / 100.0
+
+            result.add(
+                TgjuPrice(
+                    key = itemId,
+                    title = title,
+                    price = price,
+                    change = change,
+                    changePercent = changePercent,
+                    direction = when {
+                        changePercent > 0 -> "high"
+                        changePercent < 0 -> "low"
+                        else -> ""
+                    },
+                    low = parseDouble(stat.opt("dayLow")),
+                    high = parseDouble(stat.opt("dayHigh")),
+                    time = ""
+                )
+            )
+        }
+
+        return result
+    }
+
+    private fun parseDouble(value: Any?): Double {
+        return when (value) {
+            null -> 0.0
+            is Number -> value.toDouble()
+            is String -> value.replace(",", "").trim().toDoubleOrNull() ?: 0.0
+            else -> 0.0
+        }
     }
 }
