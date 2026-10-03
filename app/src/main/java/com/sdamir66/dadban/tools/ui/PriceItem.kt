@@ -1,12 +1,10 @@
 package com.sdamir66.dadban.tools.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,41 +24,25 @@ import java.util.Locale
 @Composable
 fun PriceItem(
     price: TgjuPrice,
-    isSelected: Boolean,
-    onToggle: () -> Unit
+    modifier: Modifier = Modifier
 ) {
-    val isPositive = price.direction == "high"
-    val changeColor = when {
-        price.direction == "high" -> CreditGreen
-        price.direction == "low" -> DebitRed
+    val changeColor = when (price.direction) {
+        "high" -> CreditGreen
+        "low" -> DebitRed
         else -> Color(0xFF5C5D72)
     }
 
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .clickable { onToggle() }
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .background(Color.White)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
-        // ═══ خط ۱: چک‌باکس + عنوان + قیمت + تغییر ═══
+        // ═══ خط ۱: عنوان + قیمت + تغییر ═══
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(
-                checked = isSelected,
-                onCheckedChange = { onToggle() },
-                colors = CheckboxDefaults.colors(
-                    checkedColor = HeaderBlue,
-                    checkmarkColor = Color.White,
-                    uncheckedColor = Color(0xFF5C5D72)
-                ),
-                modifier = Modifier.size(28.dp)
-            )
-
-            Spacer(Modifier.width(4.dp))
-
-            // عنوان
             Text(
                 price.title,
                 style = MaterialTheme.typography.bodyMedium,
@@ -73,7 +55,6 @@ fun PriceItem(
 
             Spacer(Modifier.width(6.dp))
 
-            // قیمت
             Text(
                 formatNumber(price.price),
                 style = MaterialTheme.typography.bodyMedium,
@@ -84,9 +65,8 @@ fun PriceItem(
 
             Spacer(Modifier.width(6.dp))
 
-            // تغییر
             Text(
-                buildChangeText(price, isPositive),
+                buildChangeText(price),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = changeColor,
@@ -96,35 +76,32 @@ fun PriceItem(
 
         // ═══ خط ۲: کمترین + بیشترین + زمان ═══
         Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 32.dp, top = 1.dp),
+            Modifier.fillMaxWidth().padding(top = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // کمترین
             Text(
                 "کم: ${formatNumber(price.low)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(0xFF5C5D72),
-                maxLines = 1
+                maxLines = 1,
+                fontSize = 10.sp
             )
 
             Spacer(Modifier.width(8.dp))
 
-            // بیشترین
             Text(
                 "بیش: ${formatNumber(price.high)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(0xFF5C5D72),
-                maxLines = 1
+                maxLines = 1,
+                fontSize = 10.sp
             )
 
             Spacer(Modifier.weight(1f))
 
-            // زمان
             if (price.time.isNotBlank()) {
                 Text(
-                    price.time,
+                    formatTime(price.time),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF5C5D72),
                     maxLines = 1,
@@ -135,7 +112,6 @@ fun PriceItem(
     }
 }
 
-// ═══ فرمت اعداد ═══
 private fun formatNumber(value: Double): String {
     val formatter = NumberFormat.getNumberInstance(Locale.US)
     formatter.minimumFractionDigits = 0
@@ -143,17 +119,48 @@ private fun formatNumber(value: Double): String {
     return formatter.format(value)
 }
 
-// ═══ ساخت متن تغییر ═══
-private fun buildChangeText(price: TgjuPrice, isPositive: Boolean): String {
+private fun buildChangeText(price: TgjuPrice): String {
     val arrow = when (price.direction) {
         "high" -> "▲"
         "low" -> "▼"
         else -> ""
     }
     val percent = String.format(Locale.US, "%.2f", price.changePercent)
-    return if (arrow.isNotEmpty()) {
-        "$arrow$percent%"
-    } else {
-        "${percent}%"
+    return "$arrow$percent%"
+}
+
+private fun formatTime(rawTime: String): String {
+    if (rawTime.isBlank()) return ""
+
+    return try {
+        if (rawTime.contains("-") && rawTime.contains(":")) {
+            val dateTime = rawTime.split(" ")
+            if (dateTime.size >= 2) {
+                val datePart = dateTime[0]
+                val timePart = dateTime[1]
+
+                val parts = datePart.split("-")
+                if (parts.size == 3) {
+                    val gy = parts[0].toInt()
+                    val gm = parts[1].toInt()
+                    val gd = parts[2].toInt()
+
+                    val j = com.sdamir66.dadban.util.Jalali.gregorianToJalaliDirect(gy, gm, gd)
+                    val jy = j[0]
+                    val jm = j[1].toString().padStart(2, '0')
+                    val jd = j[2].toString().padStart(2, '0')
+
+                    val hm = timePart.substring(0, 5)
+
+                    return "$jy/$jm/$jd $hm"
+                }
+            }
+        }
+        rawText(rawTime)
+    } catch (e: Exception) {
+        rawText(rawTime)
     }
 }
+
+// اگه فرمت میلادی نبود، خودش رو برگردون
+private fun rawText(s: String) = s
