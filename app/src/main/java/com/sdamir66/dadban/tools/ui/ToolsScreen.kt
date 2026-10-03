@@ -185,10 +185,13 @@ fun ToolsScreen() {
                             )
                         } else {
                             topList.forEach { price ->
-                                SwipeableTopItem(
-                                    price = price,
-                                    onRemove = { removeFromTop(price.key) }
-                                )
+                                // ─── key حیاتی: با عوض شدن selectedKeys، state reset می‌شه ───
+                                key(price.key) {
+                                    SwipeableTopItem(
+                                        price = price,
+                                        onRemove = { removeFromTop(price.key) }
+                                    )
+                                }
                                 HorizontalDivider(color = Color(0xFFEEEEEE))
                             }
                         }
@@ -214,10 +217,12 @@ fun ToolsScreen() {
                         if (isExpanded) {
                             HorizontalDivider(color = Color(0xFFEEEEEE))
                             allList.forEach { price ->
-                                SwipeableAllItem(
-                                    price = price,
-                                    onAdd = { addToTop(price.key) }
-                                )
+                                key(price.key) {
+                                    SwipeableAllItem(
+                                        price = price,
+                                        onAdd = { addToTop(price.key) }
+                                    )
+                                }
                                 HorizontalDivider(color = Color(0xFFEEEEEE))
                             }
                         }
