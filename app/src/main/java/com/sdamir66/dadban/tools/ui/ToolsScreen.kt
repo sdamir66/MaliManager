@@ -1,5 +1,6 @@
 package com.sdamir66.dadban.tools.ui
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -28,6 +29,8 @@ import com.sdamir66.dadban.ui.theme.HeaderBlue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private const val TAG = "ToolsScreen"
+
 @Composable
 fun ToolsScreen() {
     val context = LocalContext.current
@@ -45,12 +48,29 @@ fun ToolsScreen() {
         val result = ToolsRepository.fetchPrices(PriceCatalog.ALL_ORDERED)
         isLoading = false
         result.fold(
-            onSuccess = { allPrices = it },
+            onSuccess = { prices ->
+                allPrices = prices
+                val returned = prices.map { it.key }.toSet()
+                val missing = PriceCatalog.ALL_ORDERED.filter { it !in returned }
+                Log.d(TAG, "returned=${prices.size}, missing=${missing.size}")
+                if (missing.isNotEmpty()) {
+                    Log.w(TAG, "missing keys: $missing")
+                }
+            },
             onFailure = { errorMessage = it.message ?: "خطا در دریافت" }
         )
     }
 
     LaunchedEffect(Unit) {
+        // ═══ پاک‌سازی تاپ‌لیست قدیمی اگه با کلیدهای جدید نمی‌خونه ═══
+        val saved = ToolsPreferences.getSelectedKeys(context)
+        val validKeys = saved.filter { it in PriceCatalog.ALL_ORDERED }
+        if (validKeys != saved || saved.isEmpty()) {
+            Log.d(TAG, "resetting preferences. old=$saved")
+            ToolsPreferences.saveSelectedKeys(context, PriceCatalog.DEFAULT_SELECTED)
+            selectedKeys = PriceCatalog.DEFAULT_SELECTED
+        }
+
         refreshPrices()
         while (true) {
             delay(5 * 60 * 1000L)
@@ -185,7 +205,6 @@ fun ToolsScreen() {
                             )
                         } else {
                             topList.forEach { price ->
-                                // ─── key حیاتی: با عوض شدن selectedKeys، state reset می‌شه ───
                                 key(price.key) {
                                     SwipeableTopItem(
                                         price = price,
