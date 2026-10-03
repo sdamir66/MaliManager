@@ -2,6 +2,7 @@ package com.sdamir66.dadban.tools
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -23,12 +24,13 @@ object ToolsRepository {
 
             Log.d(TAG, "fetchPrices: total=${keys.size}, fiat=${fiatKeys.size}, crypto=${cryptoKeys.size}")
 
-            // ═══ ۱. tgju — دسته‌ای (۵ تایی) برای جلوگیری از drop ═══
-            fiatKeys.chunked(5).forEachIndexed { idx, chunk ->
+            // ═══ ۱. tgju — دسته‌ای ۳ تایی با delay برای جلوگیری از rate-limit ═══
+            val chunks = fiatKeys.chunked(3)
+            chunks.forEachIndexed { idx, chunk ->
                 try {
                     val url = "$TGJU_URL?keys=${chunk.joinToString(",")}"
                     Log.d(TAG, "tgju[$idx] URL: $url")
-                    val json = fetchUrl(url)
+                    val json = fetchUrlWithRetry(url)
                     val parsed = parseTgjuJson(json)
                     Log.d(TAG, "tgju[$idx] parsed=${parsed.size}, keys=${parsed.map { it.key }}")
                     result.addAll(parsed)
@@ -41,9 +43,14 @@ object ToolsRepository {
                 } catch (e: Exception) {
                     Log.e(TAG, "tgju[$idx] failed", e)
                 }
+
+                // ═══ بین درخواست‌ها فاصله بذار ═══
+                if (idx < chunks.size - 1) {
+                    delay(700)
+                }
             }
 
-            // ═══ ۲. نوبیتکس — رمزارزها ═══
+            // ═══ ۲. نوبیتکس — رمزارزها (با retry) ═══
             if (cryptoKeys.isNotEmpty()) {
                 try {
                     val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
@@ -51,7 +58,7 @@ object ToolsRepository {
                     if (symbols.isNotEmpty()) {
                         val url = "$NOBITEX_URL?srcCurrency=${symbols.joinToString(",")}&dstCurrency=rls"
                         Log.d(TAG, "nobitex URL: $url")
-                        val json = fetchUrl(url)
+                        val json = fetchUrlWithRetry(url)
                         val parsed = parseNobitexJson(json, cryptoKeys)
                         Log.d(TAG, "nobitex parsed=${parsed.size}, keys=${parsed.map { it.key }}")
                         result.addAll(parsed)
@@ -64,6 +71,23 @@ object ToolsRepository {
             Log.d(TAG, "fetchPrices TOTAL=${result.size}")
             Result.success(result)
         }
+
+    /**
+     * fetch با retry — اگه خطا داد، تا ۳ بار تلاش می‌کنه
+     */
+    private suspend fun fetchUrlWithRetry(urlStr: String, maxRetries: Int = 3): String {
+        var lastException: Exception? = null
+        repeat(maxRetries) { attempt ->
+            try {
+                return fetchUrl(urlStr)
+            } catch (e: Exception) {
+                lastException = e
+                Log.w(TAG, "fetch attempt ${attempt + 1} failed for $urlStr: ${e.message}")
+                if (attempt < maxRetries - 1) delay(1000L * (attempt + 1))
+            }
+        }
+        throw lastException ?: java.io.IOException("fetch failed: $urlStr")
+    }
 
     private fun fetchUrl(urlStr: String): String {
         val url = URL(urlStr)
@@ -121,8 +145,8 @@ object ToolsRepository {
     }
 
     /**
-     * نوبیتکس برمی‌گردونه: "btc-rls": { "latest": "...", "dayChange": "...", ... }
-     * پس کلید "btc-rls" باید به itemId "398096" map بشه.
+     * نوبیتکس برمی‌گردونه: "btc-rls": { ... }
+     * پس "btc-rls" → "crypto_btc"
      */
     private fun parseNobitexJson(
         jsonText: String,
@@ -138,7 +162,6 @@ object ToolsRepository {
         val statKeys = stats.keys().asSequence().toList()
         Log.d(TAG, "nobitex stats keys (raw): $statKeys")
 
-        // ─── map: "btc" و "btc-rls" و "btc-irt" → itemId ───
         val symbolToKey = mutableMapOf<String, String>()
         PriceCatalog.CRYPTO_SYMBOLS.forEach { (itemId, sym) ->
             val s = sym.lowercase()
@@ -154,10 +177,7 @@ object ToolsRepository {
             val stat = stats.optJSONObject(rawSymbol) ?: return@forEach
             val lower = rawSymbol.lowercase()
 
-            // ─── ۱. مچ دقیق ───
             var itemId: String? = symbolToKey[lower]
-
-            // ─── ۲. fallback: مچ با پیشوند ───
             if (itemId == null) {
                 itemId = PriceCatalog.CRYPTO_SYMBOLS.entries
                     .firstOrNull {
@@ -171,7 +191,6 @@ object ToolsRepository {
                 Log.w(TAG, "nobitex UNKNOWN: $rawSymbol")
                 return@forEach
             }
-
             if (itemId !in requestedKeys) return@forEach
 
             val title = PriceCatalog.CRYPTO_TITLES[itemId] ?: rawSymbol
