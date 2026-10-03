@@ -27,13 +27,12 @@ object ToolsRepository {
                     try {
                         val tgjuUrl = "$TGJU_URL?keys=${fiatKeys.joinToString(",")}"
                         val tgjuJson = fetchUrl(tgjuUrl)
-                        val parsed = parseTgjuJson(tgjuJson)
+                        val parsed = parseTgjuJson(tgjuJson, fiatKeys)
                         Log.d(TAG, "tgju: requested=${fiatKeys.size}, parsed=${parsed.size}")
                         result.addAll(parsed)
 
-                        // ─── لاگ کلیدهایی که tgju نداده ───
-                        val returnedIds = parsed.map { it.key }.toSet()
-                        val missing = fiatKeys.filter { it !in returnedIds }
+                        val returnedKeys = parsed.map { it.key }.toSet()
+                        val missing = fiatKeys.filter { it !in returnedKeys }
                         if (missing.isNotEmpty()) {
                             Log.w(TAG, "tgju missing keys: $missing")
                         }
@@ -89,7 +88,20 @@ object ToolsRepository {
         }
     }
 
-    private fun parseTgjuJson(jsonText: String): List<TgjuPrice> {
+    /**
+     * tgju فیلدهای مهمی که برمی‌گردونه:
+     *   name      → اسم واقعی (مثل "sekee", "nim", "price_dollar_rl")
+     *   item_id   → عدد داخلی tgju (قابل اعتماد نیست! ممکنه با رمزارزها قاطی شه)
+     *   title     → عنوان فارسی
+     *   p, h, l, d, dp, dt, t, updated_at
+     *
+     * پس ما از `name` استفاده می‌کنیم به عنوان key، نه item_id.
+     * اگه `name` خالی بود، fallback به item_id.
+     */
+    private fun parseTgjuJson(
+        jsonText: String,
+        requestedKeys: List<String>
+    ): List<TgjuPrice> {
         val root = JSONObject(jsonText)
         val response = root.optJSONObject("response") ?: return emptyList()
         val indicators = response.optJSONArray("indicators") ?: return emptyList()
@@ -99,21 +111,37 @@ object ToolsRepository {
         for (i in 0 until indicators.length()) {
             val obj = indicators.optJSONObject(i) ?: continue
 
+            // ─── اولویت: name → بعد item_id ───
+            val name = obj.optString("name", "").trim()
             val itemIdRaw = obj.opt("item_id")
             val itemId = when (itemIdRaw) {
                 is Number -> itemIdRaw.toLong().toString()
                 is String -> itemIdRaw
                 else -> ""
             }
-            if (itemId.isBlank()) continue
 
-            val title = obj.optString("title", "").ifBlank {
-                PriceCatalog.DEFAULT_TITLES[itemId] ?: itemId
+            // ─── key نهایی: name اگه توی requestedKeys بود، وگرنه item_id ───
+            val key = when {
+                name.isNotBlank() && name in requestedKeys -> name
+                itemId.isNotBlank() && itemId in requestedKeys -> itemId
+                else -> {
+                    // شاید اسم با یه پیشوندی اومده باشه (مثل "price_dollar_rl_2")
+                    val matchedName = requestedKeys.find {
+                        name.equals(it, ignoreCase = true) ||
+                        name.startsWith("${it}_") ||
+                        name.startsWith("${it}-")
+                    }
+                    matchedName ?: continue
+                }
+            }
+
+            val title = obj.optString("title", "").trim().ifBlank {
+                PriceCatalog.DEFAULT_TITLES[key] ?: key
             }
 
             result.add(
                 TgjuPrice(
-                    key = itemId,
+                    key = key,
                     title = title,
                     price = parseDouble(obj.opt("p")),
                     change = parseDouble(obj.opt("d")),
@@ -131,17 +159,6 @@ object ToolsRepository {
         return result
     }
 
-    /**
-     * پاسخ نوبیتکس به این شکله:
-     * {
-     *   "stats": {
-     *     "btc-rls": { "latest": "...", "dayChange": "...", "dayLow": "...", "dayHigh": "..." },
-     *     "usdt-rls": { ... }
-     *   }
-     * }
-     *
-     * پس کلید «btc-rls» باید به «398096» map بشه.
-     */
     private fun parseNobitexJson(
         jsonText: String,
         requestedKeys: List<String>
@@ -149,17 +166,15 @@ object ToolsRepository {
         val root = JSONObject(jsonText)
         val stats = root.optJSONObject("stats") ?: return emptyList()
 
-        // ─── لاگ کلیدهای دریافتی برای دیباگ ───
         Log.d(TAG, "nobitex stats keys: ${stats.keys().asSequence().toList()}")
 
-        // ─── ساخت map معکوس: "btc" و "btc-rls" → "398096" ───
+        // ─── map معکوس: "btc" / "btc-rls" → "398096" ───
         val symbolToKey = mutableMapOf<String, String>()
         PriceCatalog.CRYPTO_SYMBOLS.forEach { (key, sym) ->
             val lower = sym.lowercase()
             symbolToKey[lower] = key
             symbolToKey["$lower-rls"] = key
             symbolToKey["$lower-irt"] = key
-            symbolToKey["$lower-usdt"] = key
         }
 
         val result = mutableListOf<TgjuPrice>()
@@ -168,20 +183,14 @@ object ToolsRepository {
             val stat = stats.optJSONObject(symbol) ?: return@forEach
             val lowerSymbol = symbol.lowercase()
 
-            // ─── پیدا کردن itemId ───
-            var itemId: String? = symbolToKey[lowerSymbol]
-
-            // ─── fallback: تطبیق با پیشوند ───
-            if (itemId == null) {
-                itemId = PriceCatalog.CRYPTO_SYMBOLS.entries
+            val itemId = symbolToKey[lowerSymbol]
+                ?: PriceCatalog.CRYPTO_SYMBOLS.entries
                     .find { lowerSymbol.startsWith("${it.value.lowercase()}-") }
                     ?.key
-            }
-
-            if (itemId == null) {
-                Log.w(TAG, "nobitex unknown symbol: $symbol")
-                return@forEach
-            }
+                ?: run {
+                    Log.w(TAG, "nobitex unknown symbol: $symbol")
+                    return@forEach
+                }
 
             if (itemId !in requestedKeys) return@forEach
 
