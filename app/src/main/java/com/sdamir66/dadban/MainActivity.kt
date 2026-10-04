@@ -38,6 +38,7 @@ import com.sdamir66.dadban.calendar.data.CalendarSettings
 import com.sdamir66.dadban.calendar.data.HijriRepository
 import com.sdamir66.dadban.data.*
 import com.sdamir66.dadban.tools.PriceCatalog
+import com.sdamir66.dadban.tools.PriceCache
 import com.sdamir66.dadban.tools.TgjuPrice
 import com.sdamir66.dadban.tools.ToolsRepository
 import com.sdamir66.dadban.treasury.PasswordDialog
@@ -60,14 +61,9 @@ import com.sdamir66.dadban.util.computeBalance
 import com.sdamir66.dadban.util.money
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.SupervisorJobimport kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
-
-// ═══════════════════════════════════════════════════════
-// MainActivity
-// ═══════════════════════════════════════════════════════
 
 class MainActivity : ComponentActivity() {
     private lateinit var db: AppDb
@@ -82,9 +78,7 @@ class MainActivity : ComponentActivity() {
 
         backupScope.launch {
             delay(500L)
-
             HijriRepository.init(applicationContext, db)
-
             val current = db.calendarSettingsDao().getNow()
             if (current == null) {
                 db.calendarSettingsDao().insert(CalendarSettings())
@@ -126,10 +120,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ═══════════════════════════════════════════════════════
-// توابع کمکی مشترک
-// ═══════════════════════════════════════════════════════
-
 fun calculateRunningBalances(transactions: List<Transaction>): Map<Long, Double> {
     val sorted = transactions.sortedBy { it.dateMillis }
     val balances = mutableMapOf<Long, Double>()
@@ -145,10 +135,6 @@ fun Account.displayUnit(): String = if (customUnit.isNotBlank()) customUnit else
 
 private fun toMillis(y: Int, m: Int, d: Int): Long =
     Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, d)) ?: 0L
-
-// ═══════════════════════════════════════════════════════
-// FinanceApp
-// ═══════════════════════════════════════════════════════
 
 @Composable
 fun FinanceApp(db: AppDb) {
@@ -213,29 +199,20 @@ fun FinanceApp(db: AppDb) {
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
             title = {
-                Text("رمز تنظیم نشده",
-                    fontWeight = FontWeight.Bold, color = HeaderBlue)
+                Text("رمز تنظیم نشده", fontWeight = FontWeight.Bold, color = HeaderBlue)
             },
             text = {
-                Text("برای ورود به «دارایی‌های من»، اول از بخش تنظیمات یه رمز تعیین کن.",
-                    color = Color(0xFF1B1B1F))
+                Text("برای ورود به «دارایی‌های من»، اول از بخش تنظیمات یه رمز تعیین کن.", color = Color(0xFF1B1B1F))
             },
             confirmButton = {
                 Button(
                     onClick = { noPasswordMessage = false },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = HeaderBlue,
-                        contentColor = Color.White
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
                 ) { Text("باشه") }
             }
         )
     }
 }
-
-// ═══════════════════════════════════════════════════════
-// PersonsScreen
-// ═══════════════════════════════════════════════════════
 
 @Composable
 fun PersonsScreen(
@@ -423,10 +400,6 @@ fun PersonsScreen(
     }
 }
 
-// ═══════════════════════════════════════════════════════
-// PersonCard
-// ═══════════════════════════════════════════════════════
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PersonCard(
@@ -527,10 +500,6 @@ fun PersonCard(
         }
     }
 }
-
-// ═══════════════════════════════════════════════════════
-// PersonScreen
-// ═══════════════════════════════════════════════════════
 
 @Composable
 fun PersonScreen(
@@ -678,7 +647,7 @@ fun PersonScreen(
                 db.accounts().insert(it.copy(displayOrder = order))
                 add = false
             }
-        }, { add = false })
+        }, { add = false }, defaultNature = "credit")
     }
 
     editTarget?.let { target ->
@@ -703,10 +672,6 @@ fun PersonScreen(
         )
     }
 }
-
-// ═══════════════════════════════════════════════════════
-// SwipeableAccountCard
-// ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -796,10 +761,6 @@ fun SwipeableAccountCard(
     }
 }
 
-// ═══════════════════════════════════════════════════════
-// AccountScreen
-// ═══════════════════════════════════════════════════════
-
 @Composable
 fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -818,6 +779,12 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     LaunchedEffect(a.id) {
         if (a.rateEnabled) {
             try {
+                // اول از cache
+                val cached = PriceCache.load(context)
+                if (cached.isNotEmpty()) {
+                    livePrices = cached
+                }
+                // بعد از API
                 val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
                 result.fold(
                     onSuccess = { livePrices = it },
@@ -855,24 +822,30 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             ) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            display.text,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = display.color
-                        )
-                        Spacer(Modifier.height(2.dp))
+                        // ═══ عدد + واحد کنار هم ═══
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (display.label.isNotEmpty()) {
-                                Text(
-                                    display.label,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = display.color,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(Modifier.width(4.dp))
-                            }
-                            Text(a.displayUnit(), style = MaterialTheme.typography.bodyMedium, color = Color(0xFF5C5D72))
+                            Text(
+                                display.text,
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = display.color
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                a.displayUnit(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color(0xFF5C5D72),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        if (display.label.isNotEmpty()) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                display.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = display.color,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
 
                         if (equivalentRial != null) {
@@ -943,7 +916,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
 }
 
 // ═══════════════════════════════════════════════════════
-// SwipeableTransactionCard
+// SwipeableTransactionCard — واحد کنار عدد
 // ═══════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1011,12 +984,22 @@ fun SwipeableTransactionCard(
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${if (isTxCredit) "+" else "−"}${money(transaction.amount)}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isTxCredit) CreditGreen else DebitRed
-                    )
+                    // ═══ عدد + واحد کنار هم ═══
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${if (isTxCredit) "+" else "−"}${money(transaction.amount)}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isTxCredit) CreditGreen else DebitRed
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            currency,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF5C5D72),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                     Spacer(Modifier.height(2.dp))
                     Text(
                         "مانده: ${runningDisplay.text}",
@@ -1029,10 +1012,6 @@ fun SwipeableTransactionCard(
         }
     }
 }
-
-// ═══════════════════════════════════════════════════════
-// AutoTransactionCard
-// ═══════════════════════════════════════════════════════
 
 @Composable
 fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalance: Double) {
@@ -1064,7 +1043,22 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("+${money(transaction.amount)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = CreditGreen)
+                // ═══ عدد + واحد کنار هم ═══
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "+${money(transaction.amount)}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = CreditGreen
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        currency,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF5C5D72),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     "مانده: ${runningDisplay.text}",
@@ -1078,104 +1072,7 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
 }
 
 // ═══════════════════════════════════════════════════════
-// PersonEditor
-// ═══════════════════════════════════════════════════════
-
-@Composable
-fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: () -> Unit) {
-    var name by remember(old) { mutableStateOf(old?.name ?: "") }
-    var note by remember(old) { mutableStateOf(old?.note ?: "") }
-
-    val personAccounts by if (old != null) {
-        db.accounts().byPerson(old.id).collectAsState(emptyList())
-    } else {
-        remember { mutableStateOf(emptyList<Account>()) }
-    }
-
-    var selectedAccounts by remember(old) {
-        mutableStateOf(old?.displayedCurrencies?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet())
-    }
-
-    val textColor = Color(0xFF1B1B1F)
-    val labelColor = Color(0xFF5C5D72)
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = textColor,
-        unfocusedTextColor = textColor,
-        focusedBorderColor = HeaderBlue,
-        unfocusedBorderColor = Color(0xFFCCCCCC),
-        focusedLabelColor = HeaderBlue,
-        unfocusedLabelColor = labelColor,
-        cursorColor = HeaderBlue
-    )
-
-    AlertDialog(
-        onDismissRequest = onCancel,
-        containerColor = Color.White,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
-        title = { Text(if (old == null) "شخص جدید" else "ویرایش شخص", fontWeight = FontWeight.Bold, color = HeaderBlue) },
-        text = {
-            Column {
-                OutlinedTextField(name, { name = it }, label = { Text("نام شخص") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
-
-                if (old != null && personAccounts.isNotEmpty()) {
-                    Spacer(Modifier.height(16.dp))
-                    Text("حساب‌های نمایشی (حداکثر ۳ تا)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = HeaderBlue)
-                    Spacer(Modifier.height(8.dp))
-                    personAccounts.forEach { acc ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable {
-                                selectedAccounts = if (acc.name in selectedAccounts) selectedAccounts - acc.name
-                                else if (selectedAccounts.size < 3) selectedAccounts + acc.name
-                                else selectedAccounts
-                            }.padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = acc.name in selectedAccounts,
-                                onCheckedChange = {
-                                    selectedAccounts = if (acc.name in selectedAccounts) selectedAccounts - acc.name
-                                    else if (selectedAccounts.size < 3) selectedAccounts + acc.name
-                                    else selectedAccounts
-                                },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = HeaderBlue,
-                                    checkmarkColor = Color.White,
-                                    uncheckedColor = labelColor
-                                )
-                            )
-                            Text(acc.name, style = MaterialTheme.typography.bodyMedium, color = textColor)
-                            Spacer(Modifier.weight(1f))
-                            Text(acc.displayUnit(), style = MaterialTheme.typography.labelSmall, color = labelColor)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (name.isNotBlank())
-                        onSave(Person(
-                            id = old?.id ?: 0,
-                            name = name,
-                            note = note,
-                            displayOrder = old?.displayOrder ?: 0,
-                            displayedCurrencies = selectedAccounts.joinToString(","),
-                            isTreasury = old?.isTreasury ?: false
-                        ))
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
-            ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
-        },
-        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
-    )
-}
-
-// ═══════════════════════════════════════════════════════
-// AccountEditor
+// AccountEditor — با رادیو ماهیت
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1194,6 +1091,10 @@ fun AccountEditor(
     val currencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
     val hasCustomUnit = customUnit.isNotBlank()
 
+    // ═══ ماهیت ═══
+    var nature by remember(old) { mutableStateOf(old?.nature ?: defaultNature) }
+
+    // معادل ریالی
     var rateEnabled by remember(old) { mutableStateOf(old?.rateEnabled ?: false) }
     var rateMode by remember(old) { mutableStateOf(old?.rateMode ?: "manual") }
     var manualRateText by remember(old) {
@@ -1258,6 +1159,48 @@ fun AccountEditor(
                     }
                 }
 
+                // ═══ ماهیت حساب ═══
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Color(0xFFEEEEEE))
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    "ماهیت حساب",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = HeaderBlue,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = nature == "credit",
+                        onClick = { nature = "credit" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = HeaderBlue,
+                            unselectedColor = labelColor
+                        )
+                    )
+                    Text("بستانکار", color = textColor, fontSize = 13.sp)
+                    Spacer(Modifier.width(12.dp))
+                    RadioButton(
+                        selected = nature == "debit",
+                        onClick = { nature = "debit" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = HeaderBlue,
+                            unselectedColor = labelColor
+                        )
+                    )
+                    Text("بدهکار", color = textColor, fontSize = 13.sp)
+                }
+                Text(
+                    if (nature == "credit") "بستانکار مثبت، بدهکار منفی (حساب‌های معمولی)"
+                    else "بدهکار مثبت، بستانکار منفی (دارایی‌ها)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = labelColor
+                )
+
+                // معادل ریالی
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = Color(0xFFEEEEEE))
                 Spacer(Modifier.height(12.dp))
@@ -1374,10 +1317,104 @@ fun AccountEditor(
                                 rateMode = rateMode,
                                 manualRate = mr,
                                 liveKey = liveKey,
-                                nature = old?.nature ?: defaultNature
+                                nature = nature   // ← از رادیو
                             )
                         )
                     }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
+            ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
+    )
+}
+
+// PersonEditor (بدون تغییر)
+@Composable
+fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: () -> Unit) {
+    var name by remember(old) { mutableStateOf(old?.name ?: "") }
+    var note by remember(old) { mutableStateOf(old?.note ?: "") }
+
+    val personAccounts by if (old != null) {
+        db.accounts().byPerson(old.id).collectAsState(emptyList())
+    } else {
+        remember { mutableStateOf(emptyList<Account>()) }
+    }
+
+    var selectedAccounts by remember(old) {
+        mutableStateOf(old?.displayedCurrencies?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet())
+    }
+
+    val textColor = Color(0xFF1B1B1F)
+    val labelColor = Color(0xFF5C5D72)
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = textColor,
+        unfocusedTextColor = textColor,
+        focusedBorderColor = HeaderBlue,
+        unfocusedBorderColor = Color(0xFFCCCCCC),
+        focusedLabelColor = HeaderBlue,
+        unfocusedLabelColor = labelColor,
+        cursorColor = HeaderBlue
+    )
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = { Text(if (old == null) "شخص جدید" else "ویرایش شخص", fontWeight = FontWeight.Bold, color = HeaderBlue) },
+        text = {
+            Column {
+                OutlinedTextField(name, { name = it }, label = { Text("نام شخص") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+
+                if (old != null && personAccounts.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text("حساب‌های نمایشی (حداکثر ۳ تا)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = HeaderBlue)
+                    Spacer(Modifier.height(8.dp))
+                    personAccounts.forEach { acc ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                selectedAccounts = if (acc.name in selectedAccounts) selectedAccounts - acc.name
+                                else if (selectedAccounts.size < 3) selectedAccounts + acc.name
+                                else selectedAccounts
+                            }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = acc.name in selectedAccounts,
+                                onCheckedChange = {
+                                    selectedAccounts = if (acc.name in selectedAccounts) selectedAccounts - acc.name
+                                    else if (selectedAccounts.size < 3) selectedAccounts + acc.name
+                                    else selectedAccounts
+                                },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = HeaderBlue,
+                                    checkmarkColor = Color.White,
+                                    uncheckedColor = labelColor
+                                )
+                            )
+                            Text(acc.name, style = MaterialTheme.typography.bodyMedium, color = textColor)
+                            Spacer(Modifier.weight(1f))
+                            Text(acc.displayUnit(), style = MaterialTheme.typography.labelSmall, color = labelColor)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isNotBlank())
+                        onSave(Person(
+                            id = old?.id ?: 0,
+                            name = name,
+                            note = note,
+                            displayOrder = old?.displayOrder ?: 0,
+                            displayedCurrencies = selectedAccounts.joinToString(","),
+                            isTreasury = old?.isTreasury ?: false
+                        ))
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
             ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
