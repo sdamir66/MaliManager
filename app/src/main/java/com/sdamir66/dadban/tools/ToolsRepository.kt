@@ -1,5 +1,6 @@
 package com.sdamir66.dadban.tools
 
+import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -15,7 +16,7 @@ object ToolsRepository {
     private const val NOBITEX_URL = "https://apiv2.nobitex.ir/market/stats"
     private const val TIMEOUT_MS = 20_000
 
-    suspend fun fetchPrices(keys: List<String>): Result<List<TgjuPrice>> =
+    suspend fun fetchPrices(context: Context, keys: List<String>): Result<List<TgjuPrice>> =
         withContext(Dispatchers.IO) {
             val result = mutableListOf<TgjuPrice>()
 
@@ -23,40 +24,47 @@ object ToolsRepository {
             val fiatKeys = keys.filter { it !in PriceCatalog.CRYPTO_KEYS }
 
             Log.d(TAG, "fetchPrices: total=${keys.size}, fiat=${fiatKeys.size}, crypto=${cryptoKeys.size}")
-            Log.d(TAG, "cryptoKeys=$cryptoKeys")
-            val symbols2 = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
-            Log.d(TAG, "mapped symbols=$symbols2")
 
             // ═══ ۱. tgju ═══
             if (fiatKeys.isNotEmpty()) {
                 try {
                     val url = "$TGJU_URL?keys=${fiatKeys.joinToString(",")}"
-                    Log.d(TAG, "tgju URL: $url")
                     val json = fetchUrlWithRetry(url, isNobitex = false)
                     val parsed = parseTgjuJson(json)
-                    Log.d(TAG, "tgju parsed=${parsed.size}, keys=${parsed.map { it.key }}")
                     result.addAll(parsed)
+                    Log.d(TAG, "tgju OK: ${parsed.size}")
                 } catch (e: Exception) {
-                    Log.e(TAG, "tgju failed", e)
+                    Log.e(TAG, "tgju FAILED", e)
                 }
             }
 
             // ═══ ۲. نوبیتکس ═══
             if (cryptoKeys.isNotEmpty()) {
-                val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
-                if (symbols.isNotEmpty()) {
-                    val url = "$NOBITEX_URL?srcCurrency=${symbols.joinToString(",")}&dstCurrency=rls"
-                    Log.d(TAG, "nobitex URL: $url")
-                    try {
+                try {
+                    val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
+                    if (symbols.isNotEmpty()) {
+                        val url = "$NOBITEX_URL?srcCurrency=${symbols.joinToString(",")}&dstCurrency=rls"
                         val json = fetchUrlWithRetry(url, isNobitex = true)
-                        Log.d(TAG, "nobitex raw response (first 300): ${json.take(300)}")
                         val parsed = parseNobitexJson(json, cryptoKeys)
-                        Log.d(TAG, "nobitex parsed=${parsed.size}, keys=${parsed.map { it.key }}")
                         result.addAll(parsed)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "nobitex failed", e)
+                        Log.d(TAG, "nobitex OK: ${parsed.size}")
                     }
+                } catch (e: Exception) {
+                    Log.e(TAG, "nobitex FAILED", e)
                 }
+            }
+
+            // ═══ ۳. اگه نتیجه خالی بود، از cache استفاده کن ═══
+            if (result.isEmpty()) {
+                val cached = PriceCache.load(context)
+                if (cached.isNotEmpty()) {
+                    Log.d(TAG, "API خالی بود، از cache استفاده می‌کنم: ${cached.size}")
+                    return@withContext Result.success(cached)
+                }
+                Log.w(TAG, "نه API جواب داد نه cache")
+            } else {
+                // ═══ ۴. ذخیره در cache ═══
+                PriceCache.save(context, result)
             }
 
             Log.d(TAG, "fetchPrices TOTAL=${result.size}")
@@ -74,11 +82,11 @@ object ToolsRepository {
                 return fetchUrl(urlStr, isNobitex)
             } catch (e: Exception) {
                 lastException = e
-                Log.w(TAG, "fetch attempt ${attempt + 1} failed: ${e.message}")
+                Log.w(TAG, "attempt ${attempt + 1} failed: ${e.message}")
                 if (attempt < maxRetries - 1) delay(1500L * (attempt + 1))
             }
         }
-        throw lastException ?: java.io.IOException("fetch failed: $urlStr")
+        throw lastException ?: java.io.IOException("fetch failed")
     }
 
     private fun fetchUrl(urlStr: String, isNobitex: Boolean = false): String {
@@ -90,13 +98,12 @@ object ToolsRepository {
         conn.setRequestProperty("Accept", "application/json")
         conn.setRequestProperty(
             "User-Agent",
-            if (isNobitex) "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            if (isNobitex) "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
             else "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Dadban/1.0"
         )
 
         return try {
             val code = conn.responseCode
-            Log.d(TAG, "fetchUrl -> HTTP $code")
             if (code !in 200..299) throw java.io.IOException("HTTP $code")
             conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
@@ -148,12 +155,12 @@ object ToolsRepository {
         val root = JSONObject(jsonText)
         val stats = root.optJSONObject("stats")
         if (stats == null) {
-            Log.e(TAG, "nobitex: no 'stats'. Response: ${jsonText.take(300)}")
+            Log.e(TAG, "nobitex: no 'stats'")
             return emptyList()
         }
 
         val statKeys = stats.keys().asSequence().toList()
-        Log.d(TAG, "nobitex stats keys (raw): $statKeys")
+        Log.d(TAG, "nobitex raw keys: $statKeys")
 
         val symbolToKey = mutableMapOf<String, String>()
         PriceCatalog.CRYPTO_SYMBOLS.forEach { (itemId, sym) ->
@@ -163,7 +170,6 @@ object ToolsRepository {
             symbolToKey["$s-irt"] = itemId
             symbolToKey["$s-usdt"] = itemId
         }
-        Log.d(TAG, "symbolToKey=$symbolToKey")
 
         val result = mutableListOf<TgjuPrice>()
 
@@ -181,14 +187,8 @@ object ToolsRepository {
                     ?.key
             }
 
-            if (itemId == null) {
-                Log.w(TAG, "nobitex UNKNOWN: $rawSymbol")
-                return@forEach
-            }
-            if (itemId !in requestedKeys) {
-                Log.d(TAG, "nobitex skip $rawSymbol (itemId=$itemId not in requested)")
-                return@forEach
-            }
+            if (itemId == null) return@forEach
+            if (itemId !in requestedKeys) return@forEach
 
             val title = PriceCatalog.CRYPTO_TITLES[itemId] ?: rawSymbol
             val price = parseDouble(stat.opt("latest"))
