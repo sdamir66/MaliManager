@@ -10,6 +10,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -22,10 +24,10 @@ import kotlinx.coroutines.delay
 
 /**
  * دیالوگ ورود رمز دارایی‌های من
+ * - کیبورد عددی خودکار (بدون نیاز به کلیک روی فیلد)
+ * - رمز فقط عددی
  * - بدون دکمه تأیید/انصراف
  * - به محض تطابق طول ورودی با رمز ذخیره‌شده → خودکار چک می‌شه
- * - اگه درست بود → onCorrect()
- * - اگه غلط بود → پیام خطا + فیلد پاک می‌شه
  */
 @Composable
 fun PasswordDialog(
@@ -35,6 +37,13 @@ fun PasswordDialog(
 ) {
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+
+    // ═══ کیبورد عددی خودکار ═══
+    LaunchedEffect(Unit) {
+        delay(150L)  // صبر کن دیالوگ کامل رندر شه
+        focusRequester.requestFocus()
+    }
 
     // ═══ چک خودکار به محض تطابق طول ═══
     LaunchedEffect(input) {
@@ -43,10 +52,11 @@ fun PasswordDialog(
                 onCorrect()
             } else {
                 error = true
-                // یه مکث کوتاه تا کاربر پیام خطا رو ببینه، بعد پاک کن
                 delay(600L)
                 input = ""
                 error = false
+                // دوباره focus کن
+                try { focusRequester.requestFocus() } catch (e: Exception) { }
             }
         }
     }
@@ -80,18 +90,21 @@ fun PasswordDialog(
                 OutlinedTextField(
                     value = input,
                     onValueChange = { newValue ->
-                        // اجازه‌ی هر کاراکتری، فقط از طول رمز ذخیره‌شده بیشتر نشه
-                        if (newValue.length <= correctPassword.length) {
+                        // فقط عدد، و از طول رمز ذخیره‌شده بیشتر نشه
+                        val filtered = newValue.filter { it.isDigit() }
+                        if (filtered.length <= correctPassword.length) {
                             error = false
-                            input = newValue
+                            input = filtered
                         }
                     },
                     label = { Text("رمز را وارد کنید", color = Color(0xFF5C5D72)) },
                     visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     isError = error,
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color(0xFF1B1B1F),
                         unfocusedTextColor = Color(0xFF1B1B1F),
@@ -114,7 +127,7 @@ fun PasswordDialog(
                 }
             }
         },
-        // ═══ بدون دکمه ═══
+        // بدون دکمه
         confirmButton = {},
         dismissButton = {}
     )
