@@ -16,6 +16,10 @@ object ToolsRepository {
     private const val NOBITEX_URL = "https://apiv2.nobitex.ir/market/stats"
     private const val TIMEOUT_MS = 20_000
 
+    /**
+     * خروجی: لیست قیمت‌ها (اول از cache، بعد از API)
+     * اگه API fail داد، از cache استفاده می‌شه
+     */
     suspend fun fetchPrices(context: Context, keys: List<String>): Result<List<TgjuPrice>> =
         withContext(Dispatchers.IO) {
             val result = mutableListOf<TgjuPrice>()
@@ -54,12 +58,16 @@ object ToolsRepository {
                 }
             }
 
-            // ═══ ۳. اگه نتیجه خالی بود، از cache استفاده کن ═══
+            // ═══ ۳. اگه API چیزی نداد، از cache استفاده کن ═══
             if (result.isEmpty()) {
                 val cached = PriceCache.load(context)
                 if (cached.isNotEmpty()) {
                     Log.d(TAG, "API خالی بود، از cache استفاده می‌کنم: ${cached.size}")
-                    return@withContext Result.success(cached)
+                    // فیلتر کن بر اساس کلیدهای درخواستی
+                    val filtered = cached.filter { it.key in keys }
+                    return@withContext Result.success(
+                        if (filtered.isNotEmpty()) filtered else cached
+                    )
                 }
                 Log.w(TAG, "نه API جواب داد نه cache")
             } else {
@@ -153,14 +161,7 @@ object ToolsRepository {
         requestedKeys: List<String>
     ): List<TgjuPrice> {
         val root = JSONObject(jsonText)
-        val stats = root.optJSONObject("stats")
-        if (stats == null) {
-            Log.e(TAG, "nobitex: no 'stats'")
-            return emptyList()
-        }
-
-        val statKeys = stats.keys().asSequence().toList()
-        Log.d(TAG, "nobitex raw keys: $statKeys")
+        val stats = root.optJSONObject("stats") ?: return emptyList()
 
         val symbolToKey = mutableMapOf<String, String>()
         PriceCatalog.CRYPTO_SYMBOLS.forEach { (itemId, sym) ->
@@ -173,7 +174,7 @@ object ToolsRepository {
 
         val result = mutableListOf<TgjuPrice>()
 
-        statKeys.forEach { rawSymbol ->
+        stats.keys().forEach { rawSymbol ->
             val stat = stats.optJSONObject(rawSymbol) ?: return@forEach
             val lower = rawSymbol.lowercase()
 
