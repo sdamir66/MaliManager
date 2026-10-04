@@ -80,7 +80,6 @@ class MainActivity : ComponentActivity() {
         window.statusBarColor = android.graphics.Color.parseColor("#4C5FD7")
         window.navigationBarColor = android.graphics.Color.parseColor("#1E1F25")
 
-        // راه‌اندازی تقویم قمری + تنظیمات پیش‌فرض
         backupScope.launch {
             delay(500L)
 
@@ -104,7 +103,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // بکاپ خودکار
         backupScope.launch {
             while (true) {
                 delay(5_000L)
@@ -192,7 +190,6 @@ fun FinanceApp(db: AppDb) {
         }
     }
 
-    // ═══ دیالوگ رمز ═══
     if (showPasswordDialog) {
         val pwd = TreasuryPreferences.getPassword(context)
         if (pwd != null) {
@@ -209,7 +206,6 @@ fun FinanceApp(db: AppDb) {
         }
     }
 
-    // ═══ پیام «رمز تنظیم نشده» ═══
     if (noPasswordMessage) {
         AlertDialog(
             onDismissRequest = { noPasswordMessage = false },
@@ -269,7 +265,6 @@ fun PersonsScreen(
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
 
-                // آیکون خزانه
                 if (!editMode) {
                     Box(
                         Modifier
@@ -807,6 +802,7 @@ fun SwipeableAccountCard(
 
 @Composable
 fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
+    val context = LocalContext.current
     val tx by db.tx().byAccount(a.id).collectAsState(emptyList())
     var editor by remember { mutableStateOf<Transaction?>(null) }
     var add by remember { mutableStateOf(false) }
@@ -819,11 +815,10 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     val bal = computeBalance(creditSum, debitSum, a.nature)
     val display = balanceDisplay(bal)
 
-    // لود قیمت‌های لحظه‌ای (اگه rateEnabled بود)
     LaunchedEffect(a.id) {
         if (a.rateEnabled) {
             try {
-                val result = ToolsRepository.fetchPrices(PriceCatalog.ALL_ORDERED)
+                val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
                 result.fold(
                     onSuccess = { livePrices = it },
                     onFailure = { }
@@ -880,7 +875,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                             Text(a.displayUnit(), style = MaterialTheme.typography.bodyMedium, color = Color(0xFF5C5D72))
                         }
 
-                        // معادل ریالی
                         if (equivalentRial != null) {
                             Spacer(Modifier.height(6.dp))
                             Text(
@@ -1200,7 +1194,6 @@ fun AccountEditor(
     val currencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
     val hasCustomUnit = customUnit.isNotBlank()
 
-    // معادل ریالی
     var rateEnabled by remember(old) { mutableStateOf(old?.rateEnabled ?: false) }
     var rateMode by remember(old) { mutableStateOf(old?.rateMode ?: "manual") }
     var manualRateText by remember(old) {
@@ -1265,7 +1258,6 @@ fun AccountEditor(
                     }
                 }
 
-                // معادل ریالی
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = Color(0xFFEEEEEE))
                 Spacer(Modifier.height(12.dp))
