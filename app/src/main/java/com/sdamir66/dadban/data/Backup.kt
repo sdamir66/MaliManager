@@ -6,7 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object Backup {
-    const val CURRENT_VERSION = 2
+    const val CURRENT_VERSION = 3
 
     suspend fun exportToJson(db: AppDb): String {
         val root = JSONObject()
@@ -33,6 +33,7 @@ object Backup {
             o.put("rateMode", a.rateMode)
             o.put("manualRate", a.manualRate)
             o.put("liveKey", a.liveKey)
+            o.put("nature", a.nature)
             aa.put(o)
         }
         root.put("accounts", aa)
@@ -144,7 +145,9 @@ object Backup {
                     rateEnabled = o.optBoolean("rateEnabled", false),
                     rateMode = o.optString("rateMode", "manual"),
                     manualRate = o.optDouble("manualRate", 0.0),
-                    liveKey = o.optString("liveKey", "")
+                    liveKey = o.optString("liveKey", ""),
+                    // ✅ اگه nature نبود (بکاپ قدیمی): پیش‌فرض "credit"
+                    nature = o.optString("nature", "credit")
                 ))
                 accountIdMap[old] = id
             }
