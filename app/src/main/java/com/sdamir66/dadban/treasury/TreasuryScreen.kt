@@ -1,5 +1,6 @@
 package com.sdamir66.dadban.treasury
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,6 +39,8 @@ import com.sdamir66.dadban.util.money
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
+
+private const val TAG = "TreasuryScreen"
 
 @Composable
 fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
@@ -100,15 +103,6 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     suspend fun refreshPrices() {
         isLoading = true
         try {
-            // ═══ ۱. اول از cache (همیشه) ═══
-            val cached = PriceCache.load(context)
-            if (cached.isNotEmpty()) {
-                livePrices = cached
-                val savedAt = PriceCache.getSavedAt(context)
-                if (savedAt > 0) lastUpdate = savedAt
-            }
-
-            // ═══ ۲. بعد از API ═══
             val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
             result.fold(
                 onSuccess = { prices ->
@@ -117,18 +111,37 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                         val now = System.currentTimeMillis()
                         TreasuryPreferences.setLastUpdate(context, now)
                         lastUpdate = now
+                        Log.d(TAG, "prices updated: ${prices.size}")
                     }
                 },
-                onFailure = { }
+                onFailure = {
+                    Log.w(TAG, "fetch failed, using cache")
+                }
             )
-        } catch (e: Exception) { }
+        } catch (e: Exception) {
+            Log.e(TAG, "refreshPrices error", e)
+        }
         isLoading = false
     }
 
     LaunchedEffect(treasuryPerson) {
         if (treasuryPerson != null) {
             loadAccounts()
+
+            // ═══ ۱. اول cache رو لود کن (برای نمایش فوری) ═══
+            val cached = PriceCache.load(context)
+            if (cached.isNotEmpty()) {
+                livePrices = cached
+                val savedAt = PriceCache.getSavedAt(context)
+                if (savedAt > 0) lastUpdate = savedAt
+                Log.d(TAG, "loaded ${cached.size} from cache")
+            } else {
+                Log.w(TAG, "cache is empty")
+            }
+
+            // ═══ ۲. بعد از API ═══
             refreshPrices()
+
             while (true) {
                 delay(5 * 60 * 1000L)
                 loadAccounts()
