@@ -5,10 +5,6 @@ import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * کش قیمت‌های لحظه‌ای برای استفاده‌ی آفلاین.
- * آخرین پاسخ موفق از ToolsRepository رو ذخیره می‌کنه.
- */
 object PriceCache {
 
     private const val TAG = "PriceCache"
@@ -16,7 +12,6 @@ object PriceCache {
     private const val KEY_CACHE = "price_cache_json"
     private const val KEY_SAVED_AT = "price_cache_saved_at"
 
-    // ═══ ذخیره ═══
     fun save(context: Context, prices: List<TgjuPrice>) {
         if (prices.isEmpty()) return
         try {
@@ -39,13 +34,12 @@ object PriceCache {
                 .putString(KEY_CACHE, arr.toString())
                 .putLong(KEY_SAVED_AT, System.currentTimeMillis())
                 .apply()
-            Log.d(TAG, "saved ${prices.size} prices to cache")
+            Log.d(TAG, "saved ${prices.size} prices")
         } catch (e: Exception) {
             Log.e(TAG, "save failed", e)
         }
     }
 
-    // ═══ خواندن ═══
     fun load(context: Context): List<TgjuPrice> {
         return try {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -70,7 +64,7 @@ object PriceCache {
                     )
                 )
             }
-            Log.d(TAG, "loaded ${result.size} prices from cache")
+            Log.d(TAG, "loaded ${result.size} prices")
             result
         } catch (e: Exception) {
             Log.e(TAG, "load failed", e)
@@ -78,13 +72,11 @@ object PriceCache {
         }
     }
 
-    // ═══ زمان آخرین ذخیره ═══
     fun getSavedAt(context: Context): Long {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getLong(KEY_SAVED_AT, 0L)
     }
 
-    // ═══ پاک کردن ═══
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().clear().apply()
