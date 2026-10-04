@@ -25,6 +25,7 @@ import com.sdamir66.dadban.data.Account
 import com.sdamir66.dadban.data.AppDb
 import com.sdamir66.dadban.data.Person
 import com.sdamir66.dadban.tools.PriceCatalog
+import com.sdamir66.dadban.tools.PriceCache
 import com.sdamir66.dadban.tools.TgjuPrice
 import com.sdamir66.dadban.tools.ToolsRepository
 import com.sdamir66.dadban.ui.ConfirmDeleteDialog
@@ -99,13 +100,23 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     suspend fun refreshPrices() {
         isLoading = true
         try {
+            // ═══ ۱. اول از cache (برای نمایش فوری) ═══
+            val cached = PriceCache.load(context)
+            if (cached.isNotEmpty() && livePrices.isEmpty()) {
+                livePrices = cached
+                lastUpdate = TreasuryPreferences.getLastUpdate(context)
+            }
+
+            // ═══ ۲. بعد از API (برای آپدیت) ═══
             val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
             result.fold(
                 onSuccess = { prices ->
-                    livePrices = prices
-                    val now = System.currentTimeMillis()
-                    TreasuryPreferences.setLastUpdate(context, now)
-                    lastUpdate = now
+                    if (prices.isNotEmpty()) {
+                        livePrices = prices
+                        val now = System.currentTimeMillis()
+                        TreasuryPreferences.setLastUpdate(context, now)
+                        lastUpdate = now
+                    }
                 },
                 onFailure = { }
             )
@@ -125,16 +136,21 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
+    // ═══ هر بار openAccount از غیرnull به null تغییر کرد → دوباره لود کن ═══
+    LaunchedEffect(openAccount) {
+        if (openAccount == null && treasuryPerson != null) {
+            loadAccounts()
+        }
+    }
+
     // اگه AccountScreen بازه، همون رو نشون بده
     if (openAccount != null) {
         AccountScreen(db, openAccount!!) {
             openAccount = null
-            scope.launch { loadAccounts() }
         }
         return
     }
 
-    // جمع کل معادل ریالی
     val totalEquivalent: Double = accounts.sumOf { acc ->
         val bal = balances[acc.id] ?: 0.0
         TreasuryCalculator.calculateEquivalent(acc, bal, livePrices) ?: 0.0
@@ -145,9 +161,6 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
 
-            // ═══════════════════════════════════════════════
-            // هدر
-            // ═══════════════════════════════════════════════
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -191,9 +204,6 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             }
 
-            // ═══════════════════════════════════════════════
-            // کارت هدر (سوار روی هدر)
-            // ═══════════════════════════════════════════════
             Card(
                 Modifier
                     .fillMaxWidth()
@@ -267,9 +277,6 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             }
 
-            // ═══════════════════════════════════════════════
-            // لیست دارایی‌ها
-            // ═══════════════════════════════════════════════
             if (accounts.isEmpty()) {
                 Box(
                     Modifier.fillMaxSize().offset(y = (-20).dp).padding(top = 40.dp),
@@ -329,7 +336,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // افزودن دارایی
+    // افزودن دارایی (nature = debit)
     if (add && treasuryPerson != null) {
         AccountEditor(
             old = null,
@@ -347,7 +354,6 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         )
     }
 
-    // ویرایش دارایی
     editTarget?.let { target ->
         AccountEditor(
             old = target,
@@ -363,7 +369,6 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         )
     }
 
-    // حذف دارایی
     deleteTarget?.let { target ->
         ConfirmDeleteDialog(
             title = "حذف دارایی",
