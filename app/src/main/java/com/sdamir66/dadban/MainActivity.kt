@@ -645,7 +645,7 @@ fun PersonScreen(
         AccountEditor(null, person.id, {
             scope.launch {
                 val order = (accounts.maxOfOrNull { it.displayOrder } ?: 0) + 1
-                db.accounts().insert(it.copy(displayOrder = order))
+                db.accounts().insert(it.copy(displayOrder = order, nature = "credit"))
                 add = false
             }
         }, { add = false }, defaultNature = "credit")
@@ -780,12 +780,10 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     LaunchedEffect(a.id) {
         if (a.rateEnabled) {
             try {
-                // اول از cache
                 val cached = PriceCache.load(context)
                 if (cached.isNotEmpty()) {
                     livePrices = cached
                 }
-                // بعد از API
                 val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
                 result.fold(
                     onSuccess = { livePrices = it },
@@ -823,7 +821,6 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
             ) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        // ═══ عدد + واحد کنار هم ═══
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 display.text,
@@ -881,9 +878,9 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 items(tx, key = { it.id }) { t ->
                     val running = runningBalances[t.id] ?: 0.0
                     if (!t.isAutoProfit) {
-                        SwipeableTransactionCard(t, a.displayUnit(), running, { editor = t }, { deleteTarget = t })
+                        SwipeableTransactionCard(t, a.displayUnit(), running, a.nature, { editor = t }, { deleteTarget = t })
                     } else {
-                        AutoTransactionCard(t, a.displayUnit(), running)
+                        AutoTransactionCard(t, a.displayUnit(), running, a.nature)
                     }
                 }
             }
@@ -916,16 +913,13 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     }
 }
 
-// ═══════════════════════════════════════════════════════
-// SwipeableTransactionCard — واحد کنار عدد
-// ═══════════════════════════════════════════════════════
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwipeableTransactionCard(
     transaction: Transaction,
     currency: String,
     runningBalance: Double,
+    accountNature: String,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -958,7 +952,13 @@ fun SwipeableTransactionCard(
             }
         }
     ) {
-        val isTxCredit = transaction.type == "بستانکار"
+        val isCreditType = transaction.type == "بستانکار"
+        val isPositive = if (accountNature == "debit") !isCreditType else isCreditType
+        val sign = if (isPositive) "+" else "−"
+        val amountColor = if (isPositive) CreditGreen else DebitRed
+        val iconBg = if (isCreditType) CreditGreen else DebitRed
+        val iconChar = if (isCreditType) "↓" else "↑"
+
         val runningDisplay = balanceDisplay(runningBalance)
         Card(
             Modifier.fillMaxWidth(),
@@ -968,14 +968,19 @@ fun SwipeableTransactionCard(
         ) {
             Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(46.dp).background(color = if (isTxCredit) CreditGreen else DebitRed, shape = CircleShape),
+                    Modifier.size(46.dp).background(color = iconBg, shape = CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(if (isTxCredit) "↓" else "↑", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(iconChar, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(transaction.type, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (isTxCredit) CreditGreen else DebitRed)
+                    Text(
+                        transaction.type,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isCreditType) CreditGreen else DebitRed
+                    )
                     Spacer(Modifier.height(2.dp))
                     Text(Jalali.format(transaction.dateMillis), style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
                     if (transaction.note.isNotBlank()) {
@@ -985,13 +990,12 @@ fun SwipeableTransactionCard(
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    // ═══ عدد + واحد کنار هم ═══
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "${if (isTxCredit) "+" else "−"}${money(transaction.amount)}",
+                            "$sign${money(transaction.amount)}",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Bold,
-                            color = if (isTxCredit) CreditGreen else DebitRed
+                            color = amountColor
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
@@ -1015,7 +1019,12 @@ fun SwipeableTransactionCard(
 }
 
 @Composable
-fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalance: Double) {
+fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalance: Double, accountNature: String) {
+    val isCreditType = transaction.type == "بستانکار"
+    val isPositive = if (accountNature == "debit") !isCreditType else isCreditType
+    val sign = if (isPositive) "+" else "−"
+    val amountColor = if (isPositive) CreditGreen else DebitRed
+
     val runningDisplay = balanceDisplay(runningBalance)
     Card(
         Modifier.fillMaxWidth(),
@@ -1044,13 +1053,12 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                // ═══ عدد + واحد کنار هم ═══
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "+${money(transaction.amount)}",
+                        "$sign${money(transaction.amount)}",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
-                        color = CreditGreen
+                        color = amountColor
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
@@ -1072,10 +1080,6 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
     }
 }
 
-// ═══════════════════════════════════════════════════════
-// AccountEditor — با رادیو ماهیت
-// ═══════════════════════════════════════════════════════
-
 @Composable
 fun AccountEditor(
     old: Account?,
@@ -1092,10 +1096,8 @@ fun AccountEditor(
     val currencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
     val hasCustomUnit = customUnit.isNotBlank()
 
-    // ═══ ماهیت ═══
     var nature by remember(old) { mutableStateOf(old?.nature ?: defaultNature) }
 
-    // معادل ریالی
     var rateEnabled by remember(old) { mutableStateOf(old?.rateEnabled ?: false) }
     var rateMode by remember(old) { mutableStateOf(old?.rateMode ?: "manual") }
     var manualRateText by remember(old) {
@@ -1160,7 +1162,7 @@ fun AccountEditor(
                     }
                 }
 
-                // ═══ ماهیت حساب ═══
+                // ماهیت
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = Color(0xFFEEEEEE))
                 Spacer(Modifier.height(12.dp))
@@ -1318,7 +1320,7 @@ fun AccountEditor(
                                 rateMode = rateMode,
                                 manualRate = mr,
                                 liveKey = liveKey,
-                                nature = nature   // ← از رادیو
+                                nature = nature
                             )
                         )
                     }
@@ -1330,7 +1332,6 @@ fun AccountEditor(
     )
 }
 
-// PersonEditor (بدون تغییر)
 @Composable
 fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: () -> Unit) {
     var name by remember(old) { mutableStateOf(old?.name ?: "") }
