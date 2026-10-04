@@ -99,7 +99,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     suspend fun refreshPrices() {
         isLoading = true
         try {
-            val result = ToolsRepository.fetchPrices(PriceCatalog.ALL_ORDERED)
+            val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
             result.fold(
                 onSuccess = { prices ->
                     livePrices = prices
