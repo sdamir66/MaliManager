@@ -45,7 +45,7 @@ fun ToolsScreen() {
     suspend fun refreshPrices() {
         isLoading = true
         errorMessage = null
-        val result = ToolsRepository.fetchPrices(PriceCatalog.ALL_ORDERED)
+        val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
         isLoading = false
         result.fold(
             onSuccess = { prices ->
@@ -62,7 +62,6 @@ fun ToolsScreen() {
     }
 
     LaunchedEffect(Unit) {
-        // ═══ پاک‌سازی تاپ‌لیست قدیمی اگه با کلیدهای جدید نمی‌خونه ═══
         val saved = ToolsPreferences.getSelectedKeys(context)
         val validKeys = saved.filter { it in PriceCatalog.ALL_ORDERED }
         if (validKeys != saved || saved.isEmpty()) {
@@ -70,7 +69,6 @@ fun ToolsScreen() {
             ToolsPreferences.saveSelectedKeys(context, PriceCatalog.DEFAULT_SELECTED)
             selectedKeys = PriceCatalog.DEFAULT_SELECTED
         } else {
-            // اگه معتبر بود، همون رو نگه دار
             selectedKeys = validKeys
         }
 
@@ -93,12 +91,10 @@ fun ToolsScreen() {
         ToolsPreferences.saveSelectedKeys(context, selectedKeys)
     }
 
-    // ═══ تاپ‌لیست (مرتب‌شده) ═══
     val topList = PriceCatalog.sortForTopList(selectedKeys).mapNotNull { key ->
         allPrices.find { it.key == key }
     }
 
-    // ═══ لیست کامل (بدون انتخاب‌شده‌ها، مرتب‌شده) ═══
     val allList = PriceCatalog.sortForAllList(
         PriceCatalog.ALL_ORDERED.filter { it !in selectedKeys }
     ).mapNotNull { key ->
@@ -108,7 +104,6 @@ fun ToolsScreen() {
     Column(
         Modifier.fillMaxSize().background(BgLight)
     ) {
-        // ═══ هدر ═══
         Box(
             Modifier
                 .fillMaxWidth()
@@ -142,7 +137,6 @@ fun ToolsScreen() {
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // ═══ کارت اصلی ═══
             item {
                 Card(
                     Modifier.fillMaxWidth(),
@@ -151,7 +145,6 @@ fun ToolsScreen() {
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column {
-                        // ─── هدر کارت ───
                         Row(
                             Modifier
                                 .fillMaxWidth()
@@ -182,7 +175,6 @@ fun ToolsScreen() {
                             }
                         }
 
-                        // ─── خطا ───
                         errorMessage?.let { err ->
                             Box(
                                 Modifier
@@ -198,7 +190,6 @@ fun ToolsScreen() {
                             }
                         }
 
-                        // ─── تاپ‌لیست ───
                         if (topList.isEmpty()) {
                             Text(
                                 "هنوز چیزی انتخاب نکردی",
@@ -218,7 +209,6 @@ fun ToolsScreen() {
                             }
                         }
 
-                        // ─── دکمه‌ی باز/بسته ───
                         Box(
                             Modifier
                                 .fillMaxWidth()
@@ -235,7 +225,6 @@ fun ToolsScreen() {
                             )
                         }
 
-                        // ─── لیست کامل ───
                         if (isExpanded) {
                             HorizontalDivider(color = Color(0xFFEEEEEE))
                             allList.forEach { price ->
@@ -254,10 +243,6 @@ fun ToolsScreen() {
         }
     }
 }
-
-// ═══════════════════════════════════════════════════════════════
-//  Swipeable item برای تاپ‌لیست (سوایپ ← حذف)
-// ═══════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -307,10 +292,6 @@ private fun SwipeableTopItem(
         PriceItem(price)
     }
 }
-
-// ═══════════════════════════════════════════════════════════════
-//  Swipeable item برای لیست کامل (سوایپ ← افزودن به تاپ)
-// ═══════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
