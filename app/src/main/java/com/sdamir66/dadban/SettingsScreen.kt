@@ -31,15 +31,17 @@ import com.sdamir66.dadban.calendar.data.HijriCalendarUpdater
 import com.sdamir66.dadban.calendar.data.LocationMode
 import com.sdamir66.dadban.calendar.prayer.LocationHelper
 import com.sdamir66.dadban.data.AppDb
+import com.sdamir66.dadban.data.Backup
 import com.sdamir66.dadban.treasury.TreasuryPreferences
 import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.CreditGreen
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.util.Jalali
-import kotlinx.coroutines.Dispatchers
+import com.sdamir66.dadban.util.clearBackupFolderUri
+import com.sdamir66.dadban.util.getSavedBackupFolderUri
+import com.sdamir66.dadban.util.saveBackupFolderUri
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -57,15 +59,14 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     var calendarSettings by remember { mutableStateOf<CalendarSettings?>(null) }
     var showCityPicker by remember { mutableStateOf(false) }
 
-    // ✅ state های تقویم قمری
+    // تقویم قمری
     var isDownloading by remember { mutableStateOf(false) }
     var downloadMessage by remember { mutableStateOf<String?>(null) }
     var cacheCount by remember { mutableStateOf(0) }
 
     // ═══ رمز دارایی‌های من ═══
-    var treasuryPassword by remember { mutableStateOf("") }
     var hasTreasuryPassword by remember { mutableStateOf(false) }
-    var passwordMessage by remember { mutableStateOf<String?>(null) }
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
 
     val create = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -89,7 +90,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ✅ launcher برای انتخاب فایل calendar.json
     val pickCalendarFile = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -149,7 +149,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         val currentYear = Jalali.nowJalali()[0]
         cacheCount = db.hijriCacheDao().countForYear(currentYear)
 
-        // ═══ بررسی رمز دارایی‌ها ═══
         hasTreasuryPassword = TreasuryPreferences.hasPassword(context)
 
         val file = java.io.File(context.filesDir, "auto_backup.json")
@@ -242,7 +241,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             }
 
             // ═══════════════════════════════════════════════
-            // تقویم قمری — به‌روزرسانی از GitHub
+            // تقویم قمری
             // ═══════════════════════════════════════════════
             item {
                 Text("تقویم قمری", style = MaterialTheme.typography.titleMedium,
@@ -264,7 +263,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 
                         Spacer(Modifier.height(12.dp))
 
-                        // وضعیت cache
                         if (cacheCount > 0) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(28.dp).background(
@@ -285,7 +283,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                             Spacer(Modifier.height(12.dp))
                         }
 
-                        // دکمه‌ی دریافت از GitHub
                         Button(
                             onClick = {
                                 scope.launch {
@@ -327,7 +324,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
 
                         Spacer(Modifier.height(8.dp))
 
-                        // دکمه‌ی آپلود فایل
                         OutlinedButton(
                             onClick = { pickCalendarFile.launch(arrayOf("application/json", "text/*")) },
                             enabled = !isDownloading,
@@ -338,7 +334,6 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                             Text("📁 آپلود فایل JSON")
                         }
 
-                        // پیام نتیجه
                         downloadMessage?.let {
                             Spacer(Modifier.height(8.dp))
                             Text(
@@ -648,7 +643,7 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
             }
 
             // ═══════════════════════════════════════════════
-            // 🔐 دارایی‌های من — رمز
+            // رمز دارایی‌های من
             // ═══════════════════════════════════════════════
             item {
                 Text("دارایی‌های من", style = MaterialTheme.typography.titleMedium,
@@ -662,324 +657,4 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center) {
-                                Text("🔐", fontSize = 18.sp)
-                            }
-                            Spacer(Modifier.width(14.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("رمز دارایی‌های من",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
-                                Text(
-                                    if (hasTreasuryPassword) "رمز تعیین شده"
-                                    else "رمز تعیین نشده",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (hasTreasuryPassword) CreditGreen else Color(0xFF5C5D72)
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = treasuryPassword,
-                            onValueChange = {
-                                treasuryPassword = it
-                                passwordMessage = null
-                            },
-                            label = { Text(if (hasTreasuryPassword) "رمز جدید (اختیاری)" else "رمز جدید") },
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color(0xFF1B1B1F),
-                                unfocusedTextColor = Color(0xFF1B1B1F),
-                                focusedBorderColor = HeaderBlue,
-                                unfocusedBorderColor = Color(0xFFCCCCCC),
-                                focusedLabelColor = HeaderBlue,
-                                unfocusedLabelColor = Color(0xFF5C5D72),
-                                cursorColor = HeaderBlue
-                            )
-                        )
-
-                        Spacer(Modifier.height(10.dp))
-
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    if (treasuryPassword.isNotBlank()) {
-                                        TreasuryPreferences.setPassword(context, treasuryPassword)
-                                        hasTreasuryPassword = true
-                                        treasuryPassword = ""
-                                        passwordMessage = "✅ رمز ذخیره شد"
-                                    } else {
-                                        passwordMessage = "❌ رمز نمی‌تونه خالی باشه"
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = HeaderBlue,
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Text(if (hasTreasuryPassword) "تغییر رمز" else "ذخیره")
-                            }
-
-                            if (hasTreasuryPassword) {
-                                OutlinedButton(
-                                    onClick = {
-                                        TreasuryPreferences.clearPassword(context)
-                                        hasTreasuryPassword = false
-                                        treasuryPassword = ""
-                                        passwordMessage = "🗑 رمز حذف شد"
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = DebitRed)
-                                ) {
-                                    Text("حذف رمز")
-                                }
-                            }
-                        }
-
-                        passwordMessage?.let { msg ->
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                msg,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = when {
-                                    msg.startsWith("✅") -> CreditGreen
-                                    msg.startsWith("🗑") -> Color(0xFF5C5D72)
-                                    else -> DebitRed
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ═══════════════════════════════════════════════
-            // درباره
-            // ═══════════════════════════════════════════════
-            item {
-                Text("درباره", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
-            }
-
-            item {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(48.dp).background(HeaderBlue, RoundedCornerShape(12.dp)),
-                                contentAlignment = Alignment.Center) { Text("📅", fontSize = 24.sp) }
-                            Spacer(Modifier.width(14.dp))
-                            Column {
-                                Text("دادبان", style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
-                                Text("نسخه ۲.۰", style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF5C5D72))
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        HorizontalDivider(color = Color(0xFFEEEEEE))
-                        Spacer(Modifier.height(12.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("👤", fontSize = 20.sp)
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text("سازنده", style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF5C5D72))
-                                Text("sdamir66", style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium, color = Color(0xFF1B1B1F))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (showCityPicker && calendarSettings != null) {
-        CityPickerDialog(
-            currentCity = calendarSettings!!.cityName,
-            onCitySelected = { city ->
-                scope.launch {
-                    calendarSettings = calendarSettings!!.copy(
-                        cityName = city.name, latitude = city.latitude, longitude = city.longitude)
-                    db.calendarSettingsDao().insert(calendarSettings!!)
-                }
-                showCityPicker = false
-            },
-            onDismiss = { showCityPicker = false }
-        )
-    }
-
-    if (confirmRestore) {
-        ConfirmDeleteDialog(
-            title = "بازیابی از بکاپ خودکار",
-            message = "تمام داده‌های فعلی با بکاپ جایگزین می‌شوند. مطمئنی؟",
-            onConfirm = {
-                scope.launch {
-                    val file = java.io.File(context.filesDir, "auto_backup.json")
-                    if (file.exists()) Backup.restoreOrExport(context, db, Uri.fromFile(file), true)
-                    confirmRestore = false
-                }
-            },
-            onCancel = { confirmRestore = false }
-        )
-    }
-
-    if (confirmRemoveFolder) {
-        AlertDialog(
-            onDismissRequest = { confirmRemoveFolder = false },
-            containerColor = Color.White, shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
-            title = { Text("حذف پوشه بکاپ", fontWeight = FontWeight.Bold, color = HeaderBlue) },
-            text = { Text("بکاپ‌های بعدی در حافظه داخلی برنامه ذخیره می‌شوند.") },
-            confirmButton = {
-                Button(onClick = {
-                    clearBackupFolderUri(context); customFolderName = null; confirmRemoveFolder = false
-                }, colors = ButtonDefaults.buttonColors(containerColor = DebitRed)) { Text("حذف") }
-            },
-            dismissButton = { TextButton(onClick = { confirmRemoveFolder = false }) {
-                Text("انصراف", color = HeaderBlue) } }
-        )
-    }
-}
-
-// ═══════════════════════════════════════════════════════
-// کامپوننت‌های کمکی
-// ═══════════════════════════════════════════════════════
-
-@Composable
-private fun CalendarTypeOption(label: String, isSelected: Boolean, onClick: () -> Unit) {
-    Surface(
-        color = if (isSelected) HeaderBlue else Color(0xFFF0F1F7),
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.clickable { onClick() }
-    ) {
-        Text(label, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) Color.White else Color(0xFF5C5D72))
-    }
-}
-
-@Composable
-private fun SettingSwitch(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF1B1B1F), modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = HeaderBlue))
-    }
-}
-
-@Composable
-private fun EventSettingRow(
-    title: String, checked: Boolean, selectedColor: String,
-    onCheckedChange: (Boolean) -> Unit, onColorChange: (String) -> Unit
-) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF1B1B1F), modifier = Modifier.weight(1f))
-            Switch(checked = checked, onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = HeaderBlue))
-        }
-        if (checked) {
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                listOf("#E53935", "#4CAF50", "#2196F3", "#FF9800", "#9C27B0", "#9E9E9E").forEach { hex ->
-                    Box(Modifier.size(24.dp)
-                        .background(parseColor(hex), CircleShape)
-                        .border(width = if (hex == selectedColor) 3.dp else 0.dp,
-                            color = if (hex == selectedColor) HeaderBlue else Color.Transparent,
-                            shape = CircleShape)
-                        .clickable { onColorChange(hex) })
-                }
-            }
-        }
-    }
-}
-
-private fun parseColor(hex: String): Color {
-    return try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { Color(0xFF9E9E9E) }
-}
-
-@Composable
-private fun SettingRow(title: String, subtitle: String, icon: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center) { Text(icon, fontSize = 18.sp, color = HeaderBlue) }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium, color = Color(0xFF1B1B1F))
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
-        }
-        Text("‹", fontSize = 20.sp, color = Color(0xFF5C5D72))
-    }
-}
-
-@Composable
-private fun CityPickerDialog(
-    currentCity: String,
-    onCitySelected: (com.sdamir66.dadban.calendar.prayer.CityLocation) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var searchQuery by remember { mutableStateOf("") }
-    val allCities = LocationHelper.iranianCities
-    val filteredCities = remember(searchQuery) {
-        if (searchQuery.isBlank()) allCities else allCities.filter { it.name.contains(searchQuery) }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color.White, shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
-        title = { Text("انتخاب شهر", fontWeight = FontWeight.Bold, color = HeaderBlue) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = searchQuery, onValueChange = { searchQuery = it },
-                    label = { Text("جستجو...") }, modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color(0xFF1B1B1F), unfocusedTextColor = Color(0xFF1B1B1F),
-                        focusedBorderColor = HeaderBlue, unfocusedBorderColor = Color(0xFFCCCCCC),
-                        focusedLabelColor = HeaderBlue, unfocusedLabelColor = Color(0xFF5C5D72),
-                        cursorColor = HeaderBlue))
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(Modifier.heightIn(max = 350.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    items(filteredCities.size) { index ->
-                        val city = filteredCities[index]
-                        Card(Modifier.fillMaxWidth().clickable { onCitySelected(city) },
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (city.name == currentCity)
-                                    HeaderBlue.copy(alpha = 0.15f) else Color(0xFFF8F9FC)),
-                            shape = RoundedCornerShape(10.dp)) {
-                            Text(city.name, modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (city.name == currentCity) FontWeight.Bold else FontWeight.Normal,
-                                color = if (city.name == currentCity) HeaderBlue else Color(0xFF1B1B1F))
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) {
-            Text("بستن", color = HeaderBlue, fontWeight = FontWeight.Bold) } }
-    )
-}
+                            Box(Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCorner
