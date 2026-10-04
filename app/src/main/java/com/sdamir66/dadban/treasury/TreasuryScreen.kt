@@ -1,6 +1,6 @@
 package com.sdamir66.dadban.treasury
 
-import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,7 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,32 +20,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.AccountEditor
 import com.sdamir66.dadban.AccountScreen
-import com.sdamir66.dadban.ConfirmDeleteDialog
 import com.sdamir66.dadban.SwipeableAccountCard
 import com.sdamir66.dadban.data.Account
 import com.sdamir66.dadban.data.AppDb
 import com.sdamir66.dadban.data.Person
-import com.sdamir66.dadban.data.Transaction
 import com.sdamir66.dadban.tools.PriceCatalog
 import com.sdamir66.dadban.tools.TgjuPrice
 import com.sdamir66.dadban.tools.ToolsRepository
+import com.sdamir66.dadban.ui.ConfirmDeleteDialog
 import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.util.Jalali
+import com.sdamir66.dadban.util.balanceDisplay
+import com.sdamir66.dadban.util.computeBalance
+import com.sdamir66.dadban.util.money
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.NumberFormat
 import java.util.Locale
-
-private const val TAG = "TreasuryScreen"
 
 @Composable
 fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // ═══ state ها ═══
     var treasuryPerson by remember { mutableStateOf<Person?>(null) }
     var accounts by remember { mutableStateOf<List<Account>>(emptyList()) }
     var balances by remember { mutableStateOf<Map<Long, Double>>(emptyMap()) }
@@ -57,6 +55,15 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     var editTarget by remember { mutableStateOf<Account?>(null) }
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var openAccount by remember { mutableStateOf<Account?>(null) }
+
+    // ═══ BackHandler: اگه توی AccountScreen بودیم، برگرد به TreasuryScreen ═══
+    BackHandler(enabled = true) {
+        if (openAccount != null) {
+            openAccount = null
+        } else {
+            onBack()
+        }
+    }
 
     // ═══ پیدا کردن/ساختن شخص مخفی ═══
     LaunchedEffect(Unit) {
@@ -76,7 +83,6 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         treasuryPerson = p
     }
 
-    // ═══ بارگذاری حساب‌ها و مانده‌ها ═══
     suspend fun loadAccounts() {
         val p = treasuryPerson ?: return
         val accs = db.accounts().byPersonNow(p.id)
@@ -84,12 +90,13 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         val newBalances = mutableMapOf<Long, Double>()
         for (acc in accs) {
             val txs = db.tx().byAccountNow(acc.id)
-            newBalances[acc.id] = txs.sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+            val creditSum = txs.filter { it.type == "بستانکار" }.sumOf { it.amount }
+            val debitSum = txs.filter { it.type == "بدهکار" }.sumOf { it.amount }
+            newBalances[acc.id] = computeBalance(creditSum, debitSum, acc.nature)
         }
         balances = newBalances
     }
 
-    // ═══ بارگذاری قیمت‌های لحظه‌ای ═══
     suspend fun refreshPrices() {
         isLoading = true
         try {
@@ -100,24 +107,19 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                     val now = System.currentTimeMillis()
                     TreasuryPreferences.setLastUpdate(context, now)
                     lastUpdate = now
-                    Log.d(TAG, "prices loaded: ${prices.size}")
                 },
-                onFailure = { e ->
-                    Log.e(TAG, "fetchPrices failed", e)
-                }
+                onFailure = { /* از cache استفاده کن */ }
             )
         } catch (e: Exception) {
-            Log.e(TAG, "refreshPrices exception", e)
+            // fallback به cache (توی مرحله ۶ اضافه می‌شه)
         }
         isLoading = false
     }
 
-    // ═══ LaunchedEffect اصلی ═══
     LaunchedEffect(treasuryPerson) {
         if (treasuryPerson != null) {
             loadAccounts()
             refreshPrices()
-            // هر ۵ دقیقه خودکار
             while (true) {
                 delay(5 * 60 * 1000L)
                 loadAccounts()
@@ -126,7 +128,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ═══ BackHandler: اگه توی AccountScreen بودیم ═══
+    // ═══ اگه AccountScreen بازه، همون رو نشون بده ═══
     if (openAccount != null) {
         AccountScreen(db, openAccount!!) {
             openAccount = null
@@ -143,11 +145,10 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
 
     val isStale = lastUpdate == 0L || (System.currentTimeMillis() - lastUpdate) > 30 * 60 * 1000L
 
-    // ═══ UI ═══
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
 
-            // ─── هدر ───
+            // هدر
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -160,7 +161,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.Default.ArrowBack, "بازگشت", tint = Color.White, modifier = Modifier.size(24.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "بازگشت", tint = Color.White, modifier = Modifier.size(24.dp))
                     }
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f)) {
@@ -193,7 +194,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
 
             Spacer(Modifier.height(16.dp))
 
-            // ─── کارت هدر (جمع کل) ───
+            // کارت هدر
             Card(
                 Modifier
                     .fillMaxWidth()
@@ -268,7 +269,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
 
             Spacer(Modifier.height(16.dp))
 
-            // ─── لیست دارایی‌ها ───
+            // لیست دارایی‌ها
             if (accounts.isEmpty()) {
                 Box(
                     Modifier.fillMaxSize().padding(top = 40.dp),
@@ -325,27 +326,38 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ═══ افزودن دارایی ═══
+    // ═══ افزودن دارایی (nature = debit) ═══
     if (add && treasuryPerson != null) {
-        AccountEditor(null, treasuryPerson!!.id, {
-            scope.launch {
-                val order = (accounts.maxOfOrNull { it.displayOrder } ?: 0) + 1
-                db.accounts().insert(it.copy(displayOrder = order))
-                add = false
-                loadAccounts()
-            }
-        }, { add = false })
+        AccountEditor(
+            old = null,
+            personId = treasuryPerson!!.id,
+            onSave = {
+                scope.launch {
+                    val order = (accounts.maxOfOrNull { it.displayOrder } ?: 0) + 1
+                    db.accounts().insert(it.copy(displayOrder = order))
+                    add = false
+                    loadAccounts()
+                }
+            },
+            onCancel = { add = false },
+            defaultNature = "debit"   // ← مهم
+        )
     }
 
     // ═══ ویرایش دارایی ═══
     editTarget?.let { target ->
-        AccountEditor(target, target.personId, {
-            scope.launch {
-                db.accounts().update(it)
-                editTarget = null
-                loadAccounts()
-            }
-        }, { editTarget = null })
+        AccountEditor(
+            old = target,
+            personId = target.personId,
+            onSave = {
+                scope.launch {
+                    db.accounts().update(it)
+                    editTarget = null
+                    loadAccounts()
+                }
+            },
+            onCancel = { editTarget = null }
+        )
     }
 
     // ═══ حذف دارایی ═══
@@ -365,15 +377,6 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
             onCancel = { deleteTarget = null }
         )
     }
-}
-
-// ═══ کمک‌تابع‌ها ═══
-
-private fun money(v: Double): String {
-    val f = NumberFormat.getNumberInstance(Locale.US)
-    f.minimumFractionDigits = 0
-    f.maximumFractionDigits = 0
-    return f.format(v)
 }
 
 private fun formatDateTime(millis: Long): String {
