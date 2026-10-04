@@ -10,7 +10,6 @@ data class Person(
     val note: String = "",
     val displayOrder: Int = 0,
     val displayedCurrencies: String = "",
-    // ═══ شخص مخفی «دارایی‌های من» ═══
     val isTreasury: Boolean = false
 )
 
@@ -23,11 +22,10 @@ data class Account(
     val currency: String = "تومان",
     val customUnit: String = "",
     val displayOrder: Int = 0,
-    // ═══ معادل ریالی ═══
     val rateEnabled: Boolean = false,
-    val rateMode: String = "manual",    // "manual" | "live"
-    val manualRate: Double = 0.0,       // ریال به ازای هر واحد
-    val liveKey: String = "",           // کلید از PriceCatalog
+    val rateMode: String = "manual",
+    val manualRate: Double = 0.0,
+    val liveKey: String = "",
     // ═══ ماهیت حساب ═══
     // "credit" = بستانکار (حساب معمولی) — بستانکار مثبت، بدهکار منفی
     // "debit"  = بدهکار (دارایی‌ها) — بدهکار مثبت، بستانکار منفی
@@ -39,7 +37,7 @@ data class Transaction(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val accountId: Long,
     val dateMillis: Long,
-    val type: String,          // "بدهکار" یا "بستانکار"
+    val type: String,
     val amount: Double,
     val note: String = "",
     val isAutoProfit: Boolean = false,
@@ -50,7 +48,7 @@ data class Transaction(
 data class ProfitPeriod(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val accountId: Long,
-    val type: String,          // "ANNUAL" یا "MONTHLY"
+    val type: String,
     val rate: Double,
     val startYear: Int,
     val startMonth: Int,
