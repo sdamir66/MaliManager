@@ -22,26 +22,64 @@ data class BalanceDisplay(
     val color: Color
 )
 
-fun balanceDisplay(balance: Double): BalanceDisplay {
+/**
+ * نمایش مانده با توجه به ماهیت حساب
+ *
+ * @param balance مانده‌ی عددی
+ * @param nature "credit" = بستانکار (حساب معمولی) | "debit" = بدهکار (دارایی)
+ *
+ * برای credit:
+ *   مثبت → "X" سبز + "بستانکار"
+ *   منفی → "−X" قرمز + "بدهکار"
+ *   صفر → "0" مشکی
+ *
+ * برای debit:
+ *   مثبت → "X" قرمز + "بدهکار"
+ *   منفی → "−X" سبز + "بستانکار"
+ *   صفر → "0" مشکی
+ */
+fun balanceDisplay(balance: Double, nature: String = "credit"): BalanceDisplay {
     // نرمال‌سازی: هر عدد کوچیک‌تر از 0.01 → صفر
     val bal = if (abs(balance) < 0.01) 0.0 else balance
 
-    return when {
-        bal > 0.0 -> BalanceDisplay(
-            text = money(bal),
-            label = "بستانکار",
-            color = CreditGreen
-        )
-        bal < 0.0 -> BalanceDisplay(
-            text = "−${money(-bal)}",
-            label = "بدهکار",
-            color = DebitRed
-        )
-        else -> BalanceDisplay(
-            text = "0",
-            label = "",
-            color = Color(0xFF1B1B1F)
-        )
+    if (nature == "debit") {
+        // دارایی‌ها: بدهکار مثبت (قرمز)، بستانکار منفی (سبز)
+        return when {
+            bal > 0.0 -> BalanceDisplay(
+                text = money(bal),
+                label = "بدهکار",
+                color = DebitRed
+            )
+            bal < 0.0 -> BalanceDisplay(
+                text = "−${money(-bal)}",
+                label = "بستانکار",
+                color = CreditGreen
+            )
+            else -> BalanceDisplay(
+                text = "0",
+                label = "",
+                color = Color(0xFF1B1B1F)
+            )
+        }
+    } else {
+        // حساب‌های معمولی: بستانکار مثبت (سبز)، بدهکار منفی (قرمز)
+        return when {
+            bal > 0.0 -> BalanceDisplay(
+                text = money(bal),
+                label = "بستانکار",
+                color = CreditGreen
+            )
+            bal < 0.0 -> BalanceDisplay(
+                text = "−${money(-bal)}",
+                label = "بدهکار",
+                color = DebitRed
+            )
+            else -> BalanceDisplay(
+                text = "0",
+                label = "",
+                color = Color(0xFF1B1B1F)
+            )
+        }
     }
 }
 
