@@ -32,7 +32,6 @@ import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.util.Jalali
-import com.sdamir66.dadban.util.balanceDisplay
 import com.sdamir66.dadban.util.computeBalance
 import com.sdamir66.dadban.util.money
 import kotlinx.coroutines.delay
@@ -56,7 +55,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var openAccount by remember { mutableStateOf<Account?>(null) }
 
-    // ═══ BackHandler: اگه توی AccountScreen بودیم، برگرد به TreasuryScreen ═══
+    // BackHandler
     BackHandler(enabled = true) {
         if (openAccount != null) {
             openAccount = null
@@ -65,7 +64,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ═══ پیدا کردن/ساختن شخص مخفی ═══
+    // پیدا کردن/ساختن شخص مخفی
     LaunchedEffect(Unit) {
         var p = db.persons().allNow().find { it.isTreasury }
         if (p == null) {
@@ -108,11 +107,9 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                     TreasuryPreferences.setLastUpdate(context, now)
                     lastUpdate = now
                 },
-                onFailure = { /* از cache استفاده کن */ }
+                onFailure = { }
             )
-        } catch (e: Exception) {
-            // fallback به cache (توی مرحله ۶ اضافه می‌شه)
-        }
+        } catch (e: Exception) { }
         isLoading = false
     }
 
@@ -128,7 +125,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ═══ اگه AccountScreen بازه، همون رو نشون بده ═══
+    // اگه AccountScreen بازه، همون رو نشون بده
     if (openAccount != null) {
         AccountScreen(db, openAccount!!) {
             openAccount = null
@@ -137,7 +134,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         return
     }
 
-    // ═══ محاسبه‌ی جمع کل معادل ریالی ═══
+    // جمع کل معادل ریالی
     val totalEquivalent: Double = accounts.sumOf { acc ->
         val bal = balances[acc.id] ?: 0.0
         TreasuryCalculator.calculateEquivalent(acc, bal, livePrices) ?: 0.0
@@ -148,7 +145,9 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
 
+            // ═══════════════════════════════════════════════
             // هدر
+            // ═══════════════════════════════════════════════
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -192,16 +191,17 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-
-            // کارت هدر
+            // ═══════════════════════════════════════════════
+            // کارت هدر (سوار روی هدر)
+            // ═══════════════════════════════════════════════
             Card(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(20.dp),
+                    .padding(horizontal = 16.dp)
+                    .offset(y = (-30).dp),
+                shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
             ) {
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     Text(
@@ -267,12 +267,12 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-
+            // ═══════════════════════════════════════════════
             // لیست دارایی‌ها
+            // ═══════════════════════════════════════════════
             if (accounts.isEmpty()) {
                 Box(
-                    Modifier.fillMaxSize().padding(top = 40.dp),
+                    Modifier.fillMaxSize().offset(y = (-20).dp).padding(top = 40.dp),
                     contentAlignment = Alignment.TopCenter
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -293,7 +293,10 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .offset(y = (-20).dp)
+                        .padding(horizontal = 16.dp),
                     contentPadding = PaddingValues(bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -326,7 +329,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ═══ افزودن دارایی (nature = debit) ═══
+    // افزودن دارایی
     if (add && treasuryPerson != null) {
         AccountEditor(
             old = null,
@@ -340,11 +343,11 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             },
             onCancel = { add = false },
-            defaultNature = "debit"   // ← مهم
+            defaultNature = "debit"
         )
     }
 
-    // ═══ ویرایش دارایی ═══
+    // ویرایش دارایی
     editTarget?.let { target ->
         AccountEditor(
             old = target,
@@ -360,7 +363,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         )
     }
 
-    // ═══ حذف دارایی ═══
+    // حذف دارایی
     deleteTarget?.let { target ->
         ConfirmDeleteDialog(
             title = "حذف دارایی",
