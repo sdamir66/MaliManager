@@ -16,10 +16,6 @@ object ToolsRepository {
     private const val NOBITEX_URL = "https://apiv2.nobitex.ir/market/stats"
     private const val TIMEOUT_MS = 20_000
 
-    /**
-     * خروجی: لیست قیمت‌ها (اول از cache، بعد از API)
-     * اگه API fail داد، از cache استفاده می‌شه
-     */
     suspend fun fetchPrices(context: Context, keys: List<String>): Result<List<TgjuPrice>> =
         withContext(Dispatchers.IO) {
             val result = mutableListOf<TgjuPrice>()
@@ -58,25 +54,25 @@ object ToolsRepository {
                 }
             }
 
-            // ═══ ۳. اگه API چیزی نداد، از cache استفاده کن ═══
-            if (result.isEmpty()) {
-                val cached = PriceCache.load(context)
-                if (cached.isNotEmpty()) {
-                    Log.d(TAG, "API خالی بود، از cache استفاده می‌کنم: ${cached.size}")
-                    // فیلتر کن بر اساس کلیدهای درخواستی
-                    val filtered = cached.filter { it.key in keys }
-                    return@withContext Result.success(
-                        if (filtered.isNotEmpty()) filtered else cached
-                    )
-                }
-                Log.w(TAG, "نه API جواب داد نه cache")
-            } else {
-                // ═══ ۴. ذخیره در cache ═══
+            // ═══ ۳. اگه API موفق بود، cache کن ═══
+            if (result.isNotEmpty()) {
                 PriceCache.save(context, result)
+                Log.d(TAG, "saved ${result.size} to cache")
+                return@withContext Result.success(result)
             }
 
-            Log.d(TAG, "fetchPrices TOTAL=${result.size}")
-            Result.success(result)
+            // ═══ ۴. اگه API خالی بود، از cache بخون ═══
+            Log.w(TAG, "API خالی، از cache استفاده می‌کنم")
+            val cached = PriceCache.load(context)
+            if (cached.isNotEmpty()) {
+                val filtered = cached.filter { it.key in keys }
+                val finalList = if (filtered.isNotEmpty()) filtered else cached
+                Log.d(TAG, "loaded ${finalList.size} from cache")
+                return@withContext Result.success(finalList)
+            }
+
+            Log.w(TAG, "نه API، نه cache")
+            Result.success(emptyList())
         }
 
     private suspend fun fetchUrlWithRetry(
