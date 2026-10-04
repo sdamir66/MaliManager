@@ -2,16 +2,10 @@
 
 package com.sdamir66.dadban
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,7 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
@@ -34,8 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarSettings
@@ -48,13 +44,20 @@ import com.sdamir66.dadban.treasury.PasswordDialog
 import com.sdamir66.dadban.treasury.TreasuryCalculator
 import com.sdamir66.dadban.treasury.TreasuryPreferences
 import com.sdamir66.dadban.treasury.TreasuryScreen
-import com.sdamir66.dadban.ui.*
+import com.sdamir66.dadban.ui.ConfirmDeleteDialog
+import com.sdamir66.dadban.ui.PageHeader
+import com.sdamir66.dadban.ui.ProfitPeriodsScreen
+import com.sdamir66.dadban.ui.TxEditor
 import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.CreditGreen
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.ui.theme.MaliManagerTheme
-import com.sdamir66.dadban.util.*
+import com.sdamir66.dadban.util.Jalali
+import com.sdamir66.dadban.util.autoBackupToInternal
+import com.sdamir66.dadban.util.balanceDisplay
+import com.sdamir66.dadban.util.computeBalance
+import com.sdamir66.dadban.util.money
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -126,7 +129,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // ═══════════════════════════════════════════════════════
-// توابع کمکی مشترک (فقط این‌هایی که هنوز توی MainActivity لازمه)
+// توابع کمکی مشترک
 // ═══════════════════════════════════════════════════════
 
 fun calculateRunningBalances(transactions: List<Transaction>): Map<Long, Double> {
@@ -165,7 +168,7 @@ fun FinanceApp(db: AppDb) {
         }
     }
 
-    CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         when {
             treasury -> TreasuryScreen(db) { treasury = false }
             account != null -> AccountScreen(db, account!!) { account = null }
@@ -266,7 +269,7 @@ fun PersonsScreen(
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
 
-                // ═══ آیکون خزانه (قبل از عنوان) ═══
+                // آیکون خزانه
                 if (!editMode) {
                     Box(
                         Modifier
@@ -1182,7 +1185,13 @@ fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: ()
 // ═══════════════════════════════════════════════════════
 
 @Composable
-fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCancel: () -> Unit) {
+fun AccountEditor(
+    old: Account?,
+    personId: Long,
+    onSave: (Account) -> Unit,
+    onCancel: () -> Unit,
+    defaultNature: String = "credit"
+) {
     var name by remember(old) { mutableStateOf(old?.name ?: "") }
     var note by remember(old) { mutableStateOf(old?.note ?: "") }
     var currency by remember(old) { mutableStateOf(old?.currency ?: "ریال") }
@@ -1373,7 +1382,7 @@ fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCa
                                 rateMode = rateMode,
                                 manualRate = mr,
                                 liveKey = liveKey,
-                                nature = old?.nature ?: "credit"
+                                nature = old?.nature ?: defaultNature
                             )
                         )
                     }
