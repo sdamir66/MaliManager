@@ -874,4 +874,513 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                                 )
                                 Spacer(Modifier.width(4.dp))
                             }
-                            Text(a.displayUnit
+                            Text(a.displayUnit(), style = MaterialTheme.typography.bodyMedium, color = Color(0xFF5C5D72))
+                        }
+
+                        // معادل ریالی
+                        if (equivalentRial != null) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "معادل: ${money(equivalentRial)} ریال",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = HeaderBlue,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Box(
+                        Modifier.size(52.dp).background(HeaderBlue, shape = CircleShape).clickable { add = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("+", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
+                    }
+                }
+            }
+
+            val runningBalances = remember(tx) { calculateRunningBalances(tx) }
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().offset(y = (-20).dp).padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text("تراکنش‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                }
+                items(tx, key = { it.id }) { t ->
+                    val running = runningBalances[t.id] ?: 0.0
+                    if (!t.isAutoProfit) {
+                        SwipeableTransactionCard(t, a.displayUnit(), running, { editor = t }, { deleteTarget = t })
+                    } else {
+                        AutoTransactionCard(t, a.displayUnit(), running)
+                    }
+                }
+            }
+        }
+    }
+
+    if (add) TxEditor(null, a.id, {
+        scope.launch { db.tx().insert(it); ProfitEngine.recalculateAll(db); add = false }
+    }, { add = false })
+    editor?.let {
+        TxEditor(it, a.id, {
+            scope.launch { db.tx().update(it); ProfitEngine.recalculateAll(db); editor = null }
+        }, { editor = null })
+    }
+    if (profit) ProfitPeriodsScreen(db, a.id, a.name) { profit = false }
+
+    deleteTarget?.let { target ->
+        ConfirmDeleteDialog(
+            title = "حذف تراکنش",
+            message = "آیا از حذف این تراکنش مطمئن هستید؟",
+            onConfirm = {
+                scope.launch {
+                    db.tx().delete(target)
+                    ProfitEngine.recalculateAll(db)
+                    deleteTarget = null
+                }
+            },
+            onCancel = { deleteTarget = null }
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// SwipeableTransactionCard
+// ═══════════════════════════════════════════════════════
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwipeableTransactionCard(
+    transaction: Transaction,
+    currency: String,
+    runningBalance: Double,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> { onEdit(); false }
+                SwipeToDismissBoxValue.EndToStart -> { onDelete(); false }
+                else -> false
+            }
+        }
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val value = dismissState.targetValue
+            val (color, icon, alignment) = when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> Triple(CreditGreen, Icons.Default.Edit, Alignment.CenterStart)
+                SwipeToDismissBoxValue.EndToStart -> Triple(DebitRed, Icons.Default.Delete, Alignment.CenterEnd)
+                else -> Triple(Color.Transparent, Icons.Default.Edit, Alignment.Center)
+            }
+            Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = alignment) {
+                if (color != Color.Transparent) {
+                    Box(modifier = Modifier.size(44.dp).background(color, shape = CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+        }
+    ) {
+        val isTxCredit = transaction.type == "بستانکار"
+        val runningDisplay = balanceDisplay(runningBalance)
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(46.dp).background(color = if (isTxCredit) CreditGreen else DebitRed, shape = CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(if (isTxCredit) "↓" else "↑", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(transaction.type, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (isTxCredit) CreditGreen else DebitRed)
+                    Spacer(Modifier.height(2.dp))
+                    Text(Jalali.format(transaction.dateMillis), style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
+                    if (transaction.note.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(transaction.note, style = MaterialTheme.typography.bodySmall, color = Color(0xFF45464F))
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${if (isTxCredit) "+" else "−"}${money(transaction.amount)}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isTxCredit) CreditGreen else DebitRed
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "مانده: ${runningDisplay.text}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = runningDisplay.color,
+                        fontWeight = if (runningDisplay.label.isEmpty()) FontWeight.Normal else FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// AutoTransactionCard
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalance: Double) {
+    val runningDisplay = balanceDisplay(runningBalance)
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(46.dp).background(CreditGreen, shape = CircleShape), contentAlignment = Alignment.Center) {
+                Text("↓", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(transaction.type, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = CreditGreen)
+                    Spacer(Modifier.width(6.dp))
+                    Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = RoundedCornerShape(6.dp)) {
+                        Text("خودکار", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(Jalali.format(transaction.dateMillis), style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
+                if (transaction.note.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(transaction.note, style = MaterialTheme.typography.bodySmall, color = Color(0xFF45464F))
+                }
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("+${money(transaction.amount)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = CreditGreen)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "مانده: ${runningDisplay.text}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = runningDisplay.color,
+                    fontWeight = if (runningDisplay.label.isEmpty()) FontWeight.Normal else FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// PersonEditor
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun PersonEditor(old: Person?, db: AppDb, onSave: (Person) -> Unit, onCancel: () -> Unit) {
+    var name by remember(old) { mutableStateOf(old?.name ?: "") }
+    var note by remember(old) { mutableStateOf(old?.note ?: "") }
+
+    val personAccounts by if (old != null) {
+        db.accounts().byPerson(old.id).collectAsState(emptyList())
+    } else {
+        remember { mutableStateOf(emptyList<Account>()) }
+    }
+
+    var selectedAccounts by remember(old) {
+        mutableStateOf(old?.displayedCurrencies?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet())
+    }
+
+    val textColor = Color(0xFF1B1B1F)
+    val labelColor = Color(0xFF5C5D72)
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = textColor,
+        unfocusedTextColor = textColor,
+        focusedBorderColor = HeaderBlue,
+        unfocusedBorderColor = Color(0xFFCCCCCC),
+        focusedLabelColor = HeaderBlue,
+        unfocusedLabelColor = labelColor,
+        cursorColor = HeaderBlue
+    )
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = { Text(if (old == null) "شخص جدید" else "ویرایش شخص", fontWeight = FontWeight.Bold, color = HeaderBlue) },
+        text = {
+            Column {
+                OutlinedTextField(name, { name = it }, label = { Text("نام شخص") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+
+                if (old != null && personAccounts.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text("حساب‌های نمایشی (حداکثر ۳ تا)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = HeaderBlue)
+                    Spacer(Modifier.height(8.dp))
+                    personAccounts.forEach { acc ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                selectedAccounts = if (acc.name in selectedAccounts) selectedAccounts - acc.name
+                                else if (selectedAccounts.size < 3) selectedAccounts + acc.name
+                                else selectedAccounts
+                            }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = acc.name in selectedAccounts,
+                                onCheckedChange = {
+                                    selectedAccounts = if (acc.name in selectedAccounts) selectedAccounts - acc.name
+                                    else if (selectedAccounts.size < 3) selectedAccounts + acc.name
+                                    else selectedAccounts
+                                },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = HeaderBlue,
+                                    checkmarkColor = Color.White,
+                                    uncheckedColor = labelColor
+                                )
+                            )
+                            Text(acc.name, style = MaterialTheme.typography.bodyMedium, color = textColor)
+                            Spacer(Modifier.weight(1f))
+                            Text(acc.displayUnit(), style = MaterialTheme.typography.labelSmall, color = labelColor)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isNotBlank())
+                        onSave(Person(
+                            id = old?.id ?: 0,
+                            name = name,
+                            note = note,
+                            displayOrder = old?.displayOrder ?: 0,
+                            displayedCurrencies = selectedAccounts.joinToString(","),
+                            isTreasury = old?.isTreasury ?: false
+                        ))
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
+            ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
+    )
+}
+
+// ═══════════════════════════════════════════════════════
+// AccountEditor
+// ═══════════════════════════════════════════════════════
+
+@Composable
+fun AccountEditor(old: Account?, personId: Long, onSave: (Account) -> Unit, onCancel: () -> Unit) {
+    var name by remember(old) { mutableStateOf(old?.name ?: "") }
+    var note by remember(old) { mutableStateOf(old?.note ?: "") }
+    var currency by remember(old) { mutableStateOf(old?.currency ?: "ریال") }
+    var customUnit by remember(old) { mutableStateOf(old?.customUnit ?: "") }
+    var currencyExpanded by remember { mutableStateOf(false) }
+    val currencies = listOf("ریال", "تومان", "دلار", "یورو", "پوند", "درهم")
+    val hasCustomUnit = customUnit.isNotBlank()
+
+    // معادل ریالی
+    var rateEnabled by remember(old) { mutableStateOf(old?.rateEnabled ?: false) }
+    var rateMode by remember(old) { mutableStateOf(old?.rateMode ?: "manual") }
+    var manualRateText by remember(old) {
+        mutableStateOf(if (old != null && old.manualRate > 0.0) old.manualRate.toString() else "")
+    }
+    var liveKey by remember(old) { mutableStateOf(old?.liveKey ?: "") }
+    var liveKeyExpanded by remember { mutableStateOf(false) }
+
+    val textColor = Color(0xFF1B1B1F)
+    val labelColor = Color(0xFF5C5D72)
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = textColor,
+        unfocusedTextColor = textColor,
+        focusedBorderColor = HeaderBlue,
+        unfocusedBorderColor = Color(0xFFCCCCCC),
+        focusedLabelColor = HeaderBlue,
+        unfocusedLabelColor = labelColor,
+        cursorColor = HeaderBlue
+    )
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.border(2.dp, HeaderBlue, RoundedCornerShape(20.dp)),
+        title = { Text(if (old == null) "حساب جدید" else "ویرایش حساب", fontWeight = FontWeight.Bold, color = HeaderBlue) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                OutlinedTextField(name, { name = it }, label = { Text("عنوان حساب") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(note, { note = it }, label = { Text("توضیحات (اختیاری)") }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    customUnit, { customUnit = it },
+                    label = { Text("واحد دلخواه (اختیاری)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Text("اگه پر بشه، جایگزین ارز می‌شه", color = labelColor) },
+                    colors = fieldColors
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("ارز", style = MaterialTheme.typography.titleSmall, color = HeaderBlue, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { if (!hasCustomUnit) currencyExpanded = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !hasCustomUnit,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = HeaderBlue)
+                    ) {
+                        Text(currency, modifier = Modifier.weight(1f), color = HeaderBlue)
+                        Text("▼", color = HeaderBlue)
+                    }
+                    DropdownMenu(expanded = currencyExpanded, onDismissRequest = { currencyExpanded = false }) {
+                        currencies.forEach { c ->
+                            DropdownMenuItem(text = { Text(c) }, onClick = { currency = c; currencyExpanded = false })
+                        }
+                    }
+                }
+
+                // معادل ریالی
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Color(0xFFEEEEEE))
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    Modifier.fillMaxWidth().clickable { rateEnabled = !rateEnabled },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = rateEnabled,
+                        onCheckedChange = { rateEnabled = it },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = HeaderBlue,
+                            checkmarkColor = Color.White,
+                            uncheckedColor = labelColor
+                        )
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "نمایش معادل ریالی",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor
+                    )
+                }
+
+                if (rateEnabled) {
+                    Spacer(Modifier.height(10.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = rateMode == "manual",
+                            onClick = { rateMode = "manual" },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = HeaderBlue,
+                                unselectedColor = labelColor
+                            )
+                        )
+                        Text("دستی", color = textColor, fontSize = 13.sp)
+                        Spacer(Modifier.width(16.dp))
+                        RadioButton(
+                            selected = rateMode == "live",
+                            onClick = { rateMode = "live" },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = HeaderBlue,
+                                unselectedColor = labelColor
+                            )
+                        )
+                        Text("از قیمت لحظه‌ای", color = textColor, fontSize = 13.sp)
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    if (rateMode == "manual") {
+                        OutlinedTextField(
+                            value = manualRateText,
+                            onValueChange = { input ->
+                                manualRateText = input.filter { it.isDigit() || it == '.' }
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            label = { Text("نرخ هر واحد (ریال)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = fieldColors
+                        )
+                    } else {
+                        Text("انتخاب از لیست قیمت‌ها", style = MaterialTheme.typography.labelMedium, color = labelColor)
+                        Spacer(Modifier.height(4.dp))
+                        Box(Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { liveKeyExpanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = HeaderBlue)
+                            ) {
+                                val display = if (liveKey.isBlank()) "انتخاب کن..."
+                                    else PriceCatalog.DEFAULT_TITLES[liveKey] ?: liveKey
+                                Text(display, modifier = Modifier.weight(1f), color = HeaderBlue)
+                                Text("▼", color = HeaderBlue)
+                            }
+                            DropdownMenu(
+                                expanded = liveKeyExpanded,
+                                onDismissRequest = { liveKeyExpanded = false },
+                                modifier = Modifier.heightIn(max = 300.dp)
+                            ) {
+                                PriceCatalog.ALL_ORDERED.forEach { key ->
+                                    if (key in PriceCatalog.CRYPTO_KEYS) return@forEach
+                                    val title = PriceCatalog.DEFAULT_TITLES[key] ?: key
+                                    DropdownMenuItem(
+                                        text = { Text(title) },
+                                        onClick = { liveKey = key; liveKeyExpanded = false }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isNotBlank()) {
+                        val mr = manualRateText.toDoubleOrNull() ?: 0.0
+                        onSave(
+                            Account(
+                                id = old?.id ?: 0,
+                                personId = personId,
+                                name = name,
+                                note = note,
+                                currency = currency,
+                                customUnit = customUnit,
+                                displayOrder = old?.displayOrder ?: 0,
+                                rateEnabled = rateEnabled,
+                                rateMode = rateMode,
+                                manualRate = mr,
+                                liveKey = liveKey,
+                                nature = old?.nature ?: "credit"
+                            )
+                        )
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue, contentColor = Color.White)
+            ) { Text("ذخیره", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("انصراف", color = HeaderBlue) } }
+    )
+}
