@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
@@ -28,6 +31,7 @@ import com.sdamir66.dadban.calendar.data.HijriCalendarUpdater
 import com.sdamir66.dadban.calendar.data.LocationMode
 import com.sdamir66.dadban.calendar.prayer.LocationHelper
 import com.sdamir66.dadban.data.AppDb
+import com.sdamir66.dadban.treasury.TreasuryPreferences
 import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.CreditGreen
 import com.sdamir66.dadban.ui.theme.DebitRed
@@ -57,6 +61,11 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
     var isDownloading by remember { mutableStateOf(false) }
     var downloadMessage by remember { mutableStateOf<String?>(null) }
     var cacheCount by remember { mutableStateOf(0) }
+
+    // ═══ رمز دارایی‌های من ═══
+    var treasuryPassword by remember { mutableStateOf("") }
+    var hasTreasuryPassword by remember { mutableStateOf(false) }
+    var passwordMessage by remember { mutableStateOf<String?>(null) }
 
     val create = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -139,6 +148,9 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
         calendarSettings = db.calendarSettingsDao().getNow() ?: CalendarSettings()
         val currentYear = Jalali.nowJalali()[0]
         cacheCount = db.hijriCacheDao().countForYear(currentYear)
+
+        // ═══ بررسی رمز دارایی‌ها ═══
+        hasTreasuryPassword = TreasuryPreferences.hasPassword(context)
 
         val file = java.io.File(context.filesDir, "auto_backup.json")
         autoBackupExists = file.exists()
@@ -630,6 +642,120 @@ fun SettingsScreen(db: AppDb, onBack: () -> Unit) {
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = DebitRed)) {
                                 Text("حذف پوشه و برگشت به پیش‌فرض")
                             }
+                        }
+                    }
+                }
+            }
+
+            // ═══════════════════════════════════════════════
+            // 🔐 دارایی‌های من — رمز
+            // ═══════════════════════════════════════════════
+            item {
+                Text("دارایی‌های من", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+            }
+
+            item {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(40.dp).background(HeaderBlue.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center) {
+                                Text("🔐", fontSize = 18.sp)
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("رمز دارایی‌های من",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
+                                Text(
+                                    if (hasTreasuryPassword) "رمز تعیین شده"
+                                    else "رمز تعیین نشده",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (hasTreasuryPassword) CreditGreen else Color(0xFF5C5D72)
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = treasuryPassword,
+                            onValueChange = {
+                                treasuryPassword = it
+                                passwordMessage = null
+                            },
+                            label = { Text(if (hasTreasuryPassword) "رمز جدید (اختیاری)" else "رمز جدید") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color(0xFF1B1B1F),
+                                unfocusedTextColor = Color(0xFF1B1B1F),
+                                focusedBorderColor = HeaderBlue,
+                                unfocusedBorderColor = Color(0xFFCCCCCC),
+                                focusedLabelColor = HeaderBlue,
+                                unfocusedLabelColor = Color(0xFF5C5D72),
+                                cursorColor = HeaderBlue
+                            )
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    if (treasuryPassword.isNotBlank()) {
+                                        TreasuryPreferences.setPassword(context, treasuryPassword)
+                                        hasTreasuryPassword = true
+                                        treasuryPassword = ""
+                                        passwordMessage = "✅ رمز ذخیره شد"
+                                    } else {
+                                        passwordMessage = "❌ رمز نمی‌تونه خالی باشه"
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = HeaderBlue,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text(if (hasTreasuryPassword) "تغییر رمز" else "ذخیره")
+                            }
+
+                            if (hasTreasuryPassword) {
+                                OutlinedButton(
+                                    onClick = {
+                                        TreasuryPreferences.clearPassword(context)
+                                        hasTreasuryPassword = false
+                                        treasuryPassword = ""
+                                        passwordMessage = "🗑 رمز حذف شد"
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = DebitRed)
+                                ) {
+                                    Text("حذف رمز")
+                                }
+                            }
+                        }
+
+                        passwordMessage?.let { msg ->
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                msg,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = when {
+                                    msg.startsWith("✅") -> CreditGreen
+                                    msg.startsWith("🗑") -> Color(0xFF5C5D72)
+                                    else -> DebitRed
+                                }
+                            )
                         }
                     }
                 }
