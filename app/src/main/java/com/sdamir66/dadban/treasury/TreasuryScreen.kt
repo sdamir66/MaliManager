@@ -100,14 +100,15 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     suspend fun refreshPrices() {
         isLoading = true
         try {
-            // ═══ ۱. اول از cache (برای نمایش فوری) ═══
+            // ═══ ۱. اول از cache (همیشه) ═══
             val cached = PriceCache.load(context)
-            if (cached.isNotEmpty() && livePrices.isEmpty()) {
+            if (cached.isNotEmpty()) {
                 livePrices = cached
-                lastUpdate = TreasuryPreferences.getLastUpdate(context)
+                val savedAt = PriceCache.getSavedAt(context)
+                if (savedAt > 0) lastUpdate = savedAt
             }
 
-            // ═══ ۲. بعد از API (برای آپدیت) ═══
+            // ═══ ۲. بعد از API ═══
             val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
             result.fold(
                 onSuccess = { prices ->
@@ -136,7 +137,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // ═══ هر بار openAccount از غیرnull به null تغییر کرد → دوباره لود کن ═══
+    // هر بار openAccount از غیرnull به null تغییر کرد → دوباره لود کن
     LaunchedEffect(openAccount) {
         if (openAccount == null && treasuryPerson != null) {
             loadAccounts()
@@ -344,7 +345,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
             onSave = {
                 scope.launch {
                     val order = (accounts.maxOfOrNull { it.displayOrder } ?: 0) + 1
-                    db.accounts().insert(it.copy(displayOrder = order))
+                    db.accounts().insert(it.copy(displayOrder = order, nature = "debit"))
                     add = false
                     loadAccounts()
                 }
