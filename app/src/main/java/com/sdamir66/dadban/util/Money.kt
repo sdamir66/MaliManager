@@ -5,10 +5,8 @@ import com.sdamir66.dadban.ui.theme.CreditGreen
 import com.sdamir66.dadban.ui.theme.DebitRed
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.abs
 
-/**
- * فرمت‌کردن عدد به صورت پول
- */
 fun money(v: Double): String {
     val formatter = NumberFormat.getNumberInstance(Locale.US)
     formatter.minimumFractionDigits = 0
@@ -18,12 +16,6 @@ fun money(v: Double): String {
 
 fun money(v: Long): String = NumberFormat.getNumberInstance(Locale.US).format(v)
 
-/**
- * نمایش مانده با رنگ و برچسب
- * - صفر: متن "0" با رنگ مشکی، بدون برچسب
- * - مثبت: متن بدون علامت، رنگ سبز، برچسب "بستانکار"
- * - منفی: متن با علامت "−"، رنگ قرمز، برچسب "بدهکار"
- */
 data class BalanceDisplay(
     val text: String,
     val label: String,
@@ -31,8 +23,8 @@ data class BalanceDisplay(
 )
 
 fun balanceDisplay(balance: Double): BalanceDisplay {
-    // نرمال‌سازی -0.0 به 0.0
-    val bal = if (balance == 0.0 || balance == -0.0) 0.0 else balance
+    // نرمال‌سازی: هر عدد کوچیک‌تر از 0.01 → صفر
+    val bal = if (abs(balance) < 0.01) 0.0 else balance
 
     return when {
         bal > 0.0 -> BalanceDisplay(
@@ -53,15 +45,6 @@ fun balanceDisplay(balance: Double): BalanceDisplay {
     }
 }
 
-/**
- * نمایش مانده با در نظر گرفتن ماهیت حساب
- * @param nature "credit" (بستانکار) یا "debit" (بدهکار)
- *
- * برای حساب‌های credit: مانده = جمع(بستانکار) - جمع(بدهکار)
- * برای حساب‌های debit: مانده = جمع(بدهکار) - جمع(بستانکار)
- *
- * تابع balanceDisplay بر اساس عدد نهایی تصمیم می‌گیره.
- */
 fun computeBalance(
     creditSum: Double,
     debitSum: Double,
