@@ -9,7 +9,9 @@ data class Person(
     val name: String,
     val note: String = "",
     val displayOrder: Int = 0,
-    val displayedCurrencies: String = ""
+    val displayedCurrencies: String = "",
+    // ═══ جدید: شخص مخفی «دارایی‌های من» ═══
+    val isTreasury: Boolean = false
 )
 
 @Entity(tableName = "accounts")
@@ -20,7 +22,12 @@ data class Account(
     val note: String = "",
     val currency: String = "تومان",
     val customUnit: String = "",
-    val displayOrder: Int = 0
+    val displayOrder: Int = 0,
+    // ═══ جدید: معادل ریالی ═══
+    val rateEnabled: Boolean = false,   // فعال/غیرفعال
+    val rateMode: String = "manual",    // "manual" | "live"
+    val manualRate: Double = 0.0,       // نرخ دستی (ریال به ازای هر واحد)
+    val liveKey: String = ""            // کلید از PriceCatalog (اگه live)
 )
 
 @Entity(tableName = "transactions")
