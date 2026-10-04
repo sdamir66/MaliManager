@@ -10,7 +10,7 @@ data class Person(
     val note: String = "",
     val displayOrder: Int = 0,
     val displayedCurrencies: String = "",
-    // ═══ جدید: شخص مخفی «دارایی‌های من» ═══
+    // ═══ شخص مخفی «دارایی‌های من» ═══
     val isTreasury: Boolean = false
 )
 
@@ -23,11 +23,15 @@ data class Account(
     val currency: String = "تومان",
     val customUnit: String = "",
     val displayOrder: Int = 0,
-    // ═══ جدید: معادل ریالی ═══
-    val rateEnabled: Boolean = false,   // فعال/غیرفعال
+    // ═══ معادل ریالی ═══
+    val rateEnabled: Boolean = false,
     val rateMode: String = "manual",    // "manual" | "live"
-    val manualRate: Double = 0.0,       // نرخ دستی (ریال به ازای هر واحد)
-    val liveKey: String = ""            // کلید از PriceCatalog (اگه live)
+    val manualRate: Double = 0.0,       // ریال به ازای هر واحد
+    val liveKey: String = "",           // کلید از PriceCatalog
+    // ═══ ماهیت حساب ═══
+    // "credit" = بستانکار (حساب معمولی) — بستانکار مثبت، بدهکار منفی
+    // "debit"  = بدهکار (دارایی‌ها) — بدهکار مثبت، بستانکار منفی
+    val nature: String = "credit"
 )
 
 @Entity(tableName = "transactions")
@@ -36,7 +40,7 @@ data class Transaction(
     val accountId: Long,
     val dateMillis: Long,
     val type: String,          // "بدهکار" یا "بستانکار"
-    val amount: Double,        // ✅ Double برای اعشار
+    val amount: Double,
     val note: String = "",
     val isAutoProfit: Boolean = false,
     val profitKey: String? = null
