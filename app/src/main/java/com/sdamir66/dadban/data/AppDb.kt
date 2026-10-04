@@ -23,7 +23,7 @@ import com.sdamir66.dadban.calendar.data.HijriCacheDao
         CalendarSettings::class,
         HijriCache::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDb : RoomDatabase() {
@@ -132,13 +132,26 @@ abstract class AppDb : RoomDatabase() {
             }
         }
 
+        // ═══ جدید: نسخه ۵ → ۶ ═══
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Person: isTreasury
+                db.execSQL("ALTER TABLE persons ADD COLUMN isTreasury INTEGER NOT NULL DEFAULT 0")
+                // Account: rateEnabled, rateMode, manualRate, liveKey
+                db.execSQL("ALTER TABLE accounts ADD COLUMN rateEnabled INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE accounts ADD COLUMN rateMode TEXT NOT NULL DEFAULT 'manual'")
+                db.execSQL("ALTER TABLE accounts ADD COLUMN manualRate REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE accounts ADD COLUMN liveKey TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun build(context: Context): AppDb {
             return Room.databaseBuilder(
                 context.applicationContext,
                 AppDb::class.java,
                 "finance.db"
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
         }
     }
