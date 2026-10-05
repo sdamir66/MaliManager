@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.tools.PriceCatalog
+import com.sdamir66.dadban.tools.PriceCache
 import com.sdamir66.dadban.tools.TgjuPrice
 import com.sdamir66.dadban.tools.ToolsPreferences
 import com.sdamir66.dadban.tools.ToolsRepository
@@ -42,22 +43,46 @@ fun ToolsScreen() {
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // ═══════════════════════════════════════════════════════
+    // ۱. فوری cache رو لود کن (بدون انتظار برای API)
+    // ═══════════════════════════════════════════════════════
+    LaunchedEffect(Unit) {
+        val cached = PriceCache.load(context)
+        Log.d(TAG, "INIT cache load: ${cached.size} items")
+        if (cached.isNotEmpty()) {
+            allPrices = cached
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ۲. auto-save: هر بار allPrices تغییر کرد، cache کن
+    // ═══════════════════════════════════════════════════════
+    LaunchedEffect(allPrices) {
+        if (allPrices.isNotEmpty()) {
+            PriceCache.save(context, allPrices)
+            Log.d(TAG, "AUTO-SAVE ${allPrices.size} to cache")
+        }
+    }
+
     suspend fun refreshPrices() {
         isLoading = true
         errorMessage = null
+        Log.d(TAG, "refreshPrices: calling API...")
         val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
         isLoading = false
         result.fold(
             onSuccess = { prices ->
-                allPrices = prices
-                val returned = prices.map { it.key }.toSet()
-                val missing = PriceCatalog.ALL_ORDERED.filter { it !in returned }
-                Log.d(TAG, "returned=${prices.size}, missing=${missing.size}")
-                if (missing.isNotEmpty()) {
-                    Log.w(TAG, "missing keys: $missing")
+                Log.d(TAG, "API success: ${prices.size} items")
+                if (prices.isNotEmpty()) {
+                    allPrices = prices
+                } else {
+                    Log.w(TAG, "API returned empty, keeping cache")
                 }
             },
-            onFailure = { errorMessage = it.message ?: "خطا در دریافت" }
+            onFailure = {
+                Log.e(TAG, "API failed: ${it.message}")
+                errorMessage = it.message ?: "خطا در دریافت"
+            }
         )
     }
 
@@ -65,7 +90,6 @@ fun ToolsScreen() {
         val saved = ToolsPreferences.getSelectedKeys(context)
         val validKeys = saved.filter { it in PriceCatalog.ALL_ORDERED }
         if (validKeys != saved || saved.isEmpty()) {
-            Log.d(TAG, "resetting preferences. old=$saved")
             ToolsPreferences.saveSelectedKeys(context, PriceCatalog.DEFAULT_SELECTED)
             selectedKeys = PriceCatalog.DEFAULT_SELECTED
         } else {
@@ -175,6 +199,14 @@ fun ToolsScreen() {
                             }
                         }
 
+                        // وضعیت cache برای دیباگ
+                        Text(
+                            "قیمت‌های موجود: ${allPrices.size}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF9E9E9E),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
+                        )
+
                         errorMessage?.let { err ->
                             Box(
                                 Modifier
@@ -190,7 +222,14 @@ fun ToolsScreen() {
                             }
                         }
 
-                        if (topList.isEmpty()) {
+                        if (topList.isEmpty() && allPrices.isEmpty()) {
+                            Text(
+                                "در حال بارگذاری...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF5C5D72),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        } else if (topList.isEmpty()) {
                             Text(
                                 "هنوز چیزی انتخاب نکردی",
                                 style = MaterialTheme.typography.bodySmall,
