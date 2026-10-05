@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -35,6 +36,7 @@ object ToolsRepository {
                 chunks.forEachIndexed { idx, chunk ->
                     try {
                         val url = "$TGJU_URL?keys=${chunk.joinToString(",")}"
+                        Log.d(TAG, "tgju[$idx] URL: $url")
                         val json = fetchUrl(url, isNobitex = false)
                         val parsed = parseTgjuJson(json)
                         fiatResult.addAll(parsed)
@@ -55,7 +57,7 @@ object ToolsRepository {
             }
 
             // ═══════════════════════════════════════════════
-            // ۲. نوبیتکس → cache جداگانه (فعلاً کار نمی‌کنه)
+            // ۲. نوبیتکس → cache جداگانه
             // ═══════════════════════════════════════════════
             val cryptoResult = mutableListOf<TgjuPrice>()
             if (cryptoKeys.isNotEmpty()) {
@@ -63,13 +65,14 @@ object ToolsRepository {
                     val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
                     if (symbols.isNotEmpty()) {
                         val url = "$NOBITEX_URL?srcCurrency=${symbols.joinToString(",")}&dstCurrency=rls"
+                        Log.d(TAG, "nobitex URL: $url")
                         val json = fetchUrl(url, isNobitex = true)
                         val parsed = parseNobitexJson(json, cryptoKeys)
                         cryptoResult.addAll(parsed)
                         Log.d(TAG, "nobitex OK: ${parsed.size}")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "nobitex FAILED: ${e.message}")
+                    Log.e(TAG, "nobitex FAILED: ${e.message}", e)
                 }
             }
 
@@ -92,19 +95,23 @@ object ToolsRepository {
             if (fiatResult.isEmpty() || cryptoResult.isEmpty()) {
                 val cached = PriceCache.load(context)
                 if (fiatResult.isEmpty()) {
-                    // فیات‌ها از cache
                     finalResult.addAll(cached.filter { it.key !in PriceCatalog.CRYPTO_KEYS })
                     Log.d(TAG, "added fiat from cache")
                 }
                 if (cryptoResult.isEmpty()) {
-                    // رمزارزها از cache
                     finalResult.addAll(cached.filter { it.key in PriceCatalog.CRYPTO_KEYS })
                     Log.d(TAG, "added crypto from cache")
                 }
             }
 
             Log.d(TAG, "══════ fetchPrices END: ${finalResult.size} (fiat=${fiatResult.size}, crypto=${cryptoResult.size}) ══════")
-            Result.success(finalResult)
+
+            // ═══ FIX: اگه هیچی نیومد، failure بده ═══
+            if (finalResult.isEmpty()) {
+                Result.failure(IOException("هیچ قیمتی دریافت نشد (شبکه/API)"))
+            } else {
+                Result.success(finalResult)
+            }
         }
 
     private fun fetchUrl(urlStr: String, isNobitex: Boolean = false): String {
@@ -114,17 +121,18 @@ object ToolsRepository {
         conn.connectTimeout = TIMEOUT_MS
         conn.readTimeout = TIMEOUT_MS
         conn.setRequestProperty("Accept", "application/json")
+        conn.setRequestProperty("Content-Type", "application/json")     // ← FIX
         conn.setRequestProperty("Cache-Control", "no-cache")
         conn.setRequestProperty("Pragma", "no-cache")
         conn.setRequestProperty(
             "User-Agent",
-            if (isNobitex) "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
+            if (isNobitex) "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             else "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Dadban/1.0"
         )
 
         return try {
             val code = conn.responseCode
-            if (code !in 200..299) throw java.io.IOException("HTTP $code")
+            if (code !in 200..299) throw IOException("HTTP $code")
             conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
             conn.disconnect()
