@@ -1,6 +1,5 @@
 package com.sdamir66.dadban.tools.ui
 
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,93 +18,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.tools.PriceCatalog
-import com.sdamir66.dadban.tools.PriceCache
-import com.sdamir66.dadban.tools.TgjuPrice
+import com.sdamir66.dadban.tools.ToolsPoller
 import com.sdamir66.dadban.tools.ToolsPreferences
-import com.sdamir66.dadban.tools.ToolsRepository
 import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.CreditGreen
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-
-private const val TAG = "ToolsScreen"
 
 @Composable
 fun ToolsScreen() {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()          // ← ADDED
 
-    var allPrices by remember { mutableStateOf<List<TgjuPrice>>(emptyList()) }
-    var selectedKeys by remember { mutableStateOf(ToolsPreferences.getSelectedKeys(context)) }
+    // state از singleton — همیشه زنده، مستقل از composition
+    val state by ToolsPoller.state.collectAsState()
+
+    var selectedKeys by remember {
+        mutableStateOf(ToolsPreferences.getSelectedKeys(context))
+    }
     var isExpanded by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var debugInfo by remember { mutableStateOf("") }
 
-    // ═══════════════════════════════════════════════════════
-    // refreshPrices — تابع محلی (کاملاً مثل TreasuryScreen)
-    // ═══════════════════════════════════════════════════════
-    suspend fun refreshPrices() {
-        isLoading = true
-        errorMessage = null
-        try {
-            Log.d(TAG, "refresh START")
-            val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
-            result.fold(
-                onSuccess = { prices ->
-                    Log.d(TAG, "refresh OK: ${prices.size}")
-                    if (prices.isNotEmpty()) {
-                        allPrices = prices
-                        debugInfo = "آخرین: ${prices.size} آیتم"
-                    } else {
-                        debugInfo = "API خالی (آفلاین؟)"
-                        if (allPrices.isEmpty()) errorMessage = "قیمتی دریافت نشد"
-                    }
-                },
-                onFailure = { e ->
-                    Log.e(TAG, "refresh FAILED: ${e.message}")
-                    errorMessage = e.message
-                    debugInfo = "خطا در دریافت"
-                }
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "refresh EXCEPTION", e)
-            errorMessage = e.message
-        } finally {
-            isLoading = false
-            Log.d(TAG, "refresh END")
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // ۱. cache فوری (فقط بار اول)
-    // ═══════════════════════════════════════════════════════
+    // ═══ بار اول: cache + fetch ═══
     LaunchedEffect(Unit) {
-        val cached = PriceCache.load(context)
-        Log.d(TAG, "INIT cache: ${cached.size}")
-        if (cached.isNotEmpty() && allPrices.isEmpty()) {
-            allPrices = cached
-            debugInfo = "از کش: ${cached.size} آیتم"
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // ۲. auto-save
-    // ═══════════════════════════════════════════════════════
-    LaunchedEffect(allPrices) {
-        if (allPrices.isNotEmpty()) {
-            PriceCache.save(context, allPrices)
-            Log.d(TAG, "AUTO-SAVE ${allPrices.size}")
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // ۳. راه‌اندازی اولیه + حلقه ۵ دقیقه (کاملاً مثل TreasuryScreen)
-    // ═══════════════════════════════════════════════════════
-    LaunchedEffect(Unit) {
-        // ─── selected keys ───
+        // ─── اعتبارسنجی selected keys ───
         val saved = ToolsPreferences.getSelectedKeys(context)
         val validKeys = saved.filter { it in PriceCatalog.ALL_ORDERED }
         if (validKeys != saved || saved.isEmpty()) {
@@ -115,13 +50,26 @@ fun ToolsScreen() {
             selectedKeys = validKeys
         }
 
-        // ─── fetch اولیه ───
-        refreshPrices()
+        // ─── load cache فوری ───
+        ToolsPoller.loadFromCache(context)
 
-        // ─── loop ───
+        // ─── fetch اولیه ───
+        ToolsPoller.refresh(context)
+    }
+
+    // ═══ auto-save وقتی لیست عوض می‌شه ═══
+    LaunchedEffect(state.prices.size) {
+        if (state.prices.isNotEmpty()) {
+            ToolsPoller.persist(context)
+        }
+    }
+
+    // ═══ auto-refresh هر ۵ دقیقه — مستقل از composition ═══
+    // توجه: این loop توی Composable نمی‌مونه؛ فقط trigger می‌کنه
+    LaunchedEffect(Unit) {
         while (true) {
             delay(5 * 60 * 1000L)
-            refreshPrices()
+            ToolsPoller.refresh(context)
         }
     }
 
@@ -138,18 +86,16 @@ fun ToolsScreen() {
     }
 
     val topList = PriceCatalog.sortForTopList(selectedKeys).mapNotNull { key ->
-        allPrices.find { it.key == key }
+        state.prices.find { it.key == key }
     }
 
     val allList = PriceCatalog.sortForAllList(
         PriceCatalog.ALL_ORDERED.filter { it !in selectedKeys }
     ).mapNotNull { key ->
-        allPrices.find { it.key == key }
+        state.prices.find { it.key == key }
     }
 
-    Column(
-        Modifier.fillMaxSize().background(BgLight)
-    ) {
+    Column(Modifier.fillMaxSize().background(BgLight)) {
         Box(
             Modifier
                 .fillMaxWidth()
@@ -204,15 +150,15 @@ fun ToolsScreen() {
                                 color = Color(0xFF1B1B1F),
                                 modifier = Modifier.weight(1f)
                             )
-                            // ═══ دکمه ↻ — مستقیم scope.launch ═══
+                            // ═══ دکمه ↻ — از singleton، نه scope ═══
                             IconButton(
                                 onClick = {
-                                    scope.launch { refreshPrices() }
+                                    ToolsPoller.refresh(context, force = true)
                                 },
-                                enabled = !isLoading,
+                                enabled = !state.isLoading,
                                 modifier = Modifier.size(36.dp)
                             ) {
-                                if (isLoading) {
+                                if (state.isLoading) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
                                         color = HeaderBlue,
@@ -225,13 +171,13 @@ fun ToolsScreen() {
                         }
 
                         Text(
-                            "موجود: ${allPrices.size} آیتم  •  $debugInfo",
+                            "موجود: ${state.prices.size} آیتم  •  ${state.debugInfo}",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFF9E9E9E),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
                         )
 
-                        errorMessage?.let { err ->
+                        state.error?.let { err ->
                             Box(
                                 Modifier
                                     .fillMaxWidth()
@@ -246,7 +192,7 @@ fun ToolsScreen() {
                             }
                         }
 
-                        if (topList.isEmpty() && allPrices.isEmpty()) {
+                        if (topList.isEmpty() && state.prices.isEmpty()) {
                             Text(
                                 "در حال بارگذاری...",
                                 style = MaterialTheme.typography.bodySmall,
