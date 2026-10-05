@@ -28,14 +28,12 @@ import com.sdamir66.dadban.ui.theme.CreditGreen
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 private const val TAG = "ToolsScreen"
 
 @Composable
 fun ToolsScreen() {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     var allPrices by remember { mutableStateOf<List<TgjuPrice>>(emptyList()) }
     var selectedKeys by remember { mutableStateOf(ToolsPreferences.getSelectedKeys(context)) }
@@ -44,16 +42,25 @@ fun ToolsScreen() {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var debugInfo by remember { mutableStateOf("") }
 
-    // ═══ ۱. cache فوری ═══
+    // ═══════════════════════════════════════════════════════
+    // trigger برای refresh
+    // ═══════════════════════════════════════════════════════
+    var refreshTrigger by remember { mutableStateOf(0) }
+
+    // ═══════════════════════════════════════════════════════
+    // ۱. cache فوری — فقط بار اول
+    // ═══════════════════════════════════════════════════════
     LaunchedEffect(Unit) {
         val cached = PriceCache.load(context)
-        Log.d(TAG, "INIT cache: ${cached.size} items")
+        Log.d(TAG, "INIT cache: ${cached.size}")
         if (cached.isNotEmpty() && allPrices.isEmpty()) {
             allPrices = cached
         }
     }
 
-    // ═══ ۲. auto-save ═══
+    // ═══════════════════════════════════════════════════════
+    // ۲. auto-save
+    // ═══════════════════════════════════════════════════════
     LaunchedEffect(allPrices) {
         if (allPrices.isNotEmpty()) {
             PriceCache.save(context, allPrices)
@@ -61,39 +68,43 @@ fun ToolsScreen() {
         }
     }
 
-    suspend fun refreshPrices() {
+    // ═══════════════════════════════════════════════════════
+    // ۳. LaunchedEffect برای refresh (trigger-based)
+    // ═══════════════════════════════════════════════════════
+    LaunchedEffect(refreshTrigger) {
         isLoading = true
         errorMessage = null
         try {
-            Log.d(TAG, "refreshPrices START")
+            Log.d(TAG, "refreshTrigger=$refreshTrigger → refreshPrices")
             val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
             result.fold(
                 onSuccess = { prices ->
-                    Log.d(TAG, "refreshPrices OK: ${prices.size}")
+                    Log.d(TAG, "refresh OK: ${prices.size}")
                     if (prices.isNotEmpty()) {
                         allPrices = prices
-                        debugInfo = "آخرین آپدیت: ${prices.size} آیتم"
+                        debugInfo = "آخرین: ${prices.size} آیتم"
                     } else {
-                        debugInfo = "API خالی برگرداند (آفلاین؟)"
-                        if (allPrices.isEmpty()) {
-                            errorMessage = "قیمتی دریافت نشد"
-                        }
+                        debugInfo = "API خالی (آفلاین؟)"
+                        if (allPrices.isEmpty()) errorMessage = "قیمتی دریافت نشد"
                     }
                 },
                 onFailure = { e ->
-                    Log.e(TAG, "refreshPrices FAILED: ${e.message}")
+                    Log.e(TAG, "refresh FAILED: ${e.message}")
                     errorMessage = e.message
                 }
             )
         } catch (e: Exception) {
-            Log.e(TAG, "refreshPrices EXCEPTION", e)
+            Log.e(TAG, "refresh EXCEPTION", e)
             errorMessage = e.message
         } finally {
             isLoading = false
-            Log.d(TAG, "refreshPrices END (isLoading=false)")
+            Log.d(TAG, "refresh END (isLoading=false)")
         }
     }
 
+    // ═══════════════════════════════════════════════════════
+    // ۴. راه‌اندازی اولیه + حلقه‌ی ۵ دقیقه
+    // ═══════════════════════════════════════════════════════
     LaunchedEffect(Unit) {
         val saved = ToolsPreferences.getSelectedKeys(context)
         val validKeys = saved.filter { it in PriceCatalog.ALL_ORDERED }
@@ -104,10 +115,13 @@ fun ToolsScreen() {
             selectedKeys = validKeys
         }
 
-        refreshPrices()
+        // شروع refresh با trigger
+        refreshTrigger++
+
+        // حلقه‌ی ۵ دقیقه
         while (true) {
             delay(5 * 60 * 1000L)
-            refreshPrices()
+            refreshTrigger++
         }
     }
 
@@ -191,7 +205,10 @@ fun ToolsScreen() {
                                 modifier = Modifier.weight(1f)
                             )
                             IconButton(
-                                onClick = { scope.launch { refreshPrices() } },
+                                onClick = {
+                                    Log.d(TAG, "↻ button clicked")
+                                    refreshTrigger++
+                                },
                                 enabled = !isLoading,
                                 modifier = Modifier.size(36.dp)
                             ) {
@@ -207,7 +224,6 @@ fun ToolsScreen() {
                             }
                         }
 
-                        // ─── وضعیت (برای دیباگ) ───
                         Text(
                             "موجود: ${allPrices.size} آیتم  •  $debugInfo",
                             style = MaterialTheme.typography.labelSmall,
@@ -232,7 +248,7 @@ fun ToolsScreen() {
 
                         if (topList.isEmpty() && allPrices.isEmpty()) {
                             Text(
-                                "در حال بارگذاری... (اگه آفلاینی، ممکنه چند ثانیه طول بکشه)",
+                                "در حال بارگذاری...",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF5C5D72),
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
