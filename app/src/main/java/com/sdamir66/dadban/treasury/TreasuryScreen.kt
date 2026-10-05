@@ -59,10 +59,15 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var openAccount by remember { mutableStateOf<Account?>(null) }
 
+    // ═══ حالت مرتب‌سازی ═══
+    var editMode by remember { mutableStateOf(false) }
+
     // BackHandler
     BackHandler(enabled = true) {
         if (openAccount != null) {
             openAccount = null
+        } else if (editMode) {
+            editMode = false
         } else {
             onBack()
         }
@@ -103,22 +108,24 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     suspend fun refreshPrices() {
         isLoading = true
         try {
+            val cached = PriceCache.load(context)
+            if (cached.isNotEmpty()) {
+                livePrices = cached
+                val savedAt = PriceCache.getSavedAt(context)
+                if (savedAt > 0) lastUpdate = savedAt
+            }
+
             val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
             result.fold(
                 onSuccess = { prices ->
                     if (prices.isNotEmpty()) {
                         livePrices = prices
-                        // ═══ ذخیره‌ی مستقیم در cache (مستقل از ToolsRepository) ═══
-                        PriceCache.save(context, prices)
                         val now = System.currentTimeMillis()
                         TreasuryPreferences.setLastUpdate(context, now)
                         lastUpdate = now
-                        Log.d(TAG, "prices updated & cached: ${prices.size}")
                     }
                 },
-                onFailure = {
-                    Log.w(TAG, "fetch failed, using cache")
-                }
+                onFailure = { }
             )
         } catch (e: Exception) {
             Log.e(TAG, "refreshPrices error", e)
@@ -129,21 +136,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     LaunchedEffect(treasuryPerson) {
         if (treasuryPerson != null) {
             loadAccounts()
-
-            // ═══ ۱. اول cache رو لود کن (برای نمایش فوری) ═══
-            val cached = PriceCache.load(context)
-            if (cached.isNotEmpty()) {
-                livePrices = cached
-                val savedAt = PriceCache.getSavedAt(context)
-                if (savedAt > 0) lastUpdate = savedAt
-                Log.d(TAG, "loaded ${cached.size} from cache")
-            } else {
-                Log.w(TAG, "cache is empty")
-            }
-
-            // ═══ ۲. بعد از API ═══
             refreshPrices()
-
             while (true) {
                 delay(5 * 60 * 1000L)
                 loadAccounts()
@@ -152,14 +145,12 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         }
     }
 
-    // هر بار openAccount از غیرnull به null تغییر کرد → دوباره لود کن
     LaunchedEffect(openAccount) {
         if (openAccount == null && treasuryPerson != null) {
             loadAccounts()
         }
     }
 
-    // اگه AccountScreen بازه، همون رو نشون بده
     if (openAccount != null) {
         AccountScreen(db, openAccount!!) {
             openAccount = null
@@ -177,6 +168,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     Box(Modifier.fillMaxSize().background(BgLight)) {
         Column(Modifier.fillMaxSize()) {
 
+            // ═══ هدر ═══
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -188,25 +180,42 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                     .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 36.dp)
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
+                    IconButton(
+                        onClick = {
+                            if (editMode) editMode = false else onBack()
+                        },
+                        modifier = Modifier.size(44.dp)
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "بازگشت", tint = Color.White, modifier = Modifier.size(24.dp))
                     }
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "دارایی‌های من",
+                            if (editMode) "مرتب‌سازی" else "دارایی‌های من",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            "${accounts.size} دارایی",
+                            if (editMode) "با ▲▼ جابه‌جا کن"
+                            else "${accounts.size} دارایی",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.85f)
                         )
                     }
-                    if (!isLoading) {
+
+                    // ═══ دکمه ⇅ ═══
+                    IconButton(
+                        onClick = { editMode = !editMode },
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Text(if (editMode) "✓" else "⇅", color = Color.White, fontSize = 22.sp)
+                    }
+
+                    // ═══ دکمه + ═══
+                    if (!editMode && !isLoading) {
+                        Spacer(Modifier.width(6.dp))
                         Box(
                             Modifier
                                 .size(44.dp)
@@ -220,6 +229,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             }
 
+            // ═══ کارت هدر ═══
             Card(
                 Modifier
                     .fillMaxWidth()
@@ -293,6 +303,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             }
 
+            // ═══ لیست دارایی‌ها ═══
             if (accounts.isEmpty()) {
                 Box(
                     Modifier.fillMaxSize().offset(y = (-20).dp).padding(top = 40.dp),
@@ -338,21 +349,84 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                         val bal = balances[acc.id] ?: 0.0
                         val equiv = TreasuryCalculator.calculateEquivalent(acc, bal, livePrices)
 
-                        SwipeableAccountCard(
-                            account = acc,
-                            balance = bal,
-                            onClick = { openAccount = acc },
-                            onEdit = { editTarget = acc },
-                            onDelete = { deleteTarget = acc },
-                            equivalentRial = equiv
-                        )
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            // ═══ دکمه‌های ▲▼ در حالت editMode ═══
+                            if (editMode) {
+                                Column(Modifier.padding(end = 4.dp)) {
+                                    IconButton(
+                                        onClick = {
+                                            if (index > 0) {
+                                                scope.launch {
+                                                    val a1 = accounts[index]
+                                                    val a2 = accounts[index - 1]
+                                                    db.accounts().updateOrder(a1.id, a2.displayOrder)
+                                                    db.accounts().updateOrder(a2.id, a1.displayOrder)
+                                                    loadAccounts()
+                                                }
+                                            }
+                                        },
+                                        enabled = index > 0,
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Text(
+                                            "▲",
+                                            fontSize = 14.sp,
+                                            color = if (index > 0) HeaderBlue else Color.LightGray
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            if (index < accounts.size - 1) {
+                                                scope.launch {
+                                                    val a1 = accounts[index]
+                                                    val a2 = accounts[index + 1]
+                                                    db.accounts().updateOrder(a1.id, a2.displayOrder)
+                                                    db.accounts().updateOrder(a2.id, a1.displayOrder)
+                                                    loadAccounts()
+                                                }
+                                            }
+                                        },
+                                        enabled = index < accounts.size - 1,
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Text(
+                                            "▼",
+                                            fontSize = 14.sp,
+                                            color = if (index < accounts.size - 1) HeaderBlue else Color.LightGray
+                                        )
+                                    }
+                                }
+                            }
+
+                            Box(Modifier.weight(1f)) {
+                                if (editMode) {
+                                    SwipeableAccountCard(
+                                        account = acc,
+                                        balance = bal,
+                                        onClick = { },
+                                        onEdit = { },
+                                        onDelete = { },
+                                        equivalentRial = equiv
+                                    )
+                                } else {
+                                    SwipeableAccountCard(
+                                        account = acc,
+                                        balance = bal,
+                                        onClick = { openAccount = acc },
+                                        onEdit = { editTarget = acc },
+                                        onDelete = { deleteTarget = acc },
+                                        equivalentRial = equiv
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    // افزودن دارایی (nature = debit)
+    // افزودن دارایی
     if (add && treasuryPerson != null) {
         AccountEditor(
             old = null,
