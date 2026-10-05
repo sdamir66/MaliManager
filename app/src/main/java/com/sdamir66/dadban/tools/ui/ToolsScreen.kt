@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.tools.PriceCatalog
-import com.sdamir66.dadban.tools.TgjuPrice              // ← FIX ۱: اضافه شد
+import com.sdamir66.dadban.tools.TgjuPrice
 import com.sdamir66.dadban.tools.ToolsPoller
 import com.sdamir66.dadban.tools.ToolsPreferences
 import com.sdamir66.dadban.ui.theme.BgLight
@@ -31,6 +31,7 @@ import kotlinx.coroutines.delay
 fun ToolsScreen() {
     val context = LocalContext.current
 
+    // state از singleton — همیشه زنده، مستقل از composition
     val state by ToolsPoller.state.collectAsState()
 
     var selectedKeys by remember {
@@ -50,10 +51,8 @@ fun ToolsScreen() {
         }
 
         ToolsPoller.loadFromCache(context)
-        ToolsPoller.refresh(context)  // ← FIX ۲: دیگه force نمی‌زنیم، TTL خودش مدیریت می‌کنه
+        ToolsPoller.refresh(context)
     }
-
-    // ═══ FIX ۳: persist رو حذف کردیم — خود ToolsPoller.refresh ذخیره می‌کنه ═══
 
     // ═══ auto-refresh هر ۵ دقیقه ═══
     LaunchedEffect(Unit) {
@@ -197,7 +196,7 @@ fun ToolsScreen() {
                             )
                         } else {
                             topList.forEach { price ->
-                                key(price.key) {
+                                key(price.key, state.lastUpdate) {
                                     SwipeableTopItem(
                                         price = price,
                                         onRemove = { removeFromTop(price.key) }
@@ -226,7 +225,7 @@ fun ToolsScreen() {
                         if (isExpanded) {
                             HorizontalDivider(color = Color(0xFFEEEEEE))
                             allList.forEach { price ->
-                                key(price.key) {
+                                key(price.key, state.lastUpdate) {
                                     SwipeableAllItem(
                                         price = price,
                                         onAdd = { addToTop(price.key) }
