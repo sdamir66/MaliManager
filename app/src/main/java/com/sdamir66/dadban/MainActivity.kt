@@ -1126,7 +1126,7 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
 }
 
 // ═══════════════════════════════════════════════════════
-// AccountEditor
+// AccountEditor — با ترتیب جدید رادیو ماهیت
 // ═══════════════════════════════════════════════════════
 
 @Composable
@@ -1211,6 +1211,7 @@ fun AccountEditor(
                     }
                 }
 
+                // ═══ ماهیت حساب — بدهکار راست، بستانکار چپ ═══
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = Color(0xFFEEEEEE))
                 Spacer(Modifier.height(12.dp))
@@ -1224,16 +1225,7 @@ fun AccountEditor(
                 Spacer(Modifier.height(4.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = nature == "credit",
-                        onClick = { nature = "credit" },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = HeaderBlue,
-                            unselectedColor = labelColor
-                        )
-                    )
-                    Text("بستانکار", color = textColor, fontSize = 13.sp)
-                    Spacer(Modifier.width(12.dp))
+                    // اول: بدهکار (سمت راست در RTL)
                     RadioButton(
                         selected = nature == "debit",
                         onClick = { nature = "debit" },
@@ -1243,6 +1235,17 @@ fun AccountEditor(
                         )
                     )
                     Text("بدهکار", color = textColor, fontSize = 13.sp)
+                    Spacer(Modifier.width(12.dp))
+                    // دوم: بستانکار (سمت چپ در RTL)
+                    RadioButton(
+                        selected = nature == "credit",
+                        onClick = { nature = "credit" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = HeaderBlue,
+                            unselectedColor = labelColor
+                        )
+                    )
+                    Text("بستانکار", color = textColor, fontSize = 13.sp)
                 }
                 Text(
                     if (nature == "credit") "بستانکار مثبت، بدهکار منفی (حساب‌های معمولی)"
@@ -1251,6 +1254,7 @@ fun AccountEditor(
                     color = labelColor
                 )
 
+                // ═══ معادل ریالی ═══
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = Color(0xFFEEEEEE))
                 Spacer(Modifier.height(12.dp))
