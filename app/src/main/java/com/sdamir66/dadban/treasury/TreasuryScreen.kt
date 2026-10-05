@@ -108,10 +108,12 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 onSuccess = { prices ->
                     if (prices.isNotEmpty()) {
                         livePrices = prices
+                        // ═══ ذخیره‌ی مستقیم در cache (مستقل از ToolsRepository) ═══
+                        PriceCache.save(context, prices)
                         val now = System.currentTimeMillis()
                         TreasuryPreferences.setLastUpdate(context, now)
                         lastUpdate = now
-                        Log.d(TAG, "prices updated: ${prices.size}")
+                        Log.d(TAG, "prices updated & cached: ${prices.size}")
                     }
                 },
                 onFailure = {
