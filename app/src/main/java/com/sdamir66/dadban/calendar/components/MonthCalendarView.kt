@@ -11,10 +11,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.calendar.data.CalendarSettings
@@ -58,7 +56,6 @@ fun MonthCalendarView(
 
     var isInternalChange by remember { mutableStateOf(false) }
 
-    // ✅ وقتی swipe کاملاً تموم شد، currentDate رو آپدیت کن
     LaunchedEffect(pagerState.settledPage, primaryCalendar, dayOfMonth) {
         val offset = pagerState.settledPage - START_PAGE
         val newDate = getDateForOffset(
@@ -71,7 +68,6 @@ fun MonthCalendarView(
         }
     }
 
-    // ✅ وقتی currentDate از بیرون عوض می‌شه
     LaunchedEffect(currentDate, primaryCalendar) {
         if (isInternalChange) {
             isInternalChange = false
@@ -88,7 +84,6 @@ fun MonthCalendarView(
         }
     }
 
-    // ✅ وقتی currentDate از بیرون عوض شد، dayOfMonth رو آپدیت کن
     LaunchedEffect(currentDate, primaryCalendar) {
         val newDay = getDayOfMonth(currentDate, primaryCalendar, hijriCacheMap)
         if (newDay != dayOfMonth) {
@@ -141,7 +136,6 @@ private fun CalendarMonthContent(
     selectedDay: Date?,
     onDayClick: (Date) -> Unit
 ) {
-    // ✅ برای HIJRI: ۳۰ روز از cache
     val hijriDates: List<Date>? = if (primaryCalendar == CalendarType.HIJRI) {
         remember(monthDate, hijriCacheByHijriDate, hijriCacheMap) {
             val h = getHijriFromJalali(monthDate, hijriCacheMap) ?: return@remember null
@@ -171,15 +165,19 @@ private fun CalendarMonthContent(
     }
 
     Column(Modifier.padding(8.dp).fillMaxHeight()) {
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Row(Modifier.fillMaxWidth()) {
-                listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
-                    Text(day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72),
-                        fontSize = 13.sp)
-                }
+        // ✅ LTR حذف شد — چون برنامه RTL هست،
+        //    شنبه می‌افته راست‌ترین و جمعه چپ‌ترین.
+        Row(Modifier.fillMaxWidth()) {
+            listOf("ش", "ی", "د", "س", "چ", "پ", "ج").forEachIndexed { index, day ->
+                Text(
+                    day,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (index == 6) Color(0xFFE53935) else Color(0xFF5C5D72),
+                    fontSize = 13.sp
+                )
             }
         }
 
@@ -187,6 +185,8 @@ private fun CalendarMonthContent(
 
         for (row in 0 until 6) {
             Row(Modifier.fillMaxWidth().weight(1f)) {
+                // ✅ col=0 حالا راست‌ترین ستون هست (چون RTL)
+                //    col=6 حالا چپ‌ترین ستون هست → جمعه
                 for (col in 0 until 7) {
                     val cellIndex = row * 7 + col
                     val dayNumber = cellIndex - firstDayOfWeek + 1
@@ -228,9 +228,6 @@ private fun jalaliDateToDate(jalaliDate: String): Date? {
     return Date(millis)
 }
 
-/**
- * ✅ گرفتن HijriCache از روی Date (کلید jalaliDate)
- */
 private fun getHijriFromJalali(
     date: Date, hijriCacheMap: Map<String, HijriCache>
 ): HijriCache? {
@@ -239,9 +236,6 @@ private fun getHijriFromJalali(
     return hijriCacheMap[key]
 }
 
-/**
- * ✅ Date برای (ماه شروع + offset + روز)
- */
 private fun getDateForOffset(
     anchorMonth: Date, offset: Int, day: Int,
     type: CalendarType,
@@ -249,7 +243,6 @@ private fun getDateForOffset(
     hijriCacheByHijriDate: Map<String, HijriCache>
 ): Date {
     if (type == CalendarType.HIJRI) {
-        // ✅ گرفتن ماه فعلی از hijriCacheMap (کلید jalaliDate)
         val anchorCache = getHijriFromJalali(anchorMonth, hijriCacheMap)
             ?: return anchorMonth
         val monthNum = hijriMonthNameToNumber(anchorCache.hijriMonth)
@@ -284,9 +277,6 @@ private fun getDateForOffset(
     }
 }
 
-/**
- * ✅ شروع ماه برای offset
- */
 private fun getMonthStartForOffset(
     anchorMonth: Date, offset: Int,
     type: CalendarType,
@@ -380,12 +370,21 @@ private fun getDaysInMonth(date: Date, type: CalendarType): Int = when (type) {
     CalendarType.HIJRI -> 30
 }
 
+/**
+ * ✅ شنبه = 0 (راست‌ترین ستون در RTL)
+ *    جمعه = 6 (چپ‌ترین ستون در RTL)
+ */
 private fun getFirstDayOfWeek(date: Date, type: CalendarType): Int {
     val cal = Calendar.getInstance().apply { time = date }
     return when (cal.get(Calendar.DAY_OF_WEEK)) {
-        Calendar.SATURDAY -> 0; Calendar.SUNDAY -> 1; Calendar.MONDAY -> 2
-        Calendar.TUESDAY -> 3; Calendar.WEDNESDAY -> 4; Calendar.THURSDAY -> 5
-        Calendar.FRIDAY -> 6; else -> 0
+        Calendar.SATURDAY -> 0
+        Calendar.SUNDAY -> 1
+        Calendar.MONDAY -> 2
+        Calendar.TUESDAY -> 3
+        Calendar.WEDNESDAY -> 4
+        Calendar.THURSDAY -> 5
+        Calendar.FRIDAY -> 6
+        else -> 0
     }
 }
 
