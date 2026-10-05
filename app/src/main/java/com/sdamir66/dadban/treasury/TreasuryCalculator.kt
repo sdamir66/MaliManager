@@ -16,8 +16,8 @@ object TreasuryCalculator {
             val unit = if (account.customUnit.isNotBlank()) account.customUnit else account.currency
             return when (unit) {
                 "ریال" -> balance
-                "تومان" -> balance * 10.0  // ۱ تومان = ۱۰ ریال
-                else -> null  // واحد دیگه‌ای، بدون نرخ نمی‌شه
+                "تومان" -> balance * 10.0
+                else -> null
             }
         }
 
@@ -44,4 +44,4 @@ object TreasuryCalculator {
         if (account.liveKey.isBlank()) return null
         return livePrices.find { it.key == account.liveKey }?.title ?: account.liveKey
     }
-}a
+}
