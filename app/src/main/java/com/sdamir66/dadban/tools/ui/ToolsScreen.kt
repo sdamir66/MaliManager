@@ -43,7 +43,7 @@ fun ToolsScreen() {
     var debugInfo by remember { mutableStateOf("") }
 
     // ═══════════════════════════════════════════════════════
-    // trigger برای refresh
+    // trigger برای refresh (نه scope.launch)
     // ═══════════════════════════════════════════════════════
     var refreshTrigger by remember { mutableStateOf(0) }
 
@@ -69,13 +69,13 @@ fun ToolsScreen() {
     }
 
     // ═══════════════════════════════════════════════════════
-    // ۳. LaunchedEffect برای refresh (trigger-based)
+    // ۳. refresh با trigger
     // ═══════════════════════════════════════════════════════
     LaunchedEffect(refreshTrigger) {
         isLoading = true
         errorMessage = null
         try {
-            Log.d(TAG, "refreshTrigger=$refreshTrigger → refreshPrices")
+            Log.d(TAG, "refreshTrigger=$refreshTrigger → refresh")
             val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
             result.fold(
                 onSuccess = { prices ->
@@ -98,12 +98,12 @@ fun ToolsScreen() {
             errorMessage = e.message
         } finally {
             isLoading = false
-            Log.d(TAG, "refresh END (isLoading=false)")
+            Log.d(TAG, "refresh END")
         }
     }
 
     // ═══════════════════════════════════════════════════════
-    // ۴. راه‌اندازی اولیه + حلقه‌ی ۵ دقیقه
+    // ۴. راه‌اندازی اولیه + حلقه ۵ دقیقه
     // ═══════════════════════════════════════════════════════
     LaunchedEffect(Unit) {
         val saved = ToolsPreferences.getSelectedKeys(context)
@@ -115,10 +115,10 @@ fun ToolsScreen() {
             selectedKeys = validKeys
         }
 
-        // شروع refresh با trigger
+        // شروع refresh
         refreshTrigger++
 
-        // حلقه‌ی ۵ دقیقه
+        // حلقه ۵ دقیقه
         while (true) {
             delay(5 * 60 * 1000L)
             refreshTrigger++
@@ -205,10 +205,7 @@ fun ToolsScreen() {
                                 modifier = Modifier.weight(1f)
                             )
                             IconButton(
-                                onClick = {
-                                    Log.d(TAG, "↻ button clicked")
-                                    refreshTrigger++
-                                },
+                                onClick = { refreshTrigger++ },
                                 enabled = !isLoading,
                                 modifier = Modifier.size(36.dp)
                             ) {
