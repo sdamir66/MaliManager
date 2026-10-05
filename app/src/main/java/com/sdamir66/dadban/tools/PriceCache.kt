@@ -11,10 +11,32 @@ object PriceCache {
     private const val PREFS_NAME = "price_cache_prefs_v3"
     private const val KEY_FIAT = "cache_fiat"
     private const val KEY_CRYPTO = "cache_crypto"
+    private const val KEY_ALL = "cache_all"
     private const val KEY_SAVED_AT = "cache_saved_at"
 
     // ═══════════════════════════════════════════════════════
-    // ذخیره‌ی جداگانه
+    // save — نسخه‌ی ساده (کل لیست)
+    // ═══════════════════════════════════════════════════════
+
+    fun save(context: Context, prices: List<TgjuPrice>) {
+        if (prices.isEmpty()) {
+            Log.d(TAG, "save skipped: empty")
+            return
+        }
+        // تقسیم به fiat و crypto
+        val fiat = prices.filter { it.key !in PriceCatalog.CRYPTO_KEYS }
+        val crypto = prices.filter { it.key in PriceCatalog.CRYPTO_KEYS }
+
+        if (fiat.isNotEmpty()) saveToKey(context, KEY_FIAT, fiat)
+        if (crypto.isNotEmpty()) saveToKey(context, KEY_CRYPTO, crypto)
+
+        // همچنین کل رو ذخیره کن (برای سازگاری)
+        saveToKey(context, KEY_ALL, prices)
+        Log.d(TAG, "save total: ${prices.size} (fiat=${fiat.size}, crypto=${crypto.size})")
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // saveFiat / saveCrypto — جداگانه (اختیاری، برای ToolsRepository)
     // ═══════════════════════════════════════════════════════
 
     fun saveFiat(context: Context, prices: List<TgjuPrice>) {
@@ -26,10 +48,7 @@ object PriceCache {
     }
 
     private fun saveToKey(context: Context, key: String, prices: List<TgjuPrice>) {
-        if (prices.isEmpty()) {
-            Log.d(TAG, "save $key skipped: empty")
-            return
-        }
+        if (prices.isEmpty()) return
         try {
             val arr = JSONArray()
             for (p in prices) {
@@ -51,14 +70,14 @@ object PriceCache {
                 .putString(key, jsonStr)
                 .putLong(KEY_SAVED_AT, System.currentTimeMillis())
                 .commit()
-            Log.d(TAG, "save $key: ${prices.size} items")
+            Log.d(TAG, "save $key: ${prices.size}")
         } catch (e: Exception) {
             Log.e(TAG, "save $key failed", e)
         }
     }
 
     // ═══════════════════════════════════════════════════════
-    // لود ترکیبی
+    // load — ترکیب fiat + crypto
     // ═══════════════════════════════════════════════════════
 
     fun load(context: Context): List<TgjuPrice> {
