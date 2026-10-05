@@ -14,7 +14,9 @@ object ToolsRepository {
     private const val TAG = "ToolsRepository"
     private const val TGJU_URL = "https://api.tgju.org/v1/widget/tmp"
     private const val NOBITEX_URL = "https://apiv2.nobitex.ir/market/stats"
-    private const val TIMEOUT_MS = 5_000   // ← ۵ ثانیه (قبلاً ۲۰ بود)
+    private const val TIMEOUT_MS = 8_000
+    private const val TGJU_CHUNK_SIZE = 6   // ← هر بار ۶ کلید
+    private const val TGJU_CHUNK_DELAY = 400L  // ← بین chunks
 
     suspend fun fetchPrices(context: Context, keys: List<String>): Result<List<TgjuPrice>> =
         withContext(Dispatchers.IO) {
@@ -23,44 +25,51 @@ object ToolsRepository {
             val cryptoKeys = keys.filter { it in PriceCatalog.CRYPTO_KEYS }
             val fiatKeys = keys.filter { it !in PriceCatalog.CRYPTO_KEYS }
 
-            Log.d(TAG, "fetchPrices: total=${keys.size}, fiat=${fiatKeys.size}, crypto=${cryptoKeys.size}")
+            Log.d(TAG, "══════ fetchPrices START ══════")
+            Log.d(TAG, "total=${keys.size}, fiat=${fiatKeys.size}, crypto=${cryptoKeys.size}")
 
-            // ═══ ۱. tgju ═══
+            // ═══════════════════════════════════════════════
+            // ۱. tgju — دسته‌ای ۶ تایی با delay
+            // ═══════════════════════════════════════════════
             if (fiatKeys.isNotEmpty()) {
-                try {
-                    val url = "$TGJU_URL?keys=${fiatKeys.joinToString(",")}"
-                    val json = fetchUrl(url, isNobitex = false)
-                    val parsed = parseTgjuJson(json)
-                    result.addAll(parsed)
-                    Log.d(TAG, "tgju OK: ${parsed.size}")
-                } catch (e: Exception) {
-                    Log.e(TAG, "tgju FAILED: ${e.message}")
+                val chunks = fiatKeys.chunked(TGJU_CHUNK_SIZE)
+                Log.d(TAG, "tgju: ${chunks.size} chunks")
+                chunks.forEachIndexed { idx, chunk ->
+                    try {
+                        val url = "$TGJU_URL?keys=${chunk.joinToString(",")}"
+                        Log.d(TAG, "tgju[$idx] URL: keys=${chunk.size}")
+                        val json = fetchUrl(url, isNobitex = false)
+                        val parsed = parseTgjuJson(json)
+                        result.addAll(parsed)
+                        Log.d(TAG, "tgju[$idx] OK: ${parsed.size} items")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "tgju[$idx] FAILED: ${e.message}")
+                    }
+                    if (idx < chunks.size - 1) delay(TGJU_CHUNK_DELAY)
                 }
             }
 
-            // ═══ ۲. نوبیتکس ═══
+            // ═══════════════════════════════════════════════
+            // ۲. نوبیتکس
+            // ═══════════════════════════════════════════════
             if (cryptoKeys.isNotEmpty()) {
                 try {
                     val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
                     if (symbols.isNotEmpty()) {
                         val url = "$NOBITEX_URL?srcCurrency=${symbols.joinToString(",")}&dstCurrency=rls"
+                        Log.d(TAG, "nobitex URL: symbols=${symbols.size}")
                         val json = fetchUrl(url, isNobitex = true)
                         val parsed = parseNobitexJson(json, cryptoKeys)
                         result.addAll(parsed)
-                        Log.d(TAG, "nobitex OK: ${parsed.size}")
+                        Log.d(TAG, "nobitex OK: ${parsed.size} items")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "nobitex FAILED: ${e.message}")
                 }
             }
 
-            if (result.isNotEmpty()) {
-                Log.d(TAG, "API success, ${result.size} items")
-                Result.success(result)
-            } else {
-                Log.w(TAG, "API failed completely, cache should be used")
-                Result.success(emptyList())
-            }
+            Log.d(TAG, "══════ fetchPrices END: ${result.size} items ══════")
+            Result.success(result)
         }
 
     private fun fetchUrl(urlStr: String, isNobitex: Boolean = false): String {
@@ -70,6 +79,8 @@ object ToolsRepository {
         conn.connectTimeout = TIMEOUT_MS
         conn.readTimeout = TIMEOUT_MS
         conn.setRequestProperty("Accept", "application/json")
+        conn.setRequestProperty("Cache-Control", "no-cache")   // ← مهم: بدون cache
+        conn.setRequestProperty("Pragma", "no-cache")          // ← مهم
         conn.setRequestProperty(
             "User-Agent",
             if (isNobitex) "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
@@ -78,6 +89,7 @@ object ToolsRepository {
 
         return try {
             val code = conn.responseCode
+            Log.d(TAG, "HTTP $code for ${urlStr.take(80)}")
             if (code !in 200..299) throw java.io.IOException("HTTP $code")
             conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
