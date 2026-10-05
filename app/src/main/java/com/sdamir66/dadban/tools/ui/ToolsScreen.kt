@@ -31,7 +31,6 @@ import kotlinx.coroutines.delay
 fun ToolsScreen() {
     val context = LocalContext.current
 
-    // state از singleton — همیشه زنده، مستقل از composition
     val state by ToolsPoller.state.collectAsState()
 
     var selectedKeys by remember {
@@ -39,7 +38,6 @@ fun ToolsScreen() {
     }
     var isExpanded by remember { mutableStateOf(false) }
 
-    // ═══ بار اول: cache + fetch ═══
     LaunchedEffect(Unit) {
         val saved = ToolsPreferences.getSelectedKeys(context)
         val validKeys = saved.filter { it in PriceCatalog.ALL_ORDERED }
@@ -54,7 +52,6 @@ fun ToolsScreen() {
         ToolsPoller.refresh(context)
     }
 
-    // ═══ auto-refresh هر ۵ دقیقه ═══
     LaunchedEffect(Unit) {
         while (true) {
             delay(5 * 60 * 1000L)
@@ -74,14 +71,19 @@ fun ToolsScreen() {
         ToolsPreferences.saveSelectedKeys(context, selectedKeys)
     }
 
-    val topList = PriceCatalog.sortForTopList(selectedKeys).mapNotNull { key ->
-        state.prices.find { it.key == key }
+    // ═══ با version گره می‌خوریم تا همیشه recompute بشه ═══
+    val topList = remember(state.version, selectedKeys) {
+        PriceCatalog.sortForTopList(selectedKeys).mapNotNull { key ->
+            state.prices.find { it.key == key }
+        }
     }
 
-    val allList = PriceCatalog.sortForAllList(
-        PriceCatalog.ALL_ORDERED.filter { it !in selectedKeys }
-    ).mapNotNull { key ->
-        state.prices.find { it.key == key }
+    val allList = remember(state.version, selectedKeys) {
+        PriceCatalog.sortForAllList(
+            PriceCatalog.ALL_ORDERED.filter { it !in selectedKeys }
+        ).mapNotNull { key ->
+            state.prices.find { it.key == key }
+        }
     }
 
     Column(Modifier.fillMaxSize().background(BgLight)) {
@@ -159,7 +161,7 @@ fun ToolsScreen() {
                         }
 
                         Text(
-                            "موجود: ${state.prices.size} آیتم  •  ${state.debugInfo}",
+                            "v${state.version} • ${state.prices.size} آیتم • ${state.debugInfo}",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFF9E9E9E),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
@@ -196,7 +198,7 @@ fun ToolsScreen() {
                             )
                         } else {
                             topList.forEach { price ->
-                                key(price.key, state.lastUpdate) {
+                                key(state.version, price.key) {
                                     SwipeableTopItem(
                                         price = price,
                                         onRemove = { removeFromTop(price.key) }
@@ -225,7 +227,7 @@ fun ToolsScreen() {
                         if (isExpanded) {
                             HorizontalDivider(color = Color(0xFFEEEEEE))
                             allList.forEach { price ->
-                                key(price.key, state.lastUpdate) {
+                                key(state.version, price.key) {
                                     SwipeableAllItem(
                                         price = price,
                                         onAdd = { addToTop(price.key) }
