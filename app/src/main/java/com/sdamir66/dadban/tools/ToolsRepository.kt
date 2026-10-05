@@ -14,7 +14,7 @@ object ToolsRepository {
     private const val TAG = "ToolsRepository"
     private const val TGJU_URL = "https://api.tgju.org/v1/widget/tmp"
     private const val NOBITEX_URL = "https://apiv2.nobitex.ir/market/stats"
-    private const val TIMEOUT_MS = 20_000
+    private const val TIMEOUT_MS = 5_000   // ← ۵ ثانیه (قبلاً ۲۰ بود)
 
     suspend fun fetchPrices(context: Context, keys: List<String>): Result<List<TgjuPrice>> =
         withContext(Dispatchers.IO) {
@@ -29,12 +29,12 @@ object ToolsRepository {
             if (fiatKeys.isNotEmpty()) {
                 try {
                     val url = "$TGJU_URL?keys=${fiatKeys.joinToString(",")}"
-                    val json = fetchUrlWithRetry(url, isNobitex = false)
+                    val json = fetchUrl(url, isNobitex = false)
                     val parsed = parseTgjuJson(json)
                     result.addAll(parsed)
                     Log.d(TAG, "tgju OK: ${parsed.size}")
                 } catch (e: Exception) {
-                    Log.e(TAG, "tgju FAILED", e)
+                    Log.e(TAG, "tgju FAILED: ${e.message}")
                 }
             }
 
@@ -44,54 +44,24 @@ object ToolsRepository {
                     val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
                     if (symbols.isNotEmpty()) {
                         val url = "$NOBITEX_URL?srcCurrency=${symbols.joinToString(",")}&dstCurrency=rls"
-                        val json = fetchUrlWithRetry(url, isNobitex = true)
+                        val json = fetchUrl(url, isNobitex = true)
                         val parsed = parseNobitexJson(json, cryptoKeys)
                         result.addAll(parsed)
                         Log.d(TAG, "nobitex OK: ${parsed.size}")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "nobitex FAILED", e)
+                    Log.e(TAG, "nobitex FAILED: ${e.message}")
                 }
             }
 
-            // ═══ ۳. اگه API موفق بود، cache کن ═══
             if (result.isNotEmpty()) {
-                PriceCache.save(context, result)
-                Log.d(TAG, "saved ${result.size} to cache")
-                return@withContext Result.success(result)
-            }
-
-            // ═══ ۴. اگه API خالی بود، از cache بخون ═══
-            Log.w(TAG, "API خالی، از cache استفاده می‌کنم")
-            val cached = PriceCache.load(context)
-            if (cached.isNotEmpty()) {
-                val filtered = cached.filter { it.key in keys }
-                val finalList = if (filtered.isNotEmpty()) filtered else cached
-                Log.d(TAG, "loaded ${finalList.size} from cache")
-                return@withContext Result.success(finalList)
-            }
-
-            Log.w(TAG, "نه API، نه cache")
-            Result.success(emptyList())
-        }
-
-    private suspend fun fetchUrlWithRetry(
-        urlStr: String,
-        isNobitex: Boolean = false,
-        maxRetries: Int = 3
-    ): String {
-        var lastException: Exception? = null
-        repeat(maxRetries) { attempt ->
-            try {
-                return fetchUrl(urlStr, isNobitex)
-            } catch (e: Exception) {
-                lastException = e
-                Log.w(TAG, "attempt ${attempt + 1} failed: ${e.message}")
-                if (attempt < maxRetries - 1) delay(1500L * (attempt + 1))
+                Log.d(TAG, "API success, ${result.size} items")
+                Result.success(result)
+            } else {
+                Log.w(TAG, "API failed completely, cache should be used")
+                Result.success(emptyList())
             }
         }
-        throw lastException ?: java.io.IOException("fetch failed")
-    }
 
     private fun fetchUrl(urlStr: String, isNobitex: Boolean = false): String {
         val url = URL(urlStr)
