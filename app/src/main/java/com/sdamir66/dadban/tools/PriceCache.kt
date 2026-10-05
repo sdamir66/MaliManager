@@ -8,12 +8,28 @@ import org.json.JSONObject
 object PriceCache {
 
     private const val TAG = "PriceCache"
-    private const val PREFS_NAME = "price_cache_prefs"
-    private const val KEY_CACHE = "price_cache_json"
-    private const val KEY_SAVED_AT = "price_cache_saved_at"
+    private const val PREFS_NAME = "price_cache_prefs_v3"
+    private const val KEY_FIAT = "cache_fiat"
+    private const val KEY_CRYPTO = "cache_crypto"
+    private const val KEY_SAVED_AT = "cache_saved_at"
 
-    fun save(context: Context, prices: List<TgjuPrice>) {
-        if (prices.isEmpty()) return
+    // ═══════════════════════════════════════════════════════
+    // ذخیره‌ی جداگانه
+    // ═══════════════════════════════════════════════════════
+
+    fun saveFiat(context: Context, prices: List<TgjuPrice>) {
+        saveToKey(context, KEY_FIAT, prices)
+    }
+
+    fun saveCrypto(context: Context, prices: List<TgjuPrice>) {
+        saveToKey(context, KEY_CRYPTO, prices)
+    }
+
+    private fun saveToKey(context: Context, key: String, prices: List<TgjuPrice>) {
+        if (prices.isEmpty()) {
+            Log.d(TAG, "save $key skipped: empty")
+            return
+        }
         try {
             val arr = JSONArray()
             for (p in prices) {
@@ -29,31 +45,44 @@ object PriceCache {
                 o.put("time", p.time)
                 arr.put(o)
             }
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putString(KEY_CACHE, arr.toString())
+            val jsonStr = arr.toString()
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString(key, jsonStr)
                 .putLong(KEY_SAVED_AT, System.currentTimeMillis())
-                .apply()
-            Log.d(TAG, "saved ${prices.size} prices")
+                .commit()
+            Log.d(TAG, "save $key: ${prices.size} items")
         } catch (e: Exception) {
-            Log.e(TAG, "save failed", e)
+            Log.e(TAG, "save $key failed", e)
         }
     }
 
+    // ═══════════════════════════════════════════════════════
+    // لود ترکیبی
+    // ═══════════════════════════════════════════════════════
+
     fun load(context: Context): List<TgjuPrice> {
+        val fiat = loadFromKey(context, KEY_FIAT)
+        val crypto = loadFromKey(context, KEY_CRYPTO)
+        val result = fiat + crypto
+        Log.d(TAG, "load total: ${result.size} (fiat=${fiat.size}, crypto=${crypto.size})")
+        return result
+    }
+
+    private fun loadFromKey(context: Context, key: String): List<TgjuPrice> {
         return try {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val json = prefs.getString(KEY_CACHE, null) ?: return emptyList()
+            val json = prefs.getString(key, null) ?: return emptyList()
             val arr = JSONArray(json)
             val result = mutableListOf<TgjuPrice>()
             for (i in 0 until arr.length()) {
                 val o = arr.optJSONObject(i) ?: continue
-                val key = o.optString("key", "")
-                if (key.isBlank()) continue
+                val k = o.optString("key", "")
+                if (k.isBlank()) continue
                 result.add(
                     TgjuPrice(
-                        key = key,
-                        title = o.optString("title", key),
+                        key = k,
+                        title = o.optString("title", k),
                         price = o.optDouble("price", 0.0),
                         change = o.optDouble("change", 0.0),
                         changePercent = o.optDouble("changePercent", 0.0),
@@ -64,10 +93,9 @@ object PriceCache {
                     )
                 )
             }
-            Log.d(TAG, "loaded ${result.size} prices")
             result
         } catch (e: Exception) {
-            Log.e(TAG, "load failed", e)
+            Log.e(TAG, "load $key failed", e)
             emptyList()
         }
     }
@@ -79,6 +107,6 @@ object PriceCache {
 
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().clear().apply()
+            .edit().clear().commit()
     }
 }
