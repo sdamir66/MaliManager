@@ -43,12 +43,12 @@ fun ToolsScreen() {
     var debugInfo by remember { mutableStateOf("") }
 
     // ═══════════════════════════════════════════════════════
-    // trigger برای refresh (نه scope.launch)
+    // trigger
     // ═══════════════════════════════════════════════════════
     var refreshTrigger by remember { mutableStateOf(0) }
 
     // ═══════════════════════════════════════════════════════
-    // ۱. cache فوری — فقط بار اول
+    // ۱. cache فوری (فقط بار اول)
     // ═══════════════════════════════════════════════════════
     LaunchedEffect(Unit) {
         val cached = PriceCache.load(context)
@@ -69,13 +69,13 @@ fun ToolsScreen() {
     }
 
     // ═══════════════════════════════════════════════════════
-    // ۳. refresh با trigger
+    // ۳. refresh با trigger (کاملاً مثل TreasuryScreen)
     // ═══════════════════════════════════════════════════════
     LaunchedEffect(refreshTrigger) {
         isLoading = true
         errorMessage = null
         try {
-            Log.d(TAG, "refreshTrigger=$refreshTrigger → refresh")
+            Log.d(TAG, "refresh START trigger=$refreshTrigger")
             val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
             result.fold(
                 onSuccess = { prices ->
@@ -115,10 +115,7 @@ fun ToolsScreen() {
             selectedKeys = validKeys
         }
 
-        // شروع refresh
         refreshTrigger++
-
-        // حلقه ۵ دقیقه
         while (true) {
             delay(5 * 60 * 1000L)
             refreshTrigger++
