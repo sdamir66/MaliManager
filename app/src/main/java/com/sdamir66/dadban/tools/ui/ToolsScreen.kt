@@ -28,12 +28,14 @@ import com.sdamir66.dadban.ui.theme.CreditGreen
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val TAG = "ToolsScreen"
 
 @Composable
 fun ToolsScreen() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()          // ← ADDED
 
     var allPrices by remember { mutableStateOf<List<TgjuPrice>>(emptyList()) }
     var selectedKeys by remember { mutableStateOf(ToolsPreferences.getSelectedKeys(context)) }
@@ -43,39 +45,13 @@ fun ToolsScreen() {
     var debugInfo by remember { mutableStateOf("") }
 
     // ═══════════════════════════════════════════════════════
-    // trigger
+    // refreshPrices — تابع محلی (کاملاً مثل TreasuryScreen)
     // ═══════════════════════════════════════════════════════
-    var refreshTrigger by remember { mutableStateOf(0) }
-
-    // ═══════════════════════════════════════════════════════
-    // ۱. cache فوری (فقط بار اول)
-    // ═══════════════════════════════════════════════════════
-    LaunchedEffect(Unit) {
-        val cached = PriceCache.load(context)
-        Log.d(TAG, "INIT cache: ${cached.size}")
-        if (cached.isNotEmpty() && allPrices.isEmpty()) {
-            allPrices = cached
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // ۲. auto-save
-    // ═══════════════════════════════════════════════════════
-    LaunchedEffect(allPrices) {
-        if (allPrices.isNotEmpty()) {
-            PriceCache.save(context, allPrices)
-            Log.d(TAG, "AUTO-SAVE ${allPrices.size}")
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // ۳. refresh با trigger (کاملاً مثل TreasuryScreen)
-    // ═══════════════════════════════════════════════════════
-    LaunchedEffect(refreshTrigger) {
+    suspend fun refreshPrices() {
         isLoading = true
         errorMessage = null
         try {
-            Log.d(TAG, "refresh START trigger=$refreshTrigger")
+            Log.d(TAG, "refresh START")
             val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
             result.fold(
                 onSuccess = { prices ->
@@ -91,6 +67,7 @@ fun ToolsScreen() {
                 onFailure = { e ->
                     Log.e(TAG, "refresh FAILED: ${e.message}")
                     errorMessage = e.message
+                    debugInfo = "خطا در دریافت"
                 }
             )
         } catch (e: Exception) {
@@ -103,9 +80,32 @@ fun ToolsScreen() {
     }
 
     // ═══════════════════════════════════════════════════════
-    // ۴. راه‌اندازی اولیه + حلقه ۵ دقیقه
+    // ۱. cache فوری (فقط بار اول)
     // ═══════════════════════════════════════════════════════
     LaunchedEffect(Unit) {
+        val cached = PriceCache.load(context)
+        Log.d(TAG, "INIT cache: ${cached.size}")
+        if (cached.isNotEmpty() && allPrices.isEmpty()) {
+            allPrices = cached
+            debugInfo = "از کش: ${cached.size} آیتم"
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ۲. auto-save
+    // ═══════════════════════════════════════════════════════
+    LaunchedEffect(allPrices) {
+        if (allPrices.isNotEmpty()) {
+            PriceCache.save(context, allPrices)
+            Log.d(TAG, "AUTO-SAVE ${allPrices.size}")
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ۳. راه‌اندازی اولیه + حلقه ۵ دقیقه (کاملاً مثل TreasuryScreen)
+    // ═══════════════════════════════════════════════════════
+    LaunchedEffect(Unit) {
+        // ─── selected keys ───
         val saved = ToolsPreferences.getSelectedKeys(context)
         val validKeys = saved.filter { it in PriceCatalog.ALL_ORDERED }
         if (validKeys != saved || saved.isEmpty()) {
@@ -115,10 +115,13 @@ fun ToolsScreen() {
             selectedKeys = validKeys
         }
 
-        refreshTrigger++
+        // ─── fetch اولیه ───
+        refreshPrices()
+
+        // ─── loop ───
         while (true) {
             delay(5 * 60 * 1000L)
-            refreshTrigger++
+            refreshPrices()
         }
     }
 
@@ -201,8 +204,11 @@ fun ToolsScreen() {
                                 color = Color(0xFF1B1B1F),
                                 modifier = Modifier.weight(1f)
                             )
+                            // ═══ دکمه ↻ — مستقیم scope.launch ═══
                             IconButton(
-                                onClick = { refreshTrigger++ },
+                                onClick = {
+                                    scope.launch { refreshPrices() }
+                                },
                                 enabled = !isLoading,
                                 modifier = Modifier.size(36.dp)
                             ) {
