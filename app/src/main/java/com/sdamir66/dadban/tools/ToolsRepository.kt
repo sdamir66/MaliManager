@@ -15,13 +15,11 @@ object ToolsRepository {
     private const val TGJU_URL = "https://api.tgju.org/v1/widget/tmp"
     private const val NOBITEX_URL = "https://apiv2.nobitex.ir/market/stats"
     private const val TIMEOUT_MS = 8_000
-    private const val TGJU_CHUNK_SIZE = 6   // ← هر بار ۶ کلید
-    private const val TGJU_CHUNK_DELAY = 400L  // ← بین chunks
+    private const val TGJU_CHUNK_SIZE = 6
+    private const val TGJU_CHUNK_DELAY = 400L
 
     suspend fun fetchPrices(context: Context, keys: List<String>): Result<List<TgjuPrice>> =
         withContext(Dispatchers.IO) {
-            val result = mutableListOf<TgjuPrice>()
-
             val cryptoKeys = keys.filter { it in PriceCatalog.CRYPTO_KEYS }
             val fiatKeys = keys.filter { it !in PriceCatalog.CRYPTO_KEYS }
 
@@ -29,19 +27,18 @@ object ToolsRepository {
             Log.d(TAG, "total=${keys.size}, fiat=${fiatKeys.size}, crypto=${cryptoKeys.size}")
 
             // ═══════════════════════════════════════════════
-            // ۱. tgju — دسته‌ای ۶ تایی با delay
+            // ۱. tgju → cache جداگانه
             // ═══════════════════════════════════════════════
+            val fiatResult = mutableListOf<TgjuPrice>()
             if (fiatKeys.isNotEmpty()) {
                 val chunks = fiatKeys.chunked(TGJU_CHUNK_SIZE)
-                Log.d(TAG, "tgju: ${chunks.size} chunks")
                 chunks.forEachIndexed { idx, chunk ->
                     try {
                         val url = "$TGJU_URL?keys=${chunk.joinToString(",")}"
-                        Log.d(TAG, "tgju[$idx] URL: keys=${chunk.size}")
                         val json = fetchUrl(url, isNobitex = false)
                         val parsed = parseTgjuJson(json)
-                        result.addAll(parsed)
-                        Log.d(TAG, "tgju[$idx] OK: ${parsed.size} items")
+                        fiatResult.addAll(parsed)
+                        Log.d(TAG, "tgju[$idx] OK: ${parsed.size}")
                     } catch (e: Exception) {
                         Log.e(TAG, "tgju[$idx] FAILED: ${e.message}")
                     }
@@ -49,27 +46,65 @@ object ToolsRepository {
                 }
             }
 
+            // اگه tgju موفق بود → cache فیات
+            if (fiatResult.isNotEmpty()) {
+                PriceCache.saveFiat(context, fiatResult)
+                Log.d(TAG, "fiat cached: ${fiatResult.size}")
+            } else {
+                Log.w(TAG, "tgju کاملاً fail داد، فیات از cache قبلی استفاده می‌شه")
+            }
+
             // ═══════════════════════════════════════════════
-            // ۲. نوبیتکس
+            // ۲. نوبیتکس → cache جداگانه (فعلاً کار نمی‌کنه)
             // ═══════════════════════════════════════════════
+            val cryptoResult = mutableListOf<TgjuPrice>()
             if (cryptoKeys.isNotEmpty()) {
                 try {
                     val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
                     if (symbols.isNotEmpty()) {
                         val url = "$NOBITEX_URL?srcCurrency=${symbols.joinToString(",")}&dstCurrency=rls"
-                        Log.d(TAG, "nobitex URL: symbols=${symbols.size}")
                         val json = fetchUrl(url, isNobitex = true)
                         val parsed = parseNobitexJson(json, cryptoKeys)
-                        result.addAll(parsed)
-                        Log.d(TAG, "nobitex OK: ${parsed.size} items")
+                        cryptoResult.addAll(parsed)
+                        Log.d(TAG, "nobitex OK: ${parsed.size}")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "nobitex FAILED: ${e.message}")
                 }
             }
 
-            Log.d(TAG, "══════ fetchPrices END: ${result.size} items ══════")
-            Result.success(result)
+            // اگه نوبیتکس موفق بود → cache رمزارز
+            if (cryptoResult.isNotEmpty()) {
+                PriceCache.saveCrypto(context, cryptoResult)
+                Log.d(TAG, "crypto cached: ${cryptoResult.size}")
+            } else {
+                Log.w(TAG, "نوبیتکس fail داد، رمزارز از cache قبلی استفاده می‌شه")
+            }
+
+            // ═══════════════════════════════════════════════
+            // ۳. ترکیب: نتیجه‌ی جدید + cache قبلی برای بخش‌های fail
+            // ═══════════════════════════════════════════════
+            val finalResult = mutableListOf<TgjuPrice>()
+            finalResult.addAll(fiatResult)
+            finalResult.addAll(cryptoResult)
+
+            // اگه فیلدهای fail کردن، از cache استفاده کن
+            if (fiatResult.isEmpty() || cryptoResult.isEmpty()) {
+                val cached = PriceCache.load(context)
+                if (fiatResult.isEmpty()) {
+                    // فیات‌ها از cache
+                    finalResult.addAll(cached.filter { it.key !in PriceCatalog.CRYPTO_KEYS })
+                    Log.d(TAG, "added fiat from cache")
+                }
+                if (cryptoResult.isEmpty()) {
+                    // رمزارزها از cache
+                    finalResult.addAll(cached.filter { it.key in PriceCatalog.CRYPTO_KEYS })
+                    Log.d(TAG, "added crypto from cache")
+                }
+            }
+
+            Log.d(TAG, "══════ fetchPrices END: ${finalResult.size} (fiat=${fiatResult.size}, crypto=${cryptoResult.size}) ══════")
+            Result.success(finalResult)
         }
 
     private fun fetchUrl(urlStr: String, isNobitex: Boolean = false): String {
@@ -79,8 +114,8 @@ object ToolsRepository {
         conn.connectTimeout = TIMEOUT_MS
         conn.readTimeout = TIMEOUT_MS
         conn.setRequestProperty("Accept", "application/json")
-        conn.setRequestProperty("Cache-Control", "no-cache")   // ← مهم: بدون cache
-        conn.setRequestProperty("Pragma", "no-cache")          // ← مهم
+        conn.setRequestProperty("Cache-Control", "no-cache")
+        conn.setRequestProperty("Pragma", "no-cache")
         conn.setRequestProperty(
             "User-Agent",
             if (isNobitex) "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
@@ -89,7 +124,6 @@ object ToolsRepository {
 
         return try {
             val code = conn.responseCode
-            Log.d(TAG, "HTTP $code for ${urlStr.take(80)}")
             if (code !in 200..299) throw java.io.IOException("HTTP $code")
             conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
@@ -151,7 +185,6 @@ object ToolsRepository {
         }
 
         val result = mutableListOf<TgjuPrice>()
-
         stats.keys().forEach { rawSymbol ->
             val stat = stats.optJSONObject(rawSymbol) ?: return@forEach
             val lower = rawSymbol.lowercase()
@@ -162,10 +195,8 @@ object ToolsRepository {
                     .firstOrNull {
                         lower.startsWith("${it.value.lowercase()}-") ||
                         lower == it.value.lowercase()
-                    }
-                    ?.key
+                    }?.key
             }
-
             if (itemId == null) return@forEach
             if (itemId !in requestedKeys) return@forEach
 
