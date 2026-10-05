@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.tools.PriceCatalog
+import com.sdamir66.dadban.tools.TgjuPrice
 import com.sdamir66.dadban.tools.ToolsPoller
 import com.sdamir66.dadban.tools.ToolsPreferences
 import com.sdamir66.dadban.ui.theme.BgLight
