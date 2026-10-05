@@ -42,48 +42,56 @@ fun ToolsScreen() {
     var isExpanded by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var debugInfo by remember { mutableStateOf("") }
 
-    // ═══════════════════════════════════════════════════════
-    // ۱. فوری cache رو لود کن (بدون انتظار برای API)
-    // ═══════════════════════════════════════════════════════
+    // ═══ ۱. cache فوری ═══
     LaunchedEffect(Unit) {
         val cached = PriceCache.load(context)
-        Log.d(TAG, "INIT cache load: ${cached.size} items")
-        if (cached.isNotEmpty()) {
+        Log.d(TAG, "INIT cache: ${cached.size} items")
+        if (cached.isNotEmpty() && allPrices.isEmpty()) {
             allPrices = cached
         }
     }
 
-    // ═══════════════════════════════════════════════════════
-    // ۲. auto-save: هر بار allPrices تغییر کرد، cache کن
-    // ═══════════════════════════════════════════════════════
+    // ═══ ۲. auto-save ═══
     LaunchedEffect(allPrices) {
         if (allPrices.isNotEmpty()) {
             PriceCache.save(context, allPrices)
-            Log.d(TAG, "AUTO-SAVE ${allPrices.size} to cache")
+            Log.d(TAG, "AUTO-SAVE ${allPrices.size}")
         }
     }
 
     suspend fun refreshPrices() {
         isLoading = true
         errorMessage = null
-        Log.d(TAG, "refreshPrices: calling API...")
-        val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
-        isLoading = false
-        result.fold(
-            onSuccess = { prices ->
-                Log.d(TAG, "API success: ${prices.size} items")
-                if (prices.isNotEmpty()) {
-                    allPrices = prices
-                } else {
-                    Log.w(TAG, "API returned empty, keeping cache")
+        try {
+            Log.d(TAG, "refreshPrices START")
+            val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
+            result.fold(
+                onSuccess = { prices ->
+                    Log.d(TAG, "refreshPrices OK: ${prices.size}")
+                    if (prices.isNotEmpty()) {
+                        allPrices = prices
+                        debugInfo = "آخرین آپدیت: ${prices.size} آیتم"
+                    } else {
+                        debugInfo = "API خالی برگرداند (آفلاین؟)"
+                        if (allPrices.isEmpty()) {
+                            errorMessage = "قیمتی دریافت نشد"
+                        }
+                    }
+                },
+                onFailure = { e ->
+                    Log.e(TAG, "refreshPrices FAILED: ${e.message}")
+                    errorMessage = e.message
                 }
-            },
-            onFailure = {
-                Log.e(TAG, "API failed: ${it.message}")
-                errorMessage = it.message ?: "خطا در دریافت"
-            }
-        )
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "refreshPrices EXCEPTION", e)
+            errorMessage = e.message
+        } finally {
+            isLoading = false
+            Log.d(TAG, "refreshPrices END (isLoading=false)")
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -199,9 +207,9 @@ fun ToolsScreen() {
                             }
                         }
 
-                        // وضعیت cache برای دیباگ
+                        // ─── وضعیت (برای دیباگ) ───
                         Text(
-                            "قیمت‌های موجود: ${allPrices.size}",
+                            "موجود: ${allPrices.size} آیتم  •  $debugInfo",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFF9E9E9E),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
@@ -224,7 +232,7 @@ fun ToolsScreen() {
 
                         if (topList.isEmpty() && allPrices.isEmpty()) {
                             Text(
-                                "در حال بارگذاری...",
+                                "در حال بارگذاری... (اگه آفلاینی، ممکنه چند ثانیه طول بکشه)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF5C5D72),
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
