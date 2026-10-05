@@ -18,6 +18,7 @@ object ToolsRepository {
     private const val TIMEOUT_MS = 8_000
     private const val TGJU_CHUNK_SIZE = 6
     private const val TGJU_CHUNK_DELAY = 400L
+    private const val NOBITEX_DELAY = 150L
 
     suspend fun fetchPrices(context: Context, keys: List<String>): Result<List<TgjuPrice>> =
         withContext(Dispatchers.IO) {
@@ -48,7 +49,6 @@ object ToolsRepository {
                 }
             }
 
-            // اگه tgju موفق بود → cache فیات
             if (fiatResult.isNotEmpty()) {
                 PriceCache.saveFiat(context, fiatResult)
                 Log.d(TAG, "fiat cached: ${fiatResult.size}")
@@ -57,26 +57,48 @@ object ToolsRepository {
             }
 
             // ═══════════════════════════════════════════════
-            // ۲. نوبیتکس → cache جداگانه
+            // ۲. نوبیتکس → POST تکی برای هر ارز
             // ═══════════════════════════════════════════════
             val cryptoResult = mutableListOf<TgjuPrice>()
             if (cryptoKeys.isNotEmpty()) {
-                try {
-                    val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
-                    if (symbols.isNotEmpty()) {
-                        val url = "$NOBITEX_URL?srcCurrency=${symbols.joinToString(",")}&dstCurrency=rls"
-                        Log.d(TAG, "nobitex URL: $url")
-                        val json = fetchUrl(url, isNobitex = true)
-                        val parsed = parseNobitexJson(json, cryptoKeys)
-                        cryptoResult.addAll(parsed)
-                        Log.d(TAG, "nobitex OK: ${parsed.size}")
+                val symbols = cryptoKeys.mapNotNull { PriceCatalog.CRYPTO_SYMBOLS[it] }
+                Log.d(TAG, "nobitex: fetching ${symbols.size} symbols")
+
+                for (sym in symbols) {
+                    try {
+                        val price = fetchNobitexSingle(sym)
+                        if (price != null) {
+                            val itemId = cryptoKeys.firstOrNull {
+                                PriceCatalog.CRYPTO_SYMBOLS[it]?.equals(sym, ignoreCase = true) == true
+                            } ?: continue
+
+                            cryptoResult.add(
+                                TgjuPrice(
+                                    key = itemId,
+                                    title = PriceCatalog.CRYPTO_TITLES[itemId] ?: sym,
+                                    price = price.latest,
+                                    change = price.change,
+                                    changePercent = price.changePercent,
+                                    direction = when {
+                                        price.changePercent > 0 -> "high"
+                                        price.changePercent < 0 -> "low"
+                                        else -> ""
+                                    },
+                                    low = price.low,
+                                    high = price.high,
+                                    time = ""
+                                )
+                            )
+                            Log.d(TAG, "nobitex $sym OK: ${price.latest}")
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "nobitex $sym FAILED: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "nobitex FAILED: ${e.message}", e)
+                    delay(NOBITEX_DELAY)
                 }
+                Log.d(TAG, "nobitex total OK: ${cryptoResult.size}/${symbols.size}")
             }
 
-            // اگه نوبیتکس موفق بود → cache رمزارز
             if (cryptoResult.isNotEmpty()) {
                 PriceCache.saveCrypto(context, cryptoResult)
                 Log.d(TAG, "crypto cached: ${cryptoResult.size}")
@@ -91,7 +113,6 @@ object ToolsRepository {
             finalResult.addAll(fiatResult)
             finalResult.addAll(cryptoResult)
 
-            // اگه فیلدهای fail کردن، از cache استفاده کن
             if (fiatResult.isEmpty() || cryptoResult.isEmpty()) {
                 val cached = PriceCache.load(context)
                 if (fiatResult.isEmpty()) {
@@ -106,7 +127,6 @@ object ToolsRepository {
 
             Log.d(TAG, "══════ fetchPrices END: ${finalResult.size} (fiat=${fiatResult.size}, crypto=${cryptoResult.size}) ══════")
 
-            // ═══ FIX: اگه هیچی نیومد، failure بده ═══
             if (finalResult.isEmpty()) {
                 Result.failure(IOException("هیچ قیمتی دریافت نشد (شبکه/API)"))
             } else {
@@ -114,6 +134,9 @@ object ToolsRepository {
             }
         }
 
+    // ═══════════════════════════════════════════════════════
+    // fetchUrl — برای tgju (GET)
+    // ═══════════════════════════════════════════════════════
     private fun fetchUrl(urlStr: String, isNobitex: Boolean = false): String {
         val url = URL(urlStr)
         val conn = url.openConnection() as HttpURLConnection
@@ -121,7 +144,7 @@ object ToolsRepository {
         conn.connectTimeout = TIMEOUT_MS
         conn.readTimeout = TIMEOUT_MS
         conn.setRequestProperty("Accept", "application/json")
-        conn.setRequestProperty("Content-Type", "application/json")     // ← FIX
+        conn.setRequestProperty("Content-Type", "application/json")
         conn.setRequestProperty("Cache-Control", "no-cache")
         conn.setRequestProperty("Pragma", "no-cache")
         conn.setRequestProperty(
@@ -139,6 +162,79 @@ object ToolsRepository {
         }
     }
 
+    // ═══════════════════════════════════════════════════════
+    // نوبیتکس: POST تکی برای هر ارز
+    // ═══════════════════════════════════════════════════════
+    private data class NobitexPrice(
+        val latest: Double,
+        val change: Double,
+        val changePercent: Double,
+        val low: Double,
+        val high: Double
+    )
+
+    private fun fetchNobitexSingle(symbol: String): NobitexPrice? {
+        val url = URL(NOBITEX_URL)
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.connectTimeout = TIMEOUT_MS
+        conn.readTimeout = TIMEOUT_MS
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.setRequestProperty("Accept", "application/json")
+        conn.setRequestProperty(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        )
+
+        return try {
+            val body = """{"srcCurrency":"$symbol","dstCurrency":"rls"}"""
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                Log.e(TAG, "nobitex $symbol HTTP $code")
+                return null
+            }
+
+            val jsonText = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val root = JSONObject(jsonText)
+
+            val status = root.optString("status", "")
+            if (status != "ok") {
+                Log.e(TAG, "nobitex $symbol status=$status")
+                return null
+            }
+
+            val stats = root.optJSONObject("stats") ?: return null
+            val key = "$symbol-rls"
+            val stat = stats.optJSONObject(key) ?: stats.optJSONObject(symbol) ?: return null
+
+            val latest = parseDouble(stat.opt("latest"))
+            if (latest <= 0.0) {
+                Log.e(TAG, "nobitex $symbol latest=0")
+                return null
+            }
+
+            val dayChangePercent = parseDouble(stat.opt("dayChange"))
+            NobitexPrice(
+                latest = latest,
+                changePercent = dayChangePercent,
+                change = latest * dayChangePercent / 100.0,
+                low = parseDouble(stat.opt("dayLow")),
+                high = parseDouble(stat.opt("dayHigh"))
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "nobitex $symbol exception: ${e.message}")
+            null
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // tgju parser
+    // ═══════════════════════════════════════════════════════
     private fun parseTgjuJson(jsonText: String): List<TgjuPrice> {
         val root = JSONObject(jsonText)
         val response = root.optJSONObject("response") ?: return emptyList()
@@ -170,64 +266,6 @@ object ToolsRepository {
                     low = parseDouble(obj.opt("l")),
                     high = parseDouble(obj.opt("h")),
                     time = obj.optString("updated_at", "").ifBlank { obj.optString("t", "") }
-                )
-            )
-        }
-        return result
-    }
-
-    private fun parseNobitexJson(
-        jsonText: String,
-        requestedKeys: List<String>
-    ): List<TgjuPrice> {
-        val root = JSONObject(jsonText)
-        val stats = root.optJSONObject("stats") ?: return emptyList()
-
-        val symbolToKey = mutableMapOf<String, String>()
-        PriceCatalog.CRYPTO_SYMBOLS.forEach { (itemId, sym) ->
-            val s = sym.lowercase()
-            symbolToKey[s] = itemId
-            symbolToKey["$s-rls"] = itemId
-            symbolToKey["$s-irt"] = itemId
-            symbolToKey["$s-usdt"] = itemId
-        }
-
-        val result = mutableListOf<TgjuPrice>()
-        stats.keys().forEach { rawSymbol ->
-            val stat = stats.optJSONObject(rawSymbol) ?: return@forEach
-            val lower = rawSymbol.lowercase()
-
-            var itemId: String? = symbolToKey[lower]
-            if (itemId == null) {
-                itemId = PriceCatalog.CRYPTO_SYMBOLS.entries
-                    .firstOrNull {
-                        lower.startsWith("${it.value.lowercase()}-") ||
-                        lower == it.value.lowercase()
-                    }?.key
-            }
-            if (itemId == null) return@forEach
-            if (itemId !in requestedKeys) return@forEach
-
-            val title = PriceCatalog.CRYPTO_TITLES[itemId] ?: rawSymbol
-            val price = parseDouble(stat.opt("latest"))
-            val changePercent = parseDouble(stat.opt("dayChange"))
-            val change = price * changePercent / 100.0
-
-            result.add(
-                TgjuPrice(
-                    key = itemId,
-                    title = title,
-                    price = price,
-                    change = change,
-                    changePercent = changePercent,
-                    direction = when {
-                        changePercent > 0 -> "high"
-                        changePercent < 0 -> "low"
-                        else -> ""
-                    },
-                    low = parseDouble(stat.opt("dayLow")),
-                    high = parseDouble(stat.opt("dayHigh")),
-                    time = ""
                 )
             )
         }
