@@ -77,13 +77,23 @@ object PriceCache {
     }
 
     // ═══════════════════════════════════════════════════════
-    // load — ترکیب fiat + crypto
+    // load — ترکیب fiat + crypto (با fallback به KEY_ALL)
     // ═══════════════════════════════════════════════════════
 
     fun load(context: Context): List<TgjuPrice> {
         val fiat = loadFromKey(context, KEY_FIAT)
         val crypto = loadFromKey(context, KEY_CRYPTO)
-        val result = fiat + crypto
+        var result = fiat + crypto
+
+        // ═══ FIX: اگه fiat+crypto خالی بودن، از KEY_ALL بخون ═══
+        if (result.isEmpty()) {
+            val all = loadFromKey(context, KEY_ALL)
+            if (all.isNotEmpty()) {
+                Log.d(TAG, "load fallback to KEY_ALL: ${all.size}")
+                result = all
+            }
+        }
+
         Log.d(TAG, "load total: ${result.size} (fiat=${fiat.size}, crypto=${crypto.size})")
         return result
     }
