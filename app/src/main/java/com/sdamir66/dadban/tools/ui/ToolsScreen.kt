@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.tools.PriceCatalog
-import com.sdamir66.dadban.tools.TgjuPrice
+import com.sdamir66.dadban.tools.TgjuPrice              // ← FIX ۱: اضافه شد
 import com.sdamir66.dadban.tools.ToolsPoller
 import com.sdamir66.dadban.tools.ToolsPreferences
 import com.sdamir66.dadban.ui.theme.BgLight
@@ -31,7 +31,6 @@ import kotlinx.coroutines.delay
 fun ToolsScreen() {
     val context = LocalContext.current
 
-    // state از singleton — همیشه زنده، مستقل از composition
     val state by ToolsPoller.state.collectAsState()
 
     var selectedKeys by remember {
@@ -41,7 +40,6 @@ fun ToolsScreen() {
 
     // ═══ بار اول: cache + fetch ═══
     LaunchedEffect(Unit) {
-        // ─── اعتبارسنجی selected keys ───
         val saved = ToolsPreferences.getSelectedKeys(context)
         val validKeys = saved.filter { it in PriceCatalog.ALL_ORDERED }
         if (validKeys != saved || saved.isEmpty()) {
@@ -51,22 +49,13 @@ fun ToolsScreen() {
             selectedKeys = validKeys
         }
 
-        // ─── load cache فوری ───
         ToolsPoller.loadFromCache(context)
-
-        // ─── fetch اولیه ───
-        ToolsPoller.refresh(context)
+        ToolsPoller.refresh(context)  // ← FIX ۲: دیگه force نمی‌زنیم، TTL خودش مدیریت می‌کنه
     }
 
-    // ═══ auto-save وقتی لیست عوض می‌شه ═══
-    LaunchedEffect(state.prices.size) {
-        if (state.prices.isNotEmpty()) {
-            ToolsPoller.persist(context)
-        }
-    }
+    // ═══ FIX ۳: persist رو حذف کردیم — خود ToolsPoller.refresh ذخیره می‌کنه ═══
 
-    // ═══ auto-refresh هر ۵ دقیقه — مستقل از composition ═══
-    // توجه: این loop توی Composable نمی‌مونه؛ فقط trigger می‌کنه
+    // ═══ auto-refresh هر ۵ دقیقه ═══
     LaunchedEffect(Unit) {
         while (true) {
             delay(5 * 60 * 1000L)
@@ -151,7 +140,6 @@ fun ToolsScreen() {
                                 color = Color(0xFF1B1B1F),
                                 modifier = Modifier.weight(1f)
                             )
-                            // ═══ دکمه ↻ — از singleton، نه scope ═══
                             IconButton(
                                 onClick = {
                                     ToolsPoller.refresh(context, force = true)
