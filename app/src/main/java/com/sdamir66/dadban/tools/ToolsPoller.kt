@@ -16,14 +16,14 @@ data class ToolsState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val debugInfo: String = "",
-    val lastUpdate: Long = 0L
+    val lastUpdate: Long = 0L,
+    val version: Long = 0L
 )
 
 object ToolsPoller {
 
     private const val TAG = "ToolsPoller"
 
-    // scope مستقل از هر Composable
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _state = MutableStateFlow(ToolsState())
@@ -32,9 +32,6 @@ object ToolsPoller {
     @Volatile
     private var isFetching = false
 
-    /**
-     * بارگذاری از cache — sync-مانند
-     */
     fun loadFromCache(context: Context) {
         scope.launch {
             val cached = PriceCache.load(context)
@@ -44,18 +41,14 @@ object ToolsPoller {
                     it.copy(
                         prices = cached,
                         debugInfo = "از کش: ${cached.size} آیتم",
-                        lastUpdate = PriceCache.getSavedAt(context)
+                        lastUpdate = PriceCache.getSavedAt(context),
+                        version = it.version + 1
                     )
                 }
             }
         }
     }
 
-    /**
-     * fetch از شبکه
-     *
-     * @param force اگه true، fetch انجام می‌شه حتی اگه در جریان باشه
-     */
     fun refresh(context: Context, force: Boolean = false) {
         if (isFetching && !force) {
             Log.d(TAG, "refresh ignored: already fetching")
@@ -68,16 +61,12 @@ object ToolsPoller {
             Log.d(TAG, "refresh START (force=$force)")
 
             try {
-                val result = ToolsRepository.fetchPrices(
-                    context,
-                    PriceCatalog.ALL_ORDERED
-                )
+                val result = ToolsRepository.fetchPrices(context, PriceCatalog.ALL_ORDERED)
 
                 result.fold(
                     onSuccess = { prices ->
                         Log.d(TAG, "refresh OK: ${prices.size}")
                         if (prices.isNotEmpty()) {
-                            // ذخیره به cache
                             try {
                                 PriceCache.save(context, prices)
                             } catch (e: Exception) {
@@ -89,8 +78,8 @@ object ToolsPoller {
                                     prices = prices,
                                     error = null,
                                     debugInfo = "آخرین: ${prices.size} آیتم",
-                                    // ⚠️ lastUpdate فقط اگه force یا محتوا عوض شده
-                                    lastUpdate = System.currentTimeMillis()
+                                    lastUpdate = System.currentTimeMillis(),
+                                    version = it.version + 1
                                 )
                             }
                         } else {
@@ -105,23 +94,16 @@ object ToolsPoller {
                     onFailure = { e ->
                         Log.e(TAG, "refresh FAILED: ${e.message}")
                         _state.update {
-                            it.copy(
-                                error = e.message,
-                                debugInfo = "خطا در دریافت"
-                            )
+                            it.copy(error = e.message, debugInfo = "خطا در دریافت")
                         }
                     }
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "refresh EXCEPTION", e)
                 _state.update {
-                    it.copy(
-                        error = e.message,
-                        debugInfo = "خطای غیرمنتظره"
-                    )
+                    it.copy(error = e.message, debugInfo = "خطای غیرمنتظره")
                 }
             } finally {
-                // ═══ کلید ماجرا: isLoading همیشه اینجا false می‌شه ═══
                 _state.update { it.copy(isLoading = false) }
                 isFetching = false
                 Log.d(TAG, "refresh END")
@@ -129,9 +111,6 @@ object ToolsPoller {
         }
     }
 
-    /**
-     * ذخیره‌ی state فعلی — نیازی به fetch مجدد نیست
-     */
     fun persist(context: Context) {
         val prices = _state.value.prices
         if (prices.isNotEmpty()) {
