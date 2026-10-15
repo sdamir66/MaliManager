@@ -1,20 +1,31 @@
-name: Gemini Code Review
+name: Gemini CLI Assistant
 
 on:
-  pull_request:
-    types: [opened, synchronize]
   issue_comment:
     types: [created]
 
 jobs:
-  review:
+  gemini:
+    # فقط زمانی اجرا شود که در کامنت @gemini-cli باشد و کاربر مجاز باشد
+    if: |
+      !github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@gemini-cli') &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'COLLABORATOR')
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: google-github-actions/run-gemini-cli@v0
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Gemini CLI
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GEMINI_CLI_TRUST_WORKSPACE: true
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: ${{ github.event.comment.body }}
