@@ -2,6 +2,7 @@ package com.sdamir66.dadban.data
 
 import android.content.Context
 import android.net.Uri
+import androidx.room.withTransaction
 import org.json.JSONArray
 import org.json.JSONObject
 import com.sdamir66.dadban.calendar.data.CalendarSettings
@@ -114,7 +115,8 @@ object Backup {
             val root = JSONObject(text)
             val backupVersion = root.optInt("version", 1)
 
-            db.tx().clear(); db.accounts().clear(); db.persons().clear(); db.profitPeriod().clear()
+            db.withTransaction {
+                db.tx().clear(); db.accounts().clear(); db.persons().clear(); db.profitPeriod().clear()
 
             val persons = root.optJSONArray("persons") ?: JSONArray()
             val personIdMap = mutableMapOf<Long, Long>()
@@ -237,6 +239,7 @@ object Backup {
                         showPrayerTimes = settingsObj.optBoolean("showPrayerTimes", true)
                     ))
                 }
+            }
             }
         } else {
             val json = exportToJson(db)

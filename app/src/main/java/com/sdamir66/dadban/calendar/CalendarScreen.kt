@@ -154,6 +154,11 @@ fun CalendarScreen(db: AppDb) {
             }
         }
 
+        item {
+            Spacer(Modifier.height(12.dp))
+            CalendarDateConverter((selectedDay ?: currentDate).time)
+        }
+
         item { Spacer(Modifier.height(24.dp)) }
     }
 }

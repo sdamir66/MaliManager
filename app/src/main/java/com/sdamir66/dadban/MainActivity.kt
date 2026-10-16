@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+            ProfitEngine.recalculateAll(db)
         }
 
         backupScope.launch {
@@ -130,7 +131,7 @@ class MainActivity : ComponentActivity() {
 // ═══════════════════════════════════════════════════════
 
 fun calculateRunningBalances(transactions: List<Transaction>, nature: String): Map<Long, Double> {
-    val sorted = transactions.sortedBy { it.dateMillis }
+    val sorted = transactions.sortedWith(compareBy<Transaction> { it.dateMillis }.thenBy { it.id })
     val balances = mutableMapOf<Long, Double>()
     var running = 0.0
     for (t in sorted) {
@@ -409,6 +410,7 @@ fun PersonsScreen(
                 scope.launch {
                     val accs = db.accounts().byPersonNow(target.id)
                     accs.forEach { acc ->
+                        db.tx().deleteAutoByPrefix(acc.id.toString())
                         db.tx().byAccountNow(acc.id).forEach { db.tx().delete(it) }
                         db.profitPeriod().deleteByAccount(acc.id)
                         db.accounts().delete(acc)
@@ -692,9 +694,11 @@ fun PersonScreen(
             message = "آیا «${target.name}» و تراکنش‌هایش حذف شوند؟",
             onConfirm = {
                 scope.launch {
+                    db.tx().deleteAutoByPrefix(target.id.toString())
                     db.tx().byAccountNow(target.id).forEach { db.tx().delete(it) }
                     db.profitPeriod().deleteByAccount(target.id)
                     db.accounts().delete(target)
+                    ProfitEngine.recalculateAll(db)
                     deleteTarget = null
                 }
             },
@@ -1330,7 +1334,9 @@ fun AccountEditor(
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = HeaderBlue)
                             ) {
                                 val display = if (liveKey.isBlank()) "انتخاب کن..."
-                                    else PriceCatalog.DEFAULT_TITLES[liveKey] ?: liveKey
+                                    else PriceCatalog.DEFAULT_TITLES[liveKey]
+                                        ?: PriceCatalog.CRYPTO_TITLES[liveKey]
+                                        ?: liveKey
                                 Text(display, modifier = Modifier.weight(1f), color = HeaderBlue)
                                 Text("▼", color = HeaderBlue)
                             }
@@ -1340,8 +1346,9 @@ fun AccountEditor(
                                 modifier = Modifier.heightIn(max = 300.dp)
                             ) {
                                 PriceCatalog.ALL_ORDERED.forEach { key ->
-                                    if (key in PriceCatalog.CRYPTO_KEYS) return@forEach
-                                    val title = PriceCatalog.DEFAULT_TITLES[key] ?: key
+                                    val title = PriceCatalog.DEFAULT_TITLES[key]
+                                        ?: PriceCatalog.CRYPTO_TITLES[key]
+                                        ?: key
                                     DropdownMenuItem(
                                         text = { Text(title) },
                                         onClick = { liveKey = key; liveKeyExpanded = false }

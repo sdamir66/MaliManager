@@ -239,6 +239,9 @@ fun ToolsScreen() {
                     }
                 }
             }
+            item {
+                LoanCalculator()
+            }
         }
     }
 }
