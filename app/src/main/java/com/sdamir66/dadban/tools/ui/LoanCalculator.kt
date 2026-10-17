@@ -91,7 +91,7 @@ fun LoanCalculator() {
             LoanField("اصل وام", principal, { principal = it })
             LoanField("قسط ماهانه", payment, { payment = it })
             LoanField("تعداد اقساط (ماه)", months, { months = it }, KeyboardType.Number)
-            LoanField("نرخ سالانه (%)", annualRate, { annualRate = it })
+            LoanField("نرخ سالانه (%)", annualRate, { annualRate = it }, groupThousands = false)
             LoanField("مجموع بازپرداخت", totalRepayment, { totalRepayment = it })
             LoanField("مجموع سود", totalInterest, { totalInterest = it })
             Button(onClick = ::calculate, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue)) {
@@ -103,10 +103,10 @@ fun LoanCalculator() {
 }
 
 @Composable
-private fun LoanField(label: String, value: String, onChange: (String) -> Unit, type: KeyboardType = KeyboardType.Decimal) {
+private fun LoanField(label: String, value: String, onChange: (String) -> Unit, type: KeyboardType = KeyboardType.Decimal, groupThousands: Boolean = true) {
     OutlinedTextField(
         value = value,
-        onValueChange = { onChange(it.filter { c -> c.isDigit() || c == '.' }) },
+        onValueChange = { onChange(formatLoanInput(it, groupThousands)) },
         label = { Text(label, color = loanLabel) },
         keyboardOptions = KeyboardOptions(keyboardType = type),
         singleLine = true,
@@ -125,7 +125,16 @@ private fun LoanField(label: String, value: String, onChange: (String) -> Unit, 
 
 private fun String.toNumber(): Double? = replace(",", "").toDoubleOrNull()?.takeIf { it >= 0.0 }
 private fun Double.twoDecimals(): String = String.format(Locale.US, "%.2f", this)
-private fun formatNumber(value: Double): String = NumberFormat.getNumberInstance(Locale.US).apply { maximumFractionDigits = 2 }.format(value)
+
+private fun formatLoanInput(input: String, groupThousands: Boolean): String {
+    val normalized = input.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", "")
+    val parts = normalized.split('.', limit = 2)
+    val integer = parts[0].ifEmpty { "0" }
+    val formattedInteger = if (groupThousands) {
+        NumberFormat.getIntegerInstance(Locale.US).format(integer.toLongOrNull() ?: 0L)
+    } else integer
+    return if (parts.size == 2) "$formattedInteger.${parts[1].filter { it.isDigit() }.take(2)}" else formattedInteger
+}
 
 private fun monthlyPayment(principal: Double, months: Int, annualRate: Double): Double {
     val monthly = annualRate / 100.0 / 12.0

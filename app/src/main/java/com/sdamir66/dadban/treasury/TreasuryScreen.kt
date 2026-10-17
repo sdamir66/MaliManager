@@ -162,6 +162,9 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
         val bal = balances[acc.id] ?: 0.0
         TreasuryCalculator.calculateEquivalent(acc, bal, livePrices) ?: 0.0
     }
+    val unresolvedEquivalentCount = accounts.count { acc ->
+        TreasuryCalculator.calculateEquivalent(acc, balances[acc.id] ?: 0.0, livePrices) == null
+    }
 
     val isStale = lastUpdate == 0L || (System.currentTimeMillis() - lastUpdate) > 30 * 60 * 1000L
 
@@ -252,6 +255,14 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                         fontWeight = FontWeight.Bold,
                         color = HeaderBlue
                     )
+                    if (unresolvedEquivalentCount > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "⚠️ ارزش ${unresolvedEquivalentCount} دارایی به‌دلیل نبودن نرخ در جمع محاسبه نشده است",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DebitRed
+                        )
+                    }
 
                     Spacer(Modifier.height(10.dp))
                     HorizontalDivider(color = Color(0xFFEEEEEE))

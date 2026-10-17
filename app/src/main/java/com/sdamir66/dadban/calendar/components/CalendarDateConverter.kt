@@ -12,11 +12,8 @@ import androidx.compose.ui.unit.dp
 import com.sdamir66.dadban.calendar.data.HijriCache
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.util.Jalali
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 
 private val converterText = Color(0xFF1B1B1F)
 private val converterLabel = Color(0xFF4B4D61)
@@ -98,7 +95,7 @@ fun CalendarDateConverter(
 private fun ConverterField(label: String, value: String, onValueChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
-        onValueChange = { onValueChange(it.filter { c -> c.isDigit() || c == '/' }.take(10)) },
+        onValueChange = { onValueChange(formatDateDigits(it)) },
         label = { Text(label, color = converterLabel) },
         placeholder = { Text("سال/ماه/روز", color = converterLabel.copy(alpha = 0.65f)) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -114,4 +111,20 @@ private fun ConverterField(label: String, value: String, onValueChange: (String)
             cursorColor = HeaderBlue
         )
     )
+}
+
+private fun formatDateDigits(input: String): String {
+    val normalized = input.map { ch ->
+        when (ch) {
+            in '۰'..'۹' -> ('0'.code + (ch.code - '۰'.code)).toChar()
+            in '٠'..'٩' -> ('0'.code + (ch.code - '٠'.code)).toChar()
+            else -> ch
+        }
+    }.filter { it.isDigit() }.take(8)
+    return buildString {
+        normalized.forEachIndexed { index, ch ->
+            if (index == 4 || index == 6) append('/')
+            append(ch)
+        }
+    }
 }

@@ -29,7 +29,7 @@ object Jalali {
         val y = parts[0].toIntOrNull() ?: return null
         val m = parts[1].toIntOrNull() ?: return null
         val d = parts[2].toIntOrNull() ?: return null
-        if (m !in 1..12 || d !in 1..31) return null
+        if (y <= 0 || m !in 1..12 || d !in 1..daysInMonth(y, m)) return null
         return toGregorian(y, m, d)
     }
 

@@ -116,8 +116,10 @@ object Backup {
 
     suspend fun restoreOrExport(context: Context, db: AppDb, uri: Uri, restore: Boolean) {
         if (restore) {
-            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return
+            val rawText = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return
+            val text = BackupCrypto.decryptIfNeeded(rawText)
             val root = JSONObject(text)
+            validateRestorePayload(root)
             val backupVersion = root.optInt("version", 1)
 
             db.withTransaction {
@@ -254,6 +256,22 @@ object Backup {
         } else {
             val json = exportToJson(db)
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
+        }
+    }
+
+    private fun validateRestorePayload(root: JSONObject) {
+        require(root.optInt("version", 1) in 1..CURRENT_VERSION) { "نسخه بکاپ پشتیبانی نمی‌شود" }
+        val persons = root.optJSONArray("persons") ?: throw IllegalArgumentException("بخش اشخاص در بکاپ ناقص است")
+        for (i in 0 until persons.length()) require(persons.getJSONObject(i).has("name")) { "نام شخص در بکاپ ناقص است" }
+        val accounts = root.optJSONArray("accounts") ?: throw IllegalArgumentException("بخش حساب‌ها در بکاپ ناقص است")
+        for (i in 0 until accounts.length()) {
+            val account = accounts.getJSONObject(i)
+            require(account.has("name") && account.has("personId")) { "حساب ناقص است" }
+        }
+        val transactions = root.optJSONArray("transactions") ?: throw IllegalArgumentException("بخش تراکنش‌ها در بکاپ ناقص است")
+        for (i in 0 until transactions.length()) {
+            val tx = transactions.getJSONObject(i)
+            require(tx.has("accountId") && tx.has("dateMillis") && tx.has("type") && tx.has("amount")) { "تراکنش ناقص است" }
         }
     }
 }
