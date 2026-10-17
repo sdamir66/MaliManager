@@ -64,6 +64,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 import java.util.Locale
 
 // ═══════════════════════════════════════════════════════
@@ -121,7 +122,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        backupScope.launch { autoBackupToInternal(applicationContext, db) }
+        // بکاپ در onStop زمان‌بندی شده است؛ اینجا فقط حلقه و scope را متوقف کن
+        // تا بعد از نابودی Activity کار پس‌زمینه و نشت coroutine باقی نماند.
+        backupScope.cancel()
         super.onDestroy()
     }
 }
