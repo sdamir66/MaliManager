@@ -8,7 +8,10 @@ jobs:
   gemini:
     if: |
       !github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@gemini-cli')
+      contains(github.event.comment.body, '@gemini-cli') &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'COLLABORATOR' ||
+       github.event.comment.author_association == 'MEMBER')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -24,9 +27,13 @@ jobs:
           GEMINI_CLI_TRUST_WORKSPACE: true
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          prompt: ${{ github.event.comment.body }}
-          model: gemini-2.5-flash
-          settings_json: |
+          prompt: |
+            Review the issue and comment below. Make only the requested changes.
+            Issue title: ${{ github.event.issue.title }}
+            Issue body: ${{ github.event.issue.body }}
+            Comment: ${{ github.event.comment.body }}
+          gemini_model: gemini-2.5-flash
+          settings: |
             {
               "tools": {
                 "autoAccept": true

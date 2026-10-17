@@ -128,7 +128,6 @@ fun CalendarScreen(db: AppDb) {
                 selectedDay = selectedDay,
                 onDayClick = { date ->
                     selectedDay = date
-                    currentDate = date
                 },
                 onDateChange = { newDate -> currentDate = newDate }
             )
@@ -152,6 +151,15 @@ fun CalendarScreen(db: AppDb) {
                     hijriCacheMap = hijriCacheMap
                 )
             }
+        }
+
+        item {
+            Spacer(Modifier.height(12.dp))
+            CalendarDateConverter(
+                selectedDateMillis = (selectedDay ?: currentDate).time,
+                hijriCacheMap = hijriCacheMap,
+                hijriCacheByHijriDate = hijriCacheByHijriDate
+            )
         }
 
         item { Spacer(Modifier.height(24.dp)) }

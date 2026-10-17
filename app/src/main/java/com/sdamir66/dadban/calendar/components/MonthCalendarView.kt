@@ -76,7 +76,8 @@ fun MonthCalendarView(
         val targetOffset = monthsBetween(
             anchorMonth,
             normalizeToMonthStart(currentDate, primaryCalendar, hijriCacheMap),
-            primaryCalendar
+            primaryCalendar,
+            hijriCacheMap
         )
         val targetPage = START_PAGE + targetOffset
         if (targetPage != pagerState.currentPage && targetPage in 0 until PAGE_COUNT) {
@@ -344,10 +345,16 @@ private fun normalizeToMonthStart(
     }
 }
 
-private fun monthsBetween(from: Date, to: Date, type: CalendarType): Int {
+private fun monthsBetween(from: Date, to: Date, type: CalendarType, hijriCacheMap: Map<String, HijriCache>): Int {
     if (type == CalendarType.HIJRI) {
-        val days = ((to.time - from.time) / 86_400_000L).toInt()
-        return if (days >= 0) (days / 29.53).toInt() else -((-days / 29.53).toInt())
+        val fromHijri = getHijriFromJalali(from, hijriCacheMap)
+        val toHijri = getHijriFromJalali(to, hijriCacheMap)
+        if (fromHijri != null && toHijri != null) {
+            val fromMonth = hijriMonthNameToNumber(fromHijri.hijriMonth)
+            val toMonth = hijriMonthNameToNumber(toHijri.hijriMonth)
+            return (toHijri.hijriYear - fromHijri.hijriYear) * 12 + (toMonth - fromMonth)
+        }
+        return 0
     }
     val c1 = Calendar.getInstance().apply { time = from }
     val c2 = Calendar.getInstance().apply { time = to }

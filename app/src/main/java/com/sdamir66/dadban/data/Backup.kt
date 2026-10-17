@@ -2,6 +2,7 @@ package com.sdamir66.dadban.data
 
 import android.content.Context
 import android.net.Uri
+import androidx.room.withTransaction
 import org.json.JSONArray
 import org.json.JSONObject
 import com.sdamir66.dadban.calendar.data.CalendarSettings
@@ -97,6 +98,11 @@ object Backup {
             o.put("showNationalNonHoliday", settingsObj.showNationalNonHoliday)
             o.put("showGlobalEvents", settingsObj.showGlobalEvents)
             o.put("showUserEvents", settingsObj.showUserEvents)
+            o.put("colorHoliday", settingsObj.colorHoliday)
+            o.put("colorReligious", settingsObj.colorReligious)
+            o.put("colorNational", settingsObj.colorNational)
+            o.put("colorGlobal", settingsObj.colorGlobal)
+            o.put("colorUser", settingsObj.colorUser)
             o.put("locationMode", settingsObj.locationMode.name)
             o.put("cityName", settingsObj.cityName)
             o.put("latitude", settingsObj.latitude)
@@ -114,7 +120,8 @@ object Backup {
             val root = JSONObject(text)
             val backupVersion = root.optInt("version", 1)
 
-            db.tx().clear(); db.accounts().clear(); db.persons().clear(); db.profitPeriod().clear()
+            db.withTransaction {
+                db.tx().clear(); db.accounts().clear(); db.persons().clear(); db.profitPeriod().clear()
 
             val persons = root.optJSONArray("persons") ?: JSONArray()
             val personIdMap = mutableMapOf<Long, Long>()
@@ -228,6 +235,11 @@ object Backup {
                         showNationalNonHoliday = settingsObj.optBoolean("showNationalNonHoliday", false),
                         showGlobalEvents = settingsObj.optBoolean("showGlobalEvents", false),
                         showUserEvents = settingsObj.optBoolean("showUserEvents", true),
+                        colorHoliday = settingsObj.optString("colorHoliday", "#E53935"),
+                        colorReligious = settingsObj.optString("colorReligious", "#4CAF50"),
+                        colorNational = settingsObj.optString("colorNational", "#2196F3"),
+                        colorGlobal = settingsObj.optString("colorGlobal", "#9C27B0"),
+                        colorUser = settingsObj.optString("colorUser", "#9E9E9E"),
                         locationMode = com.sdamir66.dadban.calendar.data.LocationMode.valueOf(
                             settingsObj.optString("locationMode", "MANUAL")
                         ),
@@ -237,6 +249,7 @@ object Backup {
                         showPrayerTimes = settingsObj.optBoolean("showPrayerTimes", true)
                     ))
                 }
+            }
             }
         } else {
             val json = exportToJson(db)

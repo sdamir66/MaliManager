@@ -127,8 +127,11 @@ object ToolsRepository {
 
             Log.d(TAG, "══════ fetchPrices END: ${finalResult.size} (fiat=${fiatResult.size}, crypto=${cryptoResult.size}) ══════")
 
-            if (finalResult.isEmpty()) {
-                Result.failure(IOException("هیچ قیمتی دریافت نشد (شبکه/API)"))
+            if (finalResult.isEmpty() ||
+                (fiatKeys.isNotEmpty() && fiatResult.isEmpty()) ||
+                (cryptoKeys.isNotEmpty() && cryptoResult.isEmpty())
+            ) {
+                Result.failure(IOException("دریافت کامل نرخ‌ها انجام نشد؛ مقادیر کش‌شده قدیمی هستند"))
             } else {
                 Result.success(finalResult)
             }

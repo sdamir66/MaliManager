@@ -1,30 +1,34 @@
 package com.sdamir66.dadban.data
 
 import com.sdamir66.dadban.util.Jalali
+import androidx.room.withTransaction
 import java.util.Locale
 
 object ProfitEngine {
     suspend fun recalculateAll(db: AppDb) {
-        db.tx().deleteAllAuto()
-        for (account in db.accounts().allNow()) {
-            val periods = db.profitPeriod().byAccountNow(account.id)
-            if (periods.isEmpty()) continue
-            recalculateForAccount(db, account.id, periods)
+        db.withTransaction {
+            db.tx().deleteAllAuto()
+            for (account in db.accounts().allNow()) {
+                val periods = db.profitPeriod().byAccountNow(account.id)
+                if (periods.isEmpty()) continue
+                recalculateForAccount(db, account.id, periods)
+            }
         }
     }
 
     suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
+        // حتی وقتی آخرین بازه حذف شده، سودهای قبلی این مبدأ باید حذف شوند.
+        db.tx().deleteAutoByPrefix(accountId.toString())
         if (periods.isEmpty()) return
 
+        val sourceAccount = db.accounts().byId(accountId) ?: return
         val base = db.tx().byAccountNow(accountId)
             .filter { !it.isAutoProfit }
-            .sortedBy { it.dateMillis }
+            .sortedWith(compareBy<Transaction> { it.dateMillis }.thenBy { it.id })
             .toMutableList()
 
         val today = Jalali.nowJalali()
         val todayMillis = System.currentTimeMillis()
-
-        db.tx().deleteAutoByPrefix(accountId.toString())
 
         val sortedByStart = periods.sortedWith(
             compareBy({ it.startYear }, { it.startMonth }, { it.startDay })
@@ -105,12 +109,13 @@ object ProfitEngine {
 
                 while (currentMillis <= effectiveEnd) {
                     val dayStartMillis = currentMillis
-                    val dayEndMillis = currentMillis + 86399000L
+                    val dayEndMillis = currentMillis + 86399999L
 
-                    val minBalance = calculateMinBalanceInDay(
-                        base = base,
-                        dayStartMillis = dayStartMillis,
-                        dayEndMillis = dayEndMillis
+            val minBalance = calculateMinBalanceInDay(
+                base = base,
+                dayStartMillis = dayStartMillis,
+                dayEndMillis = dayEndMillis,
+                nature = sourceAccount.nature
                     )
 
                     if (minBalance > 0.0) {
@@ -142,7 +147,7 @@ object ProfitEngine {
                         id = 0,
                         accountId = dest,
                         dateMillis = payoutMillis,
-                        type = "بستانکار",
+                        type = if (db.accounts().byId(dest)?.nature == "debit") "بدهکار" else "بستانکار",
                         amount = roundedProfit,
                         note = text,
                         isAutoProfit = true,
@@ -153,7 +158,7 @@ object ProfitEngine {
 
                     if (dest == accountId) {
                         base.add(profitTx)
-                        base.sortBy { it.dateMillis }
+                        base.sortWith(compareBy<Transaction> { it.dateMillis }.thenBy { it.id })
                     }
                 }
             }
@@ -167,22 +172,28 @@ object ProfitEngine {
     private fun calculateMinBalanceInDay(
         base: MutableList<Transaction>,
         dayStartMillis: Long,
-        dayEndMillis: Long
+        dayEndMillis: Long,
+        nature: String
     ): Double {
+        fun delta(t: Transaction): Double = if (nature == "debit") {
+            if (t.type == "بدهکار") t.amount else -t.amount
+        } else {
+            if (t.type == "بستانکار") t.amount else -t.amount
+        }
         val balanceAtStart = base
             .filter { it.dateMillis < dayStartMillis }
-            .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
+            .sumOf(::delta)
 
         val dayTransactions = base
             .filter { it.dateMillis in dayStartMillis..dayEndMillis }
-            .sortedBy { it.dateMillis }
+            .sortedWith(compareBy<Transaction> { it.dateMillis }.thenBy { it.id })
 
         if (dayTransactions.isEmpty()) return balanceAtStart
 
         var minBal = balanceAtStart
         var runningBal = balanceAtStart
         for (t in dayTransactions) {
-            runningBal += if (t.type == "بستانکار") t.amount else -t.amount
+            runningBal += delta(t)
             if (runningBal < minBal) minBal = runningBal
         }
 

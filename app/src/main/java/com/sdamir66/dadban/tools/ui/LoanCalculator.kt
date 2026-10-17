@@ -1,0 +1,160 @@
+package com.sdamir66.dadban.tools.ui
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import com.sdamir66.dadban.ui.theme.HeaderBlue
+import java.text.NumberFormat
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.ln
+import kotlin.math.pow
+import kotlin.math.roundToInt
+
+private val loanText = Color(0xFF1B1B1F)
+private val loanLabel = Color(0xFF4B4D61)
+private val loanBorder = Color(0xFF9AA3B2)
+
+@Composable
+fun LoanCalculator() {
+    var principal by remember { mutableStateOf("") }
+    var payment by remember { mutableStateOf("") }
+    var months by remember { mutableStateOf("") }
+    var annualRate by remember { mutableStateOf("") }
+    var totalRepayment by remember { mutableStateOf("") }
+    var totalInterest by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+
+    fun calculate() {
+        val p = principal.toNumber()
+        val pay = payment.toNumber()
+        val n = months.toNumber()?.roundToInt()
+        val rate = annualRate.toNumber()
+        val total = totalRepayment.toNumber()
+        val interest = totalInterest.toNumber()
+        if (p == null && total == null) {
+            error = "حداقل اصل وام یا مجموع بازپرداخت را وارد کن"
+            return
+        }
+        var solvedP = p
+        var solvedPay = pay
+        var solvedN = n
+        var solvedRate = rate
+        var solvedTotal = total
+
+        if (solvedTotal == null && solvedP != null && interest != null) solvedTotal = solvedP + interest
+        if (solvedP == null && solvedTotal != null && interest != null) solvedP = solvedTotal - interest
+        if (solvedPay == null && solvedTotal != null && solvedN != null && solvedN > 0) solvedPay = solvedTotal / solvedN
+        if (solvedN == null && solvedTotal != null && solvedPay != null && solvedPay > 0) solvedN = (solvedTotal / solvedPay).roundToInt().coerceAtLeast(1)
+
+        when {
+            solvedP != null && solvedN != null && solvedRate != null -> solvedPay = monthlyPayment(solvedP, solvedN, solvedRate)
+            solvedP != null && solvedN != null && solvedPay != null && solvedRate == null -> solvedRate = solveAnnualRate(solvedP, solvedN, solvedPay)
+            solvedP != null && solvedPay != null && solvedRate != null && solvedN == null -> solvedN = solveMonths(solvedP, solvedPay, solvedRate)
+            solvedPay != null && solvedN != null && solvedRate != null && solvedP == null -> solvedP = loanPrincipal(solvedPay, solvedN, solvedRate)
+        }
+        if (solvedTotal == null && solvedPay != null && solvedN != null) solvedTotal = solvedPay * solvedN
+        if (solvedPay == null && solvedP != null && solvedTotal != null && solvedN != null && solvedN > 0) solvedPay = solvedTotal / solvedN
+        if (solvedRate == null && solvedP != null && solvedN != null && solvedPay != null) solvedRate = solveAnnualRate(solvedP, solvedN, solvedPay)
+        if (solvedN == null && solvedP != null && solvedPay != null && solvedTotal != null && solvedPay > 0) solvedN = (solvedTotal / solvedPay).roundToInt().coerceAtLeast(1)
+        if (solvedTotal == null && solvedP != null && solvedPay != null && solvedN != null) solvedTotal = solvedPay * solvedN
+
+        if (solvedP == null || solvedPay == null || solvedN == null || solvedN <= 0) {
+            error = "برای حل این حالت، حداقل سه مقدار سازگار وارد کن"
+            return
+        }
+        error = ""
+        principal = solvedP.twoDecimals()
+        payment = solvedPay.twoDecimals()
+        months = solvedN.toString()
+        annualRate = (solvedRate ?: 0.0).twoDecimals()
+        totalRepayment = (solvedTotal ?: solvedPay * solvedN).twoDecimals()
+        totalInterest = ((solvedTotal ?: solvedPay * solvedN) - solvedP).twoDecimals()
+    }
+
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("محاسبه‌گر وام", style = MaterialTheme.typography.titleMedium, color = HeaderBlue, fontWeight = FontWeight.Bold)
+            Text("هر چند مقدار را داری وارد کن؛ برنامه بقیه را محاسبه می‌کند. برای حالت‌های دقیق، حداقل سه مقدار مرتبط وارد شود.", style = MaterialTheme.typography.bodySmall, color = loanLabel)
+            LoanField("اصل وام", principal, { principal = it })
+            LoanField("قسط ماهانه", payment, { payment = it })
+            LoanField("تعداد اقساط (ماه)", months, { months = it }, KeyboardType.Number)
+            LoanField("نرخ سالانه (%)", annualRate, { annualRate = it })
+            LoanField("مجموع بازپرداخت", totalRepayment, { totalRepayment = it })
+            LoanField("مجموع سود", totalInterest, { totalInterest = it })
+            Button(onClick = ::calculate, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue)) {
+                Text("محاسبه و تکمیل مقادیر", color = Color.White)
+            }
+            if (error.isNotBlank()) Text(error, color = Color(0xFFC62828), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun LoanField(label: String, value: String, onChange: (String) -> Unit, type: KeyboardType = KeyboardType.Decimal) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onChange(it.filter { c -> c.isDigit() || c == '.' }) },
+        label = { Text(label, color = loanLabel) },
+        keyboardOptions = KeyboardOptions(keyboardType = type),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = loanText,
+            unfocusedTextColor = loanText,
+            focusedLabelColor = HeaderBlue,
+            unfocusedLabelColor = loanLabel,
+            focusedBorderColor = HeaderBlue,
+            unfocusedBorderColor = loanBorder,
+            cursorColor = HeaderBlue
+        )
+    )
+}
+
+private fun String.toNumber(): Double? = replace(",", "").toDoubleOrNull()?.takeIf { it >= 0.0 }
+private fun Double.twoDecimals(): String = String.format(Locale.US, "%.2f", this)
+private fun formatNumber(value: Double): String = NumberFormat.getNumberInstance(Locale.US).apply { maximumFractionDigits = 2 }.format(value)
+
+private fun monthlyPayment(principal: Double, months: Int, annualRate: Double): Double {
+    val monthly = annualRate / 100.0 / 12.0
+    if (monthly == 0.0) return principal / months
+    val factor = (1 + monthly).pow(months)
+    return principal * monthly * factor / (factor - 1)
+}
+
+private fun loanPrincipal(payment: Double, months: Int, annualRate: Double): Double {
+    val monthly = annualRate / 100.0 / 12.0
+    if (monthly == 0.0) return payment * months
+    val factor = (1 + monthly).pow(months)
+    return payment * (factor - 1) / (monthly * factor)
+}
+
+private fun solveAnnualRate(principal: Double, months: Int, payment: Double): Double {
+    if (payment <= principal / months) return 0.0
+    var low = 0.0
+    var high = 10.0
+    repeat(80) {
+        val mid = (low + high) / 2.0
+        if (monthlyPayment(principal, months, mid) < payment) low = mid else high = mid
+    }
+    return ((low + high) / 2.0) * 100.0
+}
+
+private fun solveMonths(principal: Double, payment: Double, annualRate: Double): Int {
+    val monthly = annualRate / 100.0 / 12.0
+    if (monthly == 0.0) return (principal / payment).roundToInt().coerceAtLeast(1)
+    val n = ln(payment / (payment - principal * monthly)) / ln(1 + monthly)
+    return n.roundToInt().coerceAtLeast(1)
+}

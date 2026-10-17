@@ -465,6 +465,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
             message = "آیا «${target.name}» و تراکنش‌هایش حذف شوند؟",
             onConfirm = {
                 scope.launch {
+                    db.tx().deleteAutoByPrefix(target.id.toString())
                     db.tx().byAccountNow(target.id).forEach { db.tx().delete(it) }
                     db.profitPeriod().deleteByAccount(target.id)
                     db.accounts().delete(target)
