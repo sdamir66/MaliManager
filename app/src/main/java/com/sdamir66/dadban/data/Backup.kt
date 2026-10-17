@@ -254,8 +254,8 @@ object Backup {
             }
             }
         } else {
-            val json = exportToJson(db)
-            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
+            val encrypted = BackupCrypto.encrypt(exportToJson(db))
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(encrypted) }
         }
     }
 
