@@ -254,8 +254,9 @@ object Backup {
             }
             }
         } else {
-            val encrypted = BackupCrypto.encrypt(exportToJson(db))
-            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(encrypted) }
+            // خروجی دستی باید روی دستگاه دیگر هم قابل بازیابی باشد؛
+            // رمزگذاری Keystore فقط برای بکاپ خودکار داخلی استفاده می‌شود.
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(exportToJson(db)) }
         }
     }
 
