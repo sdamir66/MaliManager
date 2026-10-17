@@ -34,7 +34,7 @@ private fun formatDecimalTextFieldValue(input: TextFieldValue): TextFieldValue {
                            else java.text.NumberFormat.getNumberInstance(Locale.US).format(intPart.toLong())
 
         val newText = if (parts.size > 1) {
-                "$formattedInt.${parts[1].filter { it.isDigit() }.take(8)}"
+            "$formattedInt.${parts[1].filter { it.isDigit() }.take(2)}"
         } else {
             formattedInt
         }

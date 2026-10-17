@@ -32,13 +32,8 @@ suspend fun autoBackupToInternal(context: Context, db: AppDb): Boolean {
 private suspend fun autoBackupToDefault(context: Context, db: AppDb): Boolean {
     return try {
         val file = java.io.File(context.filesDir, "auto_backup.json")
-        val temp = java.io.File(context.filesDir, "auto_backup.json.tmp")
-        temp.writeText(Backup.exportToJson(db), Charsets.UTF_8)
-        if (!temp.exists() || temp.length() == 0L) return false
-        if (!temp.renameTo(file)) {
-            temp.copyTo(file, overwrite = true)
-            temp.delete()
-        }
+        val uri = Uri.fromFile(file)
+        Backup.restoreOrExport(context, db, uri, false)
         true
     } catch (e: Exception) { e.printStackTrace(); false }
 }

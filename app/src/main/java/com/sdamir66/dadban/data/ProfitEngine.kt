@@ -14,18 +14,17 @@ object ProfitEngine {
     }
 
     suspend fun recalculateForAccount(db: AppDb, accountId: Long, periods: List<ProfitPeriod>) {
-        // حتی وقتی آخرین بازه حذف شده، سودهای قبلی این مبدأ باید حذف شوند.
-        db.tx().deleteAutoByPrefix(accountId.toString())
         if (periods.isEmpty()) return
 
-        val sourceAccount = db.accounts().byId(accountId) ?: return
         val base = db.tx().byAccountNow(accountId)
             .filter { !it.isAutoProfit }
-            .sortedWith(compareBy<Transaction> { it.dateMillis }.thenBy { it.id })
+            .sortedBy { it.dateMillis }
             .toMutableList()
 
         val today = Jalali.nowJalali()
         val todayMillis = System.currentTimeMillis()
+
+        db.tx().deleteAutoByPrefix(accountId.toString())
 
         val sortedByStart = periods.sortedWith(
             compareBy({ it.startYear }, { it.startMonth }, { it.startDay })
@@ -106,13 +105,12 @@ object ProfitEngine {
 
                 while (currentMillis <= effectiveEnd) {
                     val dayStartMillis = currentMillis
-                    val dayEndMillis = currentMillis + 86399999L
+                    val dayEndMillis = currentMillis + 86399000L
 
-            val minBalance = calculateMinBalanceInDay(
-                base = base,
-                dayStartMillis = dayStartMillis,
-                dayEndMillis = dayEndMillis,
-                nature = sourceAccount.nature
+                    val minBalance = calculateMinBalanceInDay(
+                        base = base,
+                        dayStartMillis = dayStartMillis,
+                        dayEndMillis = dayEndMillis
                     )
 
                     if (minBalance > 0.0) {
@@ -144,7 +142,7 @@ object ProfitEngine {
                         id = 0,
                         accountId = dest,
                         dateMillis = payoutMillis,
-                        type = if (db.accounts().byId(dest)?.nature == "debit") "بدهکار" else "بستانکار",
+                        type = "بستانکار",
                         amount = roundedProfit,
                         note = text,
                         isAutoProfit = true,
@@ -155,7 +153,7 @@ object ProfitEngine {
 
                     if (dest == accountId) {
                         base.add(profitTx)
-                        base.sortWith(compareBy<Transaction> { it.dateMillis }.thenBy { it.id })
+                        base.sortBy { it.dateMillis }
                     }
                 }
             }
@@ -169,28 +167,22 @@ object ProfitEngine {
     private fun calculateMinBalanceInDay(
         base: MutableList<Transaction>,
         dayStartMillis: Long,
-        dayEndMillis: Long,
-        nature: String
+        dayEndMillis: Long
     ): Double {
-        fun delta(t: Transaction): Double = if (nature == "debit") {
-            if (t.type == "بدهکار") t.amount else -t.amount
-        } else {
-            if (t.type == "بستانکار") t.amount else -t.amount
-        }
         val balanceAtStart = base
             .filter { it.dateMillis < dayStartMillis }
-            .sumOf(::delta)
+            .sumOf { if (it.type == "بستانکار") it.amount else -it.amount }
 
         val dayTransactions = base
             .filter { it.dateMillis in dayStartMillis..dayEndMillis }
-            .sortedWith(compareBy<Transaction> { it.dateMillis }.thenBy { it.id })
+            .sortedBy { it.dateMillis }
 
         if (dayTransactions.isEmpty()) return balanceAtStart
 
         var minBal = balanceAtStart
         var runningBal = balanceAtStart
         for (t in dayTransactions) {
-            runningBal += delta(t)
+            runningBal += if (t.type == "بستانکار") t.amount else -t.amount
             if (runningBal < minBal) minBal = runningBal
         }
 

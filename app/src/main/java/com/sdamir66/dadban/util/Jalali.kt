@@ -29,7 +29,7 @@ object Jalali {
         val y = parts[0].toIntOrNull() ?: return null
         val m = parts[1].toIntOrNull() ?: return null
         val d = parts[2].toIntOrNull() ?: return null
-        if (m !in 1..12 || d !in 1..daysInMonth(y, m)) return null
+        if (m !in 1..12 || d !in 1..31) return null
         return toGregorian(y, m, d)
     }
 
@@ -84,9 +84,10 @@ object Jalali {
     private fun gregorianToJalali(gy: Int, gm: Int, gd: Int): IntArray {
         val g_d_m = intArrayOf(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
         var jy = if (gy <= 1600) 0 else 979
-        val gy2 = if (gy <= 1600) gy - 621 else gy - 1600
-        val gyForLeap = if (gm > 2) gy2 + 1 else gy2
-        var days = 365 * gy2 + ((gyForLeap + 3) / 4) - ((gyForLeap + 99) / 100) + ((gyForLeap + 399) / 400) - 80 + gd + g_d_m[gm - 1]
+        var gy2 = if (gy <= 1600) gy - 621 else gy - 1600
+        var gm2 = gm
+        var gd2 = gd
+        var days = 365 * gy2 + ((gy2 + 3) / 4) - ((gy2 + 99) / 100) + ((gy2 + 399) / 400) - 80 + gd2 + g_d_m[gm2 - 1]
         jy += 33 * (days / 12053)
         days %= 12053
         jy += 4 * (days / 1461)

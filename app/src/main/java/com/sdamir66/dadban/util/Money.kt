@@ -10,7 +10,7 @@ import kotlin.math.abs
 fun money(v: Double): String {
     val formatter = NumberFormat.getNumberInstance(Locale.US)
     formatter.minimumFractionDigits = 0
-    formatter.maximumFractionDigits = 8
+    formatter.maximumFractionDigits = 2
     return formatter.format(v)
 }
 
@@ -34,26 +34,26 @@ data class BalanceDisplay(
  *   صفر → "0" مشکی
  *
  * برای debit:
- *   مثبت → "X" سبز + "بدهکار"
- *   منفی → "−X" قرمز + "بستانکار"
+ *   مثبت → "X" قرمز + "بدهکار"
+ *   منفی → "−X" سبز + "بستانکار"
  *   صفر → "0" مشکی
  */
 fun balanceDisplay(balance: Double, nature: String = "credit"): BalanceDisplay {
-    // فقط خطای شناور بسیار کوچک را صفر کن؛ 0.0001 برای رمزارز مقدار واقعی است.
-    val bal = if (abs(balance) < 0.00000001) 0.0 else balance
+    // نرمال‌سازی: هر عدد کوچیک‌تر از 0.01 → صفر
+    val bal = if (abs(balance) < 0.01) 0.0 else balance
 
     if (nature == "debit") {
-        // دارایی‌ها: بدهکار مثبت (سبز)، بستانکار منفی (قرمز)
+        // دارایی‌ها: بدهکار مثبت (قرمز)، بستانکار منفی (سبز)
         return when {
             bal > 0.0 -> BalanceDisplay(
                 text = money(bal),
                 label = "بدهکار",
-                color = CreditGreen
+                color = DebitRed
             )
             bal < 0.0 -> BalanceDisplay(
                 text = "−${money(-bal)}",
                 label = "بستانکار",
-                color = DebitRed
+                color = CreditGreen
             )
             else -> BalanceDisplay(
                 text = "0",
