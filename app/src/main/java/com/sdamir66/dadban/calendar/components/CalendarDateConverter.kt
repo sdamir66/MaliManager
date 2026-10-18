@@ -8,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import com.sdamir66.dadban.calendar.data.HijriCache
 import com.sdamir66.dadban.ui.theme.HeaderBlue
@@ -93,9 +95,17 @@ fun CalendarDateConverter(
 
 @Composable
 private fun ConverterField(label: String, value: String, onValueChange: (String) -> Unit) {
+    var fieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    LaunchedEffect(value) {
+        if (fieldValue.text != value) fieldValue = TextFieldValue(value, TextRange(value.length))
+    }
     OutlinedTextField(
-        value = value,
-        onValueChange = { onValueChange(formatDateDigits(it)) },
+        value = fieldValue,
+        onValueChange = {
+            val formatted = formatDateDigits(it)
+            fieldValue = TextFieldValue(formatted.first, TextRange(formatted.second))
+            onValueChange(formatted.first)
+        },
         label = { Text(label, color = converterLabel) },
         placeholder = { Text("سال/ماه/روز", color = converterLabel.copy(alpha = 0.65f)) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -113,18 +123,26 @@ private fun ConverterField(label: String, value: String, onValueChange: (String)
     )
 }
 
-private fun formatDateDigits(input: String): String {
-    val normalized = input.map { ch ->
+private fun formatDateDigits(input: TextFieldValue): Pair<String, Int> {
+    val digitsBeforeCursor = input.text.take(input.selection.start).count { it.isDigit() }
+    val normalized = input.text.map { ch ->
         when (ch) {
             in '۰'..'۹' -> ('0'.code + (ch.code - '۰'.code)).toChar()
             in '٠'..'٩' -> ('0'.code + (ch.code - '٠'.code)).toChar()
             else -> ch
         }
     }.filter { it.isDigit() }.take(8)
-    return buildString {
+    val result = buildString {
         normalized.forEachIndexed { index, ch ->
             if (index == 4 || index == 6) append('/')
             append(ch)
         }
     }
+    if (digitsBeforeCursor >= normalized.size) return result to result.length
+    var seen = 0
+    val cursor = result.indexOfFirst { ch ->
+        if (ch.isDigit()) seen++
+        seen == digitsBeforeCursor
+    }
+    return result to if (cursor >= 0) cursor + 1 else result.length
 }

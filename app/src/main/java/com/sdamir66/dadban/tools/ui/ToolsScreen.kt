@@ -25,6 +25,10 @@ import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.CreditGreen
 import com.sdamir66.dadban.ui.theme.DebitRed
 import com.sdamir66.dadban.ui.theme.HeaderBlue
+import com.sdamir66.dadban.calendar.components.CalendarDateConverter
+import com.sdamir66.dadban.calendar.components.hijriMonthNameToNumber
+import com.sdamir66.dadban.calendar.data.HijriCache
+import com.sdamir66.dadban.calendar.data.HijriOfficialData
 import kotlinx.coroutines.delay
 
 @Composable
@@ -37,6 +41,8 @@ fun ToolsScreen() {
         mutableStateOf(ToolsPreferences.getSelectedKeys(context))
     }
     var isExpanded by remember { mutableStateOf(false) }
+    var hijriCacheMap by remember { mutableStateOf<Map<String, HijriCache>>(emptyMap()) }
+    var hijriCacheByHijriDate by remember { mutableStateOf<Map<String, HijriCache>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
         val saved = ToolsPreferences.getSelectedKeys(context)
@@ -50,6 +56,12 @@ fun ToolsScreen() {
 
         ToolsPoller.loadFromCache(context)
         ToolsPoller.refresh(context)
+        HijriOfficialData.ensureLoaded(context)
+        val all = HijriOfficialData.getAllCaches()
+        hijriCacheMap = all.associateBy { it.jalaliDate }
+        hijriCacheByHijriDate = all.associateBy {
+            "${it.hijriYear}/${hijriMonthNameToNumber(it.hijriMonth)}/${it.hijriDay}"
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -241,6 +253,13 @@ fun ToolsScreen() {
             }
             item {
                 LoanCalculator()
+            }
+            item {
+                CalendarDateConverter(
+                    selectedDateMillis = System.currentTimeMillis(),
+                    hijriCacheMap = hijriCacheMap,
+                    hijriCacheByHijriDate = hijriCacheByHijriDate
+                )
             }
         }
     }

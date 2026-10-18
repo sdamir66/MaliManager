@@ -3,12 +3,16 @@ package com.sdamir66.dadban.tools.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import com.sdamir66.dadban.ui.theme.HeaderBlue
 import java.text.NumberFormat
@@ -27,6 +31,7 @@ fun LoanCalculator() {
     var principal by remember { mutableStateOf("") }
     var payment by remember { mutableStateOf("") }
     var months by remember { mutableStateOf("") }
+    var interval by remember { mutableStateOf("1") }
     var annualRate by remember { mutableStateOf("") }
     var totalRepayment by remember { mutableStateOf("") }
     var totalInterest by remember { mutableStateOf("") }
@@ -90,13 +95,27 @@ fun LoanCalculator() {
             Text("هر چند مقدار را داری وارد کن؛ برنامه بقیه را محاسبه می‌کند. برای حالت‌های دقیق، حداقل سه مقدار مرتبط وارد شود.", style = MaterialTheme.typography.bodySmall, color = loanLabel)
             LoanField("اصل وام", principal, { principal = it })
             LoanField("قسط ماهانه", payment, { payment = it })
-            LoanField("تعداد اقساط (ماه)", months, { months = it }, KeyboardType.Number)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) {
+                    LoanField("تعداد اقساط", months, { months = it }, KeyboardType.Number)
+                }
+                Box(Modifier.weight(1f)) {
+                    LoanField("فاصله اقساط (ماه)", interval, { interval = it }, KeyboardType.Number, groupThousands = false)
+                }
+            }
             LoanField("نرخ سالانه (%)", annualRate, { annualRate = it }, groupThousands = false)
             LoanField("مجموع بازپرداخت", totalRepayment, { totalRepayment = it })
             LoanField("مجموع سود", totalInterest, { totalInterest = it })
             Button(onClick = ::calculate, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = HeaderBlue)) {
                 Text("محاسبه و تکمیل مقادیر", color = Color.White)
             }
+            OutlinedButton(
+                onClick = {
+                    principal = ""; payment = ""; months = ""; interval = "1"
+                    annualRate = ""; totalRepayment = ""; totalInterest = ""; error = ""
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("پاک کردن همه مقادیر", color = HeaderBlue) }
             if (error.isNotBlank()) Text(error, color = Color(0xFFC62828), style = MaterialTheme.typography.bodySmall)
         }
     }
@@ -104,9 +123,17 @@ fun LoanCalculator() {
 
 @Composable
 private fun LoanField(label: String, value: String, onChange: (String) -> Unit, type: KeyboardType = KeyboardType.Decimal, groupThousands: Boolean = true) {
+    var fieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    LaunchedEffect(value) {
+        if (fieldValue.text != value) fieldValue = TextFieldValue(value, TextRange(value.length))
+    }
     OutlinedTextField(
-        value = value,
-        onValueChange = { onChange(formatLoanInput(it, groupThousands)) },
+        value = fieldValue,
+        onValueChange = {
+            val formatted = formatLoanInputValue(it, groupThousands)
+            fieldValue = TextFieldValue(formatted.first, TextRange(formatted.second))
+            onChange(formatted.first)
+        },
         label = { Text(label, color = loanLabel) },
         keyboardOptions = KeyboardOptions(keyboardType = type),
         singleLine = true,
@@ -119,21 +146,38 @@ private fun LoanField(label: String, value: String, onChange: (String) -> Unit, 
             focusedBorderColor = HeaderBlue,
             unfocusedBorderColor = loanBorder,
             cursorColor = HeaderBlue
-        )
+        ),
+        trailingIcon = {
+            if (fieldValue.text.isNotEmpty()) {
+                IconButton(onClick = {
+                    fieldValue = TextFieldValue("")
+                    onChange("")
+                }) { Icon(Icons.Default.Delete, contentDescription = "پاک کردن", tint = DebitRed) }
+            }
+        }
     )
 }
 
 private fun String.toNumber(): Double? = replace(",", "").toDoubleOrNull()?.takeIf { it >= 0.0 }
 private fun Double.twoDecimals(): String = String.format(Locale.US, "%.2f", this)
 
-private fun formatLoanInput(input: String, groupThousands: Boolean): String {
-    val normalized = input.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", "")
+private fun formatLoanInputValue(input: TextFieldValue, groupThousands: Boolean): Pair<String, Int> {
+    val rawBeforeCursor = input.text.take(input.selection.start)
+    val digitsBeforeCursor = rawBeforeCursor.count { it.isDigit() }
+    val normalized = input.text.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", "")
     val parts = normalized.split('.', limit = 2)
     val integer = parts[0].ifEmpty { "0" }
     val formattedInteger = if (groupThousands) {
         NumberFormat.getIntegerInstance(Locale.US).format(integer.toLongOrNull() ?: 0L)
     } else integer
-    return if (parts.size == 2) "$formattedInteger.${parts[1].filter { it.isDigit() }.take(2)}" else formattedInteger
+    val result = if (parts.size == 2) "$formattedInteger.${parts[1].filter { it.isDigit() }.take(2)}" else formattedInteger
+    if (digitsBeforeCursor >= integer.length) return result to result.length
+    var seen = 0
+    val cursor = result.indexOfFirst { ch ->
+        if (ch.isDigit()) seen++
+        seen == digitsBeforeCursor
+    }
+    return result to if (cursor >= 0) cursor + 1 else result.length
 }
 
 private fun monthlyPayment(principal: Double, months: Int, annualRate: Double): Double {

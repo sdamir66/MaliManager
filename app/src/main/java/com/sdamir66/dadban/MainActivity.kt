@@ -762,17 +762,23 @@ fun SwipeableAccountCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
             Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(46.dp)
-                        .background(color = display.color, shape = CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(account.displayUnit(), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Box(
+                        Modifier
+                            .size(46.dp)
+                            .background(color = display.color, shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                    Text(
+                        if (display.label.isEmpty()) "•" else if (display.color == CreditGreen) "↓" else "↑",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(account.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F))
+                    Text(account.displayUnit(), style = MaterialTheme.typography.labelSmall, color = Color(0xFF5C5D72))
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
@@ -1004,8 +1010,10 @@ fun SwipeableTransactionCard(
         val isPositive = if (accountNature == "debit") !isCreditType else isCreditType
         val sign = if (isPositive) "+" else "−"
         val amountColor = if (isPositive) CreditGreen else DebitRed
-        val iconBg = if (isCreditType) CreditGreen else DebitRed
-        val iconChar = if (isCreditType) "↓" else "↑"
+        // در حساب بدهکار، بدهکار مثبت است؛ در حساب بستانکار، بستانکار مثبت است.
+        // جهت پایین یعنی افزایش مانده و جهت بالا یعنی کاهش مانده.
+        val iconBg = if (isPositive) CreditGreen else DebitRed
+        val iconChar = if (isPositive) "↓" else "↑"
 
         val runningDisplay = balanceDisplay(runningBalance, accountNature)
         Card(
@@ -1027,7 +1035,7 @@ fun SwipeableTransactionCard(
                         transaction.type,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (isCreditType) CreditGreen else DebitRed
+                        color = if (isPositive) CreditGreen else DebitRed
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(Jalali.format(transaction.dateMillis), style = MaterialTheme.typography.bodySmall, color = Color(0xFF5C5D72))
@@ -1076,6 +1084,8 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
     val isPositive = if (accountNature == "debit") !isCreditType else isCreditType
     val sign = if (isPositive) "+" else "−"
     val amountColor = if (isPositive) CreditGreen else DebitRed
+    val iconBg = if (isPositive) CreditGreen else DebitRed
+    val iconChar = if (isPositive) "↓" else "↑"
 
     val runningDisplay = balanceDisplay(runningBalance, accountNature)
     Card(
@@ -1085,13 +1095,13 @@ fun AutoTransactionCard(transaction: Transaction, currency: String, runningBalan
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(46.dp).background(CreditGreen, shape = CircleShape), contentAlignment = Alignment.Center) {
-                Text("↓", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Box(Modifier.size(46.dp).background(iconBg, shape = CircleShape), contentAlignment = Alignment.Center) {
+                Text(iconChar, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(transaction.type, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = CreditGreen)
+                    Text(transaction.type, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = amountColor)
                     Spacer(Modifier.width(6.dp))
                     Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = RoundedCornerShape(6.dp)) {
                         Text("خودکار", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))

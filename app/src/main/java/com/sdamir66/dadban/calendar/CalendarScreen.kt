@@ -153,15 +153,6 @@ fun CalendarScreen(db: AppDb) {
             }
         }
 
-        item {
-            Spacer(Modifier.height(12.dp))
-            CalendarDateConverter(
-                selectedDateMillis = (selectedDay ?: currentDate).time,
-                hijriCacheMap = hijriCacheMap,
-                hijriCacheByHijriDate = hijriCacheByHijriDate
-            )
-        }
-
         item { Spacer(Modifier.height(24.dp)) }
     }
 }
