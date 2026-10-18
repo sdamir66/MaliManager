@@ -46,13 +46,13 @@ fun CalendarScreen(db: AppDb) {
                     dbItems.addAll(db.hijriCacheDao().getAllForYear(y))
                 }
 
-                val finalItems = if (dbItems.isNotEmpty()) {
-                    dbItems
-                } else {
-                    HijriOfficialData.ensureLoaded(context)
-                    HijriOfficialData.getAllCaches()
-                        .filter { it.jalaliYear in years }
-                }
+                HijriOfficialData.ensureLoaded(context)
+                val officialItems = HijriOfficialData.getAllCaches()
+                    .filter { it.jalaliYear in years }
+                // دیتابیس ممکن است فقط بخشی از سال را داشته باشد؛
+                // در این حالت نباید داده رسمی با آن جایگزین شود.
+                val finalItems = (officialItems + dbItems)
+                    .distinctBy { it.jalaliDate }
 
                 // ✅ map اول (کلید jalaliDate)
                 hijriCacheMap = finalItems.associateBy { it.jalaliDate }

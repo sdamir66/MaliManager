@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sdamir66.dadban.AccountEditor
+import com.sdamir66.dadban.ReportPreviewDialog
 import com.sdamir66.dadban.AccountScreen
 import com.sdamir66.dadban.SwipeableAccountCard
 import com.sdamir66.dadban.data.Account
@@ -60,6 +61,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var openAccount by remember { mutableStateOf<Account?>(null) }
     var assetQuery by remember { mutableStateOf("") }
+    var showAssetReport by remember { mutableStateOf(false) }
 
     // ═══ حالت مرتب‌سازی ═══
     var editMode by remember { mutableStateOf(false) }
@@ -209,6 +211,10 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.85f)
                         )
+                    }
+
+                    IconButton(onClick = { showAssetReport = true }, modifier = Modifier.size(44.dp)) {
+                        Text("☷", color = Color.White, fontSize = 22.sp)
                     }
 
                     // ═══ دکمه ⇅ ═══
@@ -500,6 +506,16 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             },
             onCancel = { deleteTarget = null }
+        )
+    }
+    if (showAssetReport) {
+        ReportPreviewDialog(
+            title = "گزارش دارایی‌های من",
+            rows = filteredAccounts.map { acc ->
+                "${acc.name} | ${money(balances[acc.id] ?: 0.0)} ${acc.displayUnit()} | ${if (acc.nature == "debit") "بدهکار" else "بستانکار"}"
+            },
+            onShare = { ReportExporter.shareAccounts(context, filteredAccounts, "گزارش دارایی‌های من", balances) },
+            onDismiss = { showAssetReport = false }
         )
     }
 }

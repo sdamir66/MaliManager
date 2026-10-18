@@ -551,6 +551,7 @@ fun PersonScreen(
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var editMode by remember { mutableStateOf(false) }
     var accountQuery by remember { mutableStateOf("") }
+    var showAccountReport by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val filteredAccounts = accounts.filter { accountQuery.isBlank() || it.name.contains(accountQuery, ignoreCase = true) }
 
@@ -595,6 +596,9 @@ fun PersonScreen(
                         )
                     }
 
+                    IconButton(onClick = { showAccountReport = true }, modifier = Modifier.size(44.dp)) {
+                        Text("☷", color = Color.White, fontSize = 22.sp)
+                    }
                     IconButton(onClick = { editMode = !editMode }, modifier = Modifier.size(44.dp)) {
                         Text(if (editMode) "✓" else "⇅", color = Color.White, fontSize = 22.sp)
                     }
@@ -690,6 +694,18 @@ fun PersonScreen(
                 }
             }
         }
+    }
+
+    if (showAccountReport) {
+        ReportPreviewDialog(
+            title = "گزارش حساب‌های ${person.name}",
+            rows = filteredAccounts.map { acc ->
+                val value = accountBalances.find { it.first.id == acc.id }?.second ?: 0.0
+                "${acc.name} | ${money(value)} ${acc.displayUnit()} | ${if (acc.nature == "debit") "بدهکار" else "بستانکار"}"
+            },
+            onShare = { ReportExporter.shareAccounts(context, filteredAccounts, "گزارش حساب‌های ${person.name}", accountBalances.associate { it.first.id to it.second }) },
+            onDismiss = { showAccountReport = false }
+        )
     }
 
     if (add) {
@@ -837,7 +853,11 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     var add by remember { mutableStateOf(false) }
     var profit by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<Transaction?>(null) }
+    var showTransactionFilter by remember { mutableStateOf(false) }
+    var fromDate by remember { mutableStateOf("") }
+    var toDate by remember { mutableStateOf("") }
     var transactionQuery by remember { mutableStateOf("") }
+    var showTransactionReport by remember { mutableStateOf(false) }
     var livePrices by remember { mutableStateOf<List<TgjuPrice>>(emptyList()) }
     val scope = rememberCoroutineScope()
     val creditSum = tx.filter { it.type == "بستانکار" }.sumOf { it.amount }
@@ -845,7 +865,10 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     val bal = computeBalance(creditSum, debitSum, a.nature)
     val display = balanceDisplay(bal, a.nature)
     val filteredTransactions = tx.filter {
-        transactionQuery.isBlank() || it.type.contains(transactionQuery) || it.note.contains(transactionQuery, ignoreCase = true)
+        val from = fromDate.takeIf { it.isNotBlank() }?.let { Jalali.parse(it) }
+        val to = toDate.takeIf { it.isNotBlank() }?.let { Jalali.parse(it) }
+        (from == null || it.dateMillis >= from) && (to == null || it.dateMillis <= to + 86_399_999L) &&
+            (transactionQuery.isBlank() || it.type.contains(transactionQuery) || it.note.contains(transactionQuery, ignoreCase = true))
     }
 
     LaunchedEffect(a.id) {
@@ -875,6 +898,9 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 subtitle = "",
                 onBackClick = onBack,
                 extraActions = {
+                    IconButton(onClick = { showTransactionFilter = !showTransactionFilter }, modifier = Modifier.size(44.dp)) {
+                        Text("⌕", color = Color.White, fontSize = 25.sp)
+                    }
                     IconButton(onClick = { profit = true }, modifier = Modifier.size(44.dp)) {
                         Icon(Icons.Default.Settings, "تنظیم سود", tint = Color.White, modifier = Modifier.size(24.dp))
                     }
@@ -936,16 +962,20 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 }
             }
 
-            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = transactionQuery,
-                    onValueChange = { transactionQuery = it },
-                    label = { Text("فیلتر نوع یا یادداشت") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(Modifier.width(6.dp))
-                TextButton(onClick = { ReportExporter.shareTransactions(context, a, filteredTransactions) }) { Text("گزارش") }
+            if (showTransactionFilter) {
+                Card(Modifier.padding(horizontal = 16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedTextField(fromDate, { fromDate = it }, label = { Text("از تاریخ") }, placeholder = { Text("1405/01/01") }, singleLine = true, modifier = Modifier.weight(1f))
+                            OutlinedTextField(toDate, { toDate = it }, label = { Text("تا تاریخ") }, placeholder = { Text("1405/12/29") }, singleLine = true, modifier = Modifier.weight(1f))
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(transactionQuery, { transactionQuery = it }, label = { Text("نوشته یا نوع") }, singleLine = true, modifier = Modifier.weight(1f))
+                            Spacer(Modifier.width(6.dp))
+                            Button(onClick = { showTransactionReport = true }) { Text("گزارش") }
+                        }
+                    }
+                }
             }
 
             val runningBalances = remember(tx, a.nature) { calculateRunningBalances(tx, a.nature) }
@@ -992,6 +1022,14 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 }
             },
             onCancel = { deleteTarget = null }
+        )
+    }
+    if (showTransactionReport) {
+        ReportPreviewDialog(
+            title = "گزارش تراکنش‌های ${a.name}",
+            rows = filteredTransactions.map { "${Jalali.format(it.dateMillis)} | ${it.type} | ${money(it.amount)} | ${it.note}" },
+            onShare = { ReportExporter.shareTransactions(context, a, filteredTransactions) },
+            onDismiss = { showTransactionReport = false }
         )
     }
 }

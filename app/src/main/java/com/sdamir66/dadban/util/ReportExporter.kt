@@ -11,8 +11,8 @@ import com.sdamir66.dadban.data.Transaction
 import java.io.File
 
 object ReportExporter {
-    fun shareAccounts(context: Context, accounts: List<Account>, title: String = "گزارش حساب‌ها") {
-        shareFiles(context, title, accountsHtml(accounts), "accounts.xls", "application/vnd.ms-excel", accountsPdf(accounts, title))
+    fun shareAccounts(context: Context, accounts: List<Account>, title: String = "گزارش حساب‌ها", balances: Map<Long, Double> = emptyMap()) {
+        shareFiles(context, title, accountsHtml(accounts, balances), "accounts.xls", "application/vnd.ms-excel", accountsPdf(accounts, title, balances))
     }
 
     fun shareTransactions(context: Context, account: Account, transactions: List<Transaction>, title: String = "گزارش تراکنش‌ها") {
@@ -34,9 +34,9 @@ object ReportExporter {
         context.startActivity(Intent.createChooser(intent, "اشتراک‌گذاری گزارش"))
     }
 
-    private fun accountsHtml(accounts: List<Account>): String = buildString {
-        append("<html><meta charset='utf-8'><table><tr><th>حساب</th><th>ارز</th><th>ماهیت</th><th>نرخ</th></tr>")
-        accounts.forEach { append("<tr><td>${esc(it.name)}</td><td>${esc(it.displayUnit())}</td><td>${if (it.nature == "debit") "بدهکار" else "بستانکار"}</td><td>${it.manualRate}</td></tr>") }
+    private fun accountsHtml(accounts: List<Account>, balances: Map<Long, Double>): String = buildString {
+        append("<html><meta charset='utf-8'><table><tr><th>حساب</th><th>ارز</th><th>مانده</th><th>ماهیت</th><th>نرخ</th></tr>")
+        accounts.forEach { append("<tr><td>${esc(it.name)}</td><td>${esc(it.displayUnit())}</td><td>${balances[it.id] ?: 0.0}</td><td>${if (it.nature == "debit") "بدهکار" else "بستانکار"}</td><td>${it.manualRate}</td></tr>") }
         append("</table></html>")
     }
 
@@ -46,7 +46,7 @@ object ReportExporter {
         append("</table></html>")
     }
 
-    private fun accountsPdf(accounts: List<Account>, title: String) = pdf(title, accounts.map { "${it.name} | ${it.displayUnit()} | ${if (it.nature == "debit") "بدهکار" else "بستانکار"}" })
+    private fun accountsPdf(accounts: List<Account>, title: String, balances: Map<Long, Double>) = pdf(title, accounts.map { "${it.name} | ${money(balances[it.id] ?: 0.0)} ${it.displayUnit()} | ${if (it.nature == "debit") "بدهکار" else "بستانکار"}" })
     private fun transactionsPdf(account: Account, transactions: List<Transaction>, title: String) = pdf(title, transactions.map { "${Jalali.format(it.dateMillis)} | ${it.type} | ${money(it.amount)} | ${it.note}" })
 
     private fun pdf(title: String, rows: List<String>): ByteArray {

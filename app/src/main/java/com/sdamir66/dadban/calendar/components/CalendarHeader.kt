@@ -78,6 +78,15 @@ fun CalendarHeader(
                 )
             }
 
+            Text(
+                fullJalaliDate(currentDate),
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.92f),
+                fontWeight = FontWeight.Medium
+            )
+
             Spacer(Modifier.height(10.dp))
 
             // ═══ ترتیب LTR: میلادی (چپ) - جلالی (وسط) - قمری (راست) ═══
@@ -123,6 +132,14 @@ fun CalendarHeader(
             onDismiss = { showYearPicker = false }
         )
     }
+}
+
+private fun fullJalaliDate(date: Date): String {
+    val j = Jalali.toJalaliPublic(date.time)
+    val cal = Calendar.getInstance().apply { time = date }
+    val weekdays = arrayOf("یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه")
+    val months = arrayOf("فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند")
+    return "${weekdays[cal.get(Calendar.DAY_OF_WEEK) - 1]} ${j[2]} ${months[j[1] - 1]} ${j[0]}"
 }
 
 @Composable
