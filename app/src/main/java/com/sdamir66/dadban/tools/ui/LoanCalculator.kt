@@ -77,12 +77,12 @@ fun LoanCalculator() {
             return
         }
         error = ""
-        principal = solvedP.twoDecimals()
-        payment = solvedPay.twoDecimals()
+        principal = solvedP.formattedLoanNumber()
+        payment = solvedPay.formattedLoanNumber()
         months = solvedN.toString()
         annualRate = (solvedRate ?: 0.0).twoDecimals()
-        totalRepayment = (solvedTotal ?: solvedPay * solvedN).twoDecimals()
-        totalInterest = ((solvedTotal ?: solvedPay * solvedN) - solvedP).twoDecimals()
+        totalRepayment = (solvedTotal ?: solvedPay * solvedN).formattedLoanNumber()
+        totalInterest = ((solvedTotal ?: solvedPay * solvedN) - solvedP).formattedLoanNumber()
     }
 
     Card(
@@ -161,6 +161,10 @@ private fun LoanField(label: String, value: String, onChange: (String) -> Unit, 
 
 private fun String.toNumber(): Double? = replace(",", "").toDoubleOrNull()?.takeIf { it >= 0.0 }
 private fun Double.twoDecimals(): String = String.format(Locale.US, "%.2f", this)
+private fun Double.formattedLoanNumber(): String = NumberFormat.getNumberInstance(Locale.US).apply {
+    minimumFractionDigits = 2
+    maximumFractionDigits = 2
+}.format(this)
 
 private fun formatLoanInputValue(input: TextFieldValue, groupThousands: Boolean): Pair<String, Int> {
     val rawBeforeCursor = input.text.take(input.selection.start)

@@ -36,6 +36,7 @@ import com.sdamir66.dadban.ui.theme.HeaderBlue
 import com.sdamir66.dadban.util.Jalali
 import com.sdamir66.dadban.util.computeBalance
 import com.sdamir66.dadban.util.money
+import com.sdamir66.dadban.util.ReportExporter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -58,6 +59,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     var editTarget by remember { mutableStateOf<Account?>(null) }
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var openAccount by remember { mutableStateOf<Account?>(null) }
+    var assetQuery by remember { mutableStateOf("") }
 
     // ═══ حالت مرتب‌سازی ═══
     var editMode by remember { mutableStateOf(false) }
@@ -165,6 +167,7 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
     val unresolvedEquivalentCount = accounts.count { acc ->
         TreasuryCalculator.calculateEquivalent(acc, balances[acc.id] ?: 0.0, livePrices) == null
     }
+    val filteredAccounts = accounts.filter { assetQuery.isBlank() || it.name.contains(assetQuery, ignoreCase = true) }
 
     val isStale = lastUpdate == 0L || (System.currentTimeMillis() - lastUpdate) > 30 * 60 * 1000L
 
@@ -314,8 +317,20 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                 }
             }
 
+            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = assetQuery,
+                    onValueChange = { assetQuery = it },
+                    label = { Text("فیلتر دارایی") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(6.dp))
+                TextButton(onClick = { ReportExporter.shareAccounts(context, filteredAccounts, "گزارش دارایی‌های من") }) { Text("گزارش") }
+            }
+
             // ═══ لیست دارایی‌ها ═══
-            if (accounts.isEmpty()) {
+            if (filteredAccounts.isEmpty()) {
                 Box(
                     Modifier.fillMaxSize().offset(y = (-20).dp).padding(top = 40.dp),
                     contentAlignment = Alignment.TopCenter
@@ -355,8 +370,8 @@ fun TreasuryScreen(db: AppDb, onBack: () -> Unit) {
                         )
                     }
 
-                    items(accounts.size, key = { accounts[it].id }) { index ->
-                        val acc = accounts[index]
+                    items(filteredAccounts.size, key = { filteredAccounts[it].id }) { index ->
+                        val acc = filteredAccounts[index]
                         val bal = balances[acc.id] ?: 0.0
                         val equiv = TreasuryCalculator.calculateEquivalent(acc, bal, livePrices)
 

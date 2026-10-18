@@ -76,17 +76,21 @@ fun CalendarDateConverter(
             Text("هر ردیف را تغییر بده؛ دو ردیف دیگر هم‌زمان تبدیل می‌شوند.", style = MaterialTheme.typography.bodySmall, color = converterLabel)
             ConverterField("جلالی", jalali, { value ->
                 jalali = value
-                applyMillis(Jalali.parse(value))
+                if (value.count { it.isDigit() } == 8) applyMillis(Jalali.parse(value)) else error = ""
             })
             ConverterField("میلادی", gregorian, { value ->
                 gregorian = value
-                applyMillis(parseGregorian(value))
+                if (value.count { it.isDigit() } == 8) applyMillis(parseGregorian(value)) else error = ""
             })
             ConverterField("قمری", hijri, { value ->
                 hijri = value
                 val parts = value.split("/")
-                val cache = if (parts.size == 3) hijriCacheByHijriDate["${parts[0].toIntOrNull()}/${parts[1].toIntOrNull()}/${parts[2].toIntOrNull()}"] else null
-                applyMillis(cache?.let { Jalali.parse(it.jalaliDate) })
+                if (value.count { it.isDigit() } == 8) {
+                    val cache = if (parts.size == 3) hijriCacheByHijriDate[
+                        "${parts[0].toIntOrNull()}/${parts[1].toIntOrNull()}/${parts[2].toIntOrNull()}"
+                    ] else null
+                    applyMillis(cache?.let { Jalali.parse(it.jalaliDate) })
+                } else error = ""
             })
             if (error.isNotBlank()) Text(error, color = Color(0xFFC62828), style = MaterialTheme.typography.bodySmall)
         }

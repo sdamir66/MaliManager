@@ -34,8 +34,8 @@ data class BalanceDisplay(
  *   صفر → "0" مشکی
  *
  * برای debit:
- *   مثبت → "X" قرمز + "بدهکار"
- *   منفی → "−X" سبز + "بستانکار"
+ *   مثبت → "X" سبز + "بدهکار"
+ *   منفی → "−X" قرمز + "بستانکار"
  *   صفر → "0" مشکی
  */
 fun balanceDisplay(balance: Double, nature: String = "credit"): BalanceDisplay {
@@ -43,17 +43,17 @@ fun balanceDisplay(balance: Double, nature: String = "credit"): BalanceDisplay {
     val bal = if (abs(balance) < 0.01) 0.0 else balance
 
     if (nature == "debit") {
-        // دارایی‌ها: بدهکار مثبت (قرمز)، بستانکار منفی (سبز)
+        // دارایی‌ها: بدهکار مثبت (سبز)، بستانکار منفی (قرمز)
         return when {
             bal > 0.0 -> BalanceDisplay(
                 text = money(bal),
                 label = "بدهکار",
-                color = DebitRed
+                color = CreditGreen
             )
             bal < 0.0 -> BalanceDisplay(
                 text = "−${money(-bal)}",
                 label = "بستانکار",
-                color = CreditGreen
+                color = DebitRed
             )
             else -> BalanceDisplay(
                 text = "0",

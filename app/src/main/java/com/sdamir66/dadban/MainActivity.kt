@@ -59,6 +59,7 @@ import com.sdamir66.dadban.util.autoBackupToInternal
 import com.sdamir66.dadban.util.balanceDisplay
 import com.sdamir66.dadban.util.computeBalance
 import com.sdamir66.dadban.util.money
+import com.sdamir66.dadban.util.ReportExporter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -543,12 +544,15 @@ fun PersonScreen(
     onBack: () -> Unit,
     onOpenAccount: (Account) -> Unit
 ) {
+    val context = LocalContext.current
     val accounts by db.accounts().byPerson(person.id).collectAsState(emptyList())
     var add by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<Account?>(null) }
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var editMode by remember { mutableStateOf(false) }
+    var accountQuery by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    val filteredAccounts = accounts.filter { accountQuery.isBlank() || it.name.contains(accountQuery, ignoreCase = true) }
 
     val accountBalances = accounts.map { acc ->
         val txs = remember(acc.id) { mutableStateOf<List<Transaction>>(emptyList()) }
@@ -610,6 +614,19 @@ fun PersonScreen(
             }
 
             Spacer(Modifier.height(16.dp))
+            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = accountQuery,
+                    onValueChange = { accountQuery = it },
+                    label = { Text("فیلتر حساب") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(6.dp))
+                TextButton(onClick = { ReportExporter.shareAccounts(context, filteredAccounts, "گزارش حساب‌های ${person.name}") }) {
+                    Text("گزارش")
+                }
+            }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -620,8 +637,8 @@ fun PersonScreen(
                     Text("حساب‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
                 }
 
-                items(accounts.size, key = { accounts[it].id }) { index ->
-                    val acc = accounts[index]
+                items(filteredAccounts.size, key = { filteredAccounts[it].id }) { index ->
+                    val acc = filteredAccounts[index]
                     val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0.0
 
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -820,12 +837,16 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     var add by remember { mutableStateOf(false) }
     var profit by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<Transaction?>(null) }
+    var transactionQuery by remember { mutableStateOf("") }
     var livePrices by remember { mutableStateOf<List<TgjuPrice>>(emptyList()) }
     val scope = rememberCoroutineScope()
     val creditSum = tx.filter { it.type == "بستانکار" }.sumOf { it.amount }
     val debitSum = tx.filter { it.type == "بدهکار" }.sumOf { it.amount }
     val bal = computeBalance(creditSum, debitSum, a.nature)
     val display = balanceDisplay(bal, a.nature)
+    val filteredTransactions = tx.filter {
+        transactionQuery.isBlank() || it.type.contains(transactionQuery) || it.note.contains(transactionQuery, ignoreCase = true)
+    }
 
     LaunchedEffect(a.id) {
         if (a.rateEnabled) {
@@ -915,6 +936,18 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 }
             }
 
+            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = transactionQuery,
+                    onValueChange = { transactionQuery = it },
+                    label = { Text("فیلتر نوع یا یادداشت") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(6.dp))
+                TextButton(onClick = { ReportExporter.shareTransactions(context, a, filteredTransactions) }) { Text("گزارش") }
+            }
+
             val runningBalances = remember(tx, a.nature) { calculateRunningBalances(tx, a.nature) }
 
             LazyColumn(
@@ -925,7 +958,7 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 item {
                     Text("تراکنش‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
                 }
-                items(tx, key = { it.id }) { t ->
+                items(filteredTransactions, key = { it.id }) { t ->
                     val running = runningBalances[t.id] ?: 0.0
                     if (!t.isAutoProfit) {
                         SwipeableTransactionCard(t, a.displayUnit(), running, a.nature, { editor = t }, { deleteTarget = t })
