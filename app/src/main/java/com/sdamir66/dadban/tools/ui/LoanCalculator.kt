@@ -15,6 +15,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import com.sdamir66.dadban.ui.theme.HeaderBlue
+import com.sdamir66.dadban.ui.theme.DebitRed
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
