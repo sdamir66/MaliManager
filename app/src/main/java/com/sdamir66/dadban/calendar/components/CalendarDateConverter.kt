@@ -30,6 +30,7 @@ fun CalendarDateConverter(
     val selectedJ = Jalali.toJalaliPublic(selectedDateMillis)
     val selectedG = Calendar.getInstance().apply { timeInMillis = selectedDateMillis }
     val selectedHijri = hijriCacheMap["%04d/%02d/%02d".format(Locale.US, selectedJ[0], selectedJ[1], selectedJ[2])]
+        ?: hijriCacheMap.values.firstOrNull { it.jalaliDate == "%04d/%02d/%02d".format(Locale.US, selectedJ[0], selectedJ[1], selectedJ[2]) }
 
     var jalali by remember(selectedDateMillis) {
         mutableStateOf("%04d/%02d/%02d".format(Locale.US, selectedJ[0], selectedJ[1], selectedJ[2]))
@@ -37,7 +38,7 @@ fun CalendarDateConverter(
     var gregorian by remember(selectedDateMillis) {
         mutableStateOf("%04d/%02d/%02d".format(Locale.US, selectedG.get(Calendar.YEAR), selectedG.get(Calendar.MONTH) + 1, selectedG.get(Calendar.DAY_OF_MONTH)))
     }
-    var hijri by remember(selectedDateMillis, selectedHijri) {
+    var hijri by remember(selectedDateMillis, selectedHijri, hijriCacheMap) {
         mutableStateOf(selectedHijri?.let { "%04d/%02d/%02d".format(Locale.US, it.hijriYear, hijriMonthNameToNumber(it.hijriMonth), it.hijriDay) } ?: "")
     }
     var error by remember { mutableStateOf("") }
@@ -88,7 +89,11 @@ fun CalendarDateConverter(
                 if (value.count { it.isDigit() } == 8) {
                     val cache = if (parts.size == 3) hijriCacheByHijriDate[
                         "${parts[0].toIntOrNull()}/${parts[1].toIntOrNull()}/${parts[2].toIntOrNull()}"
-                    ] else null
+                    ] ?: hijriCacheByHijriDate.values.firstOrNull {
+                        it.hijriYear == parts.getOrNull(0)?.toIntOrNull() &&
+                            hijriMonthNameToNumber(it.hijriMonth) == parts.getOrNull(1)?.toIntOrNull() &&
+                            it.hijriDay == parts.getOrNull(2)?.toIntOrNull()
+                    } else null
                     applyMillis(cache?.let { Jalali.parse(it.jalaliDate) })
                 } else error = ""
             })

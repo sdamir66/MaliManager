@@ -43,6 +43,7 @@ fun ToolsScreen() {
     var isExpanded by remember { mutableStateOf(false) }
     var hijriCacheMap by remember { mutableStateOf<Map<String, HijriCache>>(emptyMap()) }
     var hijriCacheByHijriDate by remember { mutableStateOf<Map<String, HijriCache>>(emptyMap()) }
+    val converterDateMillis = remember { System.currentTimeMillis() }
 
     LaunchedEffect(Unit) {
         val saved = ToolsPreferences.getSelectedKeys(context)
@@ -256,7 +257,7 @@ fun ToolsScreen() {
             }
             item {
                 CalendarDateConverter(
-                    selectedDateMillis = System.currentTimeMillis(),
+                    selectedDateMillis = converterDateMillis,
                     hijriCacheMap = hijriCacheMap,
                     hijriCacheByHijriDate = hijriCacheByHijriDate
                 )

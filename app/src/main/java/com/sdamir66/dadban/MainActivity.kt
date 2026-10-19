@@ -3,6 +3,7 @@
 package com.sdamir66.dadban
 
 import android.os.Bundle
+import androidx.compose.animation.Crossfade
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -49,6 +51,7 @@ import com.sdamir66.dadban.ui.ConfirmDeleteDialog
 import com.sdamir66.dadban.ui.PageHeader
 import com.sdamir66.dadban.ui.ProfitPeriodsScreen
 import com.sdamir66.dadban.ui.TxEditor
+import com.sdamir66.dadban.ui.JalaliCalendarDialog
 import com.sdamir66.dadban.ui.theme.BgLight
 import com.sdamir66.dadban.ui.theme.CreditGreen
 import com.sdamir66.dadban.ui.theme.DebitRed
@@ -59,13 +62,16 @@ import com.sdamir66.dadban.util.autoBackupToInternal
 import com.sdamir66.dadban.util.balanceDisplay
 import com.sdamir66.dadban.util.computeBalance
 import com.sdamir66.dadban.util.money
-import com.sdamir66.dadban.util.ReportExporter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.runtime.snapshotFlow
 import java.util.Locale
 
 // ═══════════════════════════════════════════════════════
@@ -544,16 +550,12 @@ fun PersonScreen(
     onBack: () -> Unit,
     onOpenAccount: (Account) -> Unit
 ) {
-    val context = LocalContext.current
     val accounts by db.accounts().byPerson(person.id).collectAsState(emptyList())
     var add by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<Account?>(null) }
     var deleteTarget by remember { mutableStateOf<Account?>(null) }
     var editMode by remember { mutableStateOf(false) }
-    var accountQuery by remember { mutableStateOf("") }
-    var showAccountReport by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val filteredAccounts = accounts.filter { accountQuery.isBlank() || it.name.contains(accountQuery, ignoreCase = true) }
 
     val accountBalances = accounts.map { acc ->
         val txs = remember(acc.id) { mutableStateOf<List<Transaction>>(emptyList()) }
@@ -596,9 +598,6 @@ fun PersonScreen(
                         )
                     }
 
-                    IconButton(onClick = { showAccountReport = true }, modifier = Modifier.size(44.dp)) {
-                        Text("☷", color = Color.White, fontSize = 22.sp)
-                    }
                     IconButton(onClick = { editMode = !editMode }, modifier = Modifier.size(44.dp)) {
                         Text(if (editMode) "✓" else "⇅", color = Color.White, fontSize = 22.sp)
                     }
@@ -618,20 +617,6 @@ fun PersonScreen(
             }
 
             Spacer(Modifier.height(16.dp))
-            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = accountQuery,
-                    onValueChange = { accountQuery = it },
-                    label = { Text("فیلتر حساب") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(Modifier.width(6.dp))
-                TextButton(onClick = { ReportExporter.shareAccounts(context, filteredAccounts, "گزارش حساب‌های ${person.name}") }) {
-                    Text("گزارش")
-                }
-            }
-
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
@@ -641,8 +626,8 @@ fun PersonScreen(
                     Text("حساب‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B1F), modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
                 }
 
-                items(filteredAccounts.size, key = { filteredAccounts[it].id }) { index ->
-                    val acc = filteredAccounts[index]
+                items(accounts.size, key = { accounts[it].id }) { index ->
+                    val acc = accounts[index]
                     val bal = accountBalances.find { it.first.id == acc.id }?.second ?: 0.0
 
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -694,18 +679,6 @@ fun PersonScreen(
                 }
             }
         }
-    }
-
-    if (showAccountReport) {
-        ReportPreviewDialog(
-            title = "گزارش حساب‌های ${person.name}",
-            rows = filteredAccounts.map { acc ->
-                val value = accountBalances.find { it.first.id == acc.id }?.second ?: 0.0
-                "${acc.name} | ${money(value)} ${acc.displayUnit()} | ${if (acc.nature == "debit") "بدهکار" else "بستانکار"}"
-            },
-            onShare = { ReportExporter.shareAccounts(context, filteredAccounts, "گزارش حساب‌های ${person.name}", accountBalances.associate { it.first.id to it.second }) },
-            onDismiss = { showAccountReport = false }
-        )
     }
 
     if (add) {
@@ -856,19 +829,30 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
     var showTransactionFilter by remember { mutableStateOf(false) }
     var fromDate by remember { mutableStateOf("") }
     var toDate by remember { mutableStateOf("") }
+    var fromDateMillis by remember { mutableStateOf<Long?>(null) }
+    var toDateMillis by remember { mutableStateOf<Long?>(null) }
+    var searchInput by remember { mutableStateOf("") }
     var transactionQuery by remember { mutableStateOf("") }
     var showTransactionReport by remember { mutableStateOf(false) }
+    var showFromCalendar by remember { mutableStateOf(false) }
+    var showToCalendar by remember { mutableStateOf(false) }
     var livePrices by remember { mutableStateOf<List<TgjuPrice>>(emptyList()) }
     val scope = rememberCoroutineScope()
-    val creditSum = tx.filter { it.type == "بستانکار" }.sumOf { it.amount }
-    val debitSum = tx.filter { it.type == "بدهکار" }.sumOf { it.amount }
+    val filteredTransactions = tx.filter {
+        (fromDateMillis == null || it.dateMillis >= fromDateMillis!!) && (toDateMillis == null || it.dateMillis <= toDateMillis!! + 86_399_999L) &&
+            (transactionQuery.isBlank() || it.type.contains(transactionQuery) || it.note.contains(transactionQuery, ignoreCase = true))
+    }
+    val balanceTransactions = if (showTransactionFilter) filteredTransactions else tx
+    val creditSum = balanceTransactions.filter { it.type == "بستانکار" }.sumOf { it.amount }
+    val debitSum = balanceTransactions.filter { it.type == "بدهکار" }.sumOf { it.amount }
     val bal = computeBalance(creditSum, debitSum, a.nature)
     val display = balanceDisplay(bal, a.nature)
-    val filteredTransactions = tx.filter {
-        val from = fromDate.takeIf { it.isNotBlank() }?.let { Jalali.parse(it) }
-        val to = toDate.takeIf { it.isNotBlank() }?.let { Jalali.parse(it) }
-        (from == null || it.dateMillis >= from) && (to == null || it.dateMillis <= to + 86_399_999L) &&
-            (transactionQuery.isBlank() || it.type.contains(transactionQuery) || it.note.contains(transactionQuery, ignoreCase = true))
+
+    LaunchedEffect(Unit) {
+        snapshotFlow { searchInput }
+            .debounce(300)
+            .distinctUntilChanged()
+            .collectLatest { transactionQuery = it }
     }
 
     LaunchedEffect(a.id) {
@@ -898,8 +882,15 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 subtitle = "",
                 onBackClick = onBack,
                 extraActions = {
-                    IconButton(onClick = { showTransactionFilter = !showTransactionFilter }, modifier = Modifier.size(44.dp)) {
-                        Text("⌕", color = Color.White, fontSize = 25.sp)
+                    IconButton(onClick = {
+                        if (showTransactionFilter) {
+                            fromDate = ""; toDate = ""
+                            fromDateMillis = null; toDateMillis = null
+                            searchInput = ""; transactionQuery = ""
+                        }
+                        showTransactionFilter = !showTransactionFilter
+                    }, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Default.FilterList, "فیلتر تراکنش‌ها", tint = Color.White, modifier = Modifier.size(24.dp))
                     }
                     IconButton(onClick = { profit = true }, modifier = Modifier.size(44.dp)) {
                         Icon(Icons.Default.Settings, "تنظیم سود", tint = Color.White, modifier = Modifier.size(24.dp))
@@ -916,6 +907,8 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
             ) {
+                Crossfade(targetState = showTransactionFilter, label = "transaction-filter") { filtering ->
+                if (!filtering) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -960,25 +953,25 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                         Text("+", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
                     }
                 }
-            }
-
-            if (showTransactionFilter) {
-                Card(Modifier.padding(horizontal = 16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedTextField(fromDate, { fromDate = it }, label = { Text("از تاریخ") }, placeholder = { Text("1405/01/01") }, singleLine = true, modifier = Modifier.weight(1f))
-                            OutlinedTextField(toDate, { toDate = it }, label = { Text("تا تاریخ") }, placeholder = { Text("1405/12/29") }, singleLine = true, modifier = Modifier.weight(1f))
+                } else {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(fromDate, { showFromCalendar = true }, label = { Text("از تاریخ") }, readOnly = true, singleLine = true, modifier = Modifier.weight(1f).height(48.dp))
+                            OutlinedTextField(toDate, { showToCalendar = true }, label = { Text("تا تاریخ") }, readOnly = true, singleLine = true, modifier = Modifier.weight(1f).height(48.dp))
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(transactionQuery, { transactionQuery = it }, label = { Text("نوشته یا نوع") }, singleLine = true, modifier = Modifier.weight(1f))
-                            Spacer(Modifier.width(6.dp))
-                            Button(onClick = { showTransactionReport = true }) { Text("گزارش") }
+                            OutlinedTextField(searchInput, { searchInput = it }, label = { Text("جستجو") }, singleLine = true, modifier = Modifier.weight(1f).height(48.dp))
+                            Spacer(Modifier.width(8.dp))
+                            IconButton(onClick = { showTransactionReport = true }) {
+                                Text("📊", fontSize = 22.sp)
+                            }
                         }
                     }
                 }
+                }
             }
 
-            val runningBalances = remember(tx, a.nature) { calculateRunningBalances(tx, a.nature) }
+            val runningBalances = remember(filteredTransactions, a.nature) { calculateRunningBalances(filteredTransactions, a.nature) }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize().offset(y = (-20).dp).padding(horizontal = 16.dp),
@@ -1025,12 +1018,30 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
         )
     }
     if (showTransactionReport) {
-        ReportPreviewDialog(
-            title = "گزارش تراکنش‌های ${a.name}",
-            rows = filteredTransactions.map { "${Jalali.format(it.dateMillis)} | ${it.type} | ${money(it.amount)} | ${it.note}" },
-            onShare = { ReportExporter.shareTransactions(context, a, filteredTransactions) },
+        TransactionReportDialog(
+            account = a,
+            transactions = filteredTransactions,
+            fromDate = fromDate,
+            toDate = toDate,
+            search = transactionQuery,
             onDismiss = { showTransactionReport = false }
         )
+    }
+    if (showFromCalendar) {
+        val initial = Jalali.toJalaliPublic(fromDateMillis ?: System.currentTimeMillis())
+        JalaliCalendarDialog(initial[0], initial[1], initial[2], { y, m, d ->
+            fromDateMillis = Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, d))
+            fromDate = "%04d/%02d/%02d".format(Locale.US, y, m, d)
+            showFromCalendar = false
+        }, { showFromCalendar = false })
+    }
+    if (showToCalendar) {
+        val initial = Jalali.toJalaliPublic(toDateMillis ?: System.currentTimeMillis())
+        JalaliCalendarDialog(initial[0], initial[1], initial[2], { y, m, d ->
+            toDateMillis = Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, d))
+            toDate = "%04d/%02d/%02d".format(Locale.US, y, m, d)
+            showToCalendar = false
+        }, { showToCalendar = false })
     }
 }
 

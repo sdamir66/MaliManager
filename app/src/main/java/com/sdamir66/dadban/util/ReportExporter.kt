@@ -5,60 +5,76 @@ import android.content.Intent
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
-import com.sdamir66.dadban.displayUnit
 import com.sdamir66.dadban.data.Account
 import com.sdamir66.dadban.data.Transaction
 import java.io.File
+import java.text.NumberFormat
+import java.util.Locale
 
 object ReportExporter {
-    fun shareAccounts(context: Context, accounts: List<Account>, title: String = "گزارش حساب‌ها", balances: Map<Long, Double> = emptyMap()) {
-        shareFiles(context, title, accountsHtml(accounts, balances), "accounts.xls", "application/vnd.ms-excel", accountsPdf(accounts, title, balances))
-    }
+    enum class Format { PDF, EXCEL }
 
-    fun shareTransactions(context: Context, account: Account, transactions: List<Transaction>, title: String = "گزارش تراکنش‌ها") {
-        shareFiles(context, title, transactionsHtml(account, transactions), "transactions.xls", "application/vnd.ms-excel", transactionsPdf(account, transactions, title))
-    }
-
-    private fun shareFiles(context: Context, title: String, excel: String, excelName: String, mime: String, pdf: ByteArray) {
+    fun shareTransactions(context: Context, account: Account, transactions: List<Transaction>, format: Format) {
+        val rows = buildRows(account, transactions)
         val dir = File(context.cacheDir, "reports").apply { mkdirs() }
-        val excelFile = File(dir, excelName).apply { writeText(excel, Charsets.UTF_8) }
-        val pdfFile = File(dir, excelName.removeSuffix(".xls") + ".pdf").apply { writeBytes(pdf) }
-        val excelUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", excelFile)
-        val pdfUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
-        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-            type = "*/*"
-            putExtra(Intent.EXTRA_SUBJECT, title)
-            putParcelableArrayListExtra(Intent.EXTRA_STREAM, arrayListOf(excelUri, pdfUri))
+        val file = when (format) {
+            Format.EXCEL -> File(dir, "transactions.xls").apply { writeText(toHtml(rows), Charsets.UTF_8) }
+            Format.PDF -> File(dir, "transactions.pdf").apply { writeBytes(toPdf(rows)) }
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val mime = if (format == Format.PDF) "application/pdf" else "application/vnd.ms-excel"
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_SUBJECT, "گزارش تراکنش‌ها")
+            putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "اشتراک‌گذاری گزارش"))
+        context.startActivity(Intent.createChooser(intent, "اشتراک گزارش"))
     }
 
-    private fun accountsHtml(accounts: List<Account>, balances: Map<Long, Double>): String = buildString {
-        append("<html><meta charset='utf-8'><table><tr><th>حساب</th><th>ارز</th><th>مانده</th><th>ماهیت</th><th>نرخ</th></tr>")
-        accounts.forEach { append("<tr><td>${esc(it.name)}</td><td>${esc(it.displayUnit())}</td><td>${balances[it.id] ?: 0.0}</td><td>${if (it.nature == "debit") "بدهکار" else "بستانکار"}</td><td>${it.manualRate}</td></tr>") }
-        append("</table></html>")
+    private data class Row(val date: String, val note: String, val credit: Double, val debit: Double, val balance: Double)
+
+    private fun buildRows(account: Account, transactions: List<Transaction>): List<Row> {
+        var running = 0.0
+        val sorted = transactions.sortedWith(compareBy<Transaction> { it.dateMillis }.thenBy { it.id })
+        val rows = sorted.map {
+            val credit = if (it.type == "بستانکار") it.amount else 0.0
+            val debit = if (it.type == "بدهکار") it.amount else 0.0
+            running += if (account.nature == "debit") debit - credit else credit - debit
+            Row(Jalali.format(it.dateMillis), it.note, credit, debit, running)
+        }.toMutableList()
+        rows += Row("جمع", "", rows.sumOf { it.credit }, rows.sumOf { it.debit }, running)
+        return rows
     }
 
-    private fun transactionsHtml(account: Account, transactions: List<Transaction>): String = buildString {
-        append("<html><meta charset='utf-8'><table><tr><th>تاریخ</th><th>نوع</th><th>مبلغ</th><th>یادداشت</th></tr>")
-        transactions.forEach { append("<tr><td>${Jalali.format(it.dateMillis)}</td><td>${it.type}</td><td>${it.amount}</td><td>${esc(it.note)}</td></tr>") }
-        append("</table></html>")
+    private fun toHtml(rows: List<Row>): String = buildString {
+        append("<html><meta charset='utf-8'><body dir='ltr'><table border='1'><tr><th>تاریخ</th><th>شرح</th><th>بستانکار</th><th>بدهکار</th><th>مانده</th></tr>")
+        rows.forEach { append("<tr><td>${esc(it.date)}</td><td>${esc(it.note)}</td><td>${it.credit}</td><td>${it.debit}</td><td>${it.balance}</td></tr>") }
+        append("</table></body></html>")
     }
 
-    private fun accountsPdf(accounts: List<Account>, title: String, balances: Map<Long, Double>) = pdf(title, accounts.map { "${it.name} | ${money(balances[it.id] ?: 0.0)} ${it.displayUnit()} | ${if (it.nature == "debit") "بدهکار" else "بستانکار"}" })
-    private fun transactionsPdf(account: Account, transactions: List<Transaction>, title: String) = pdf(title, transactions.map { "${Jalali.format(it.dateMillis)} | ${it.type} | ${money(it.amount)} | ${it.note}" })
-
-    private fun pdf(title: String, rows: List<String>): ByteArray {
-        val doc = PdfDocument()
-        val paint = Paint().apply { textSize = 12f; color = android.graphics.Color.BLACK }
-        val page = doc.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
-        var y = 40f
-        page.canvas.drawText(title, 40f, y, paint); y += 28f
-        rows.take(28).forEach { row -> page.canvas.drawText(row.take(95), 40f, y, paint); y += 24f }
-        doc.finishPage(page)
-        return java.io.ByteArrayOutputStream().use { out -> doc.writeTo(out); doc.close(); out.toByteArray() }
+    private fun toPdf(rows: List<Row>): ByteArray {
+        val document = PdfDocument()
+        val paint = Paint().apply { textSize = 9f; color = android.graphics.Color.BLACK; typeface = android.graphics.Typeface.DEFAULT }
+        var pageNumber = 1
+        var page = document.startPage(PdfDocument.PageInfo.Builder(842, 595, pageNumber).create())
+        var y = 32f
+        page.canvas.drawText("تاریخ | شرح | بستانکار | بدهکار | مانده", 24f, y, paint)
+        y += 24f
+        rows.forEach { row ->
+            if (y > 560f) {
+                document.finishPage(page)
+                page = document.startPage(PdfDocument.PageInfo.Builder(842, 595, ++pageNumber).create())
+                y = 32f
+            }
+            val line = "${row.date} | ${row.note} | ${num(row.credit)} | ${num(row.debit)} | ${num(row.balance)}"
+            page.canvas.drawText(line.take(130), 24f, y, paint)
+            y += 19f
+        }
+        document.finishPage(page)
+        return java.io.ByteArrayOutputStream().use { out -> document.writeTo(out); document.close(); out.toByteArray() }
     }
 
+    private fun num(value: Double) = NumberFormat.getNumberInstance(Locale.US).format(value)
     private fun esc(value: String) = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 }
