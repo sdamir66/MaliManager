@@ -158,6 +158,19 @@ fun calculateRunningBalances(transactions: List<Transaction>, nature: String): M
 
 fun Account.displayUnit(): String = if (customUnit.isNotBlank()) customUnit else currency
 
+@Composable
+private fun filterFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = Color(0xFF1B1B1F),
+    unfocusedTextColor = Color(0xFF1B1B1F),
+    focusedContainerColor = Color.White,
+    unfocusedContainerColor = Color.White,
+    focusedBorderColor = HeaderBlue,
+    unfocusedBorderColor = Color(0xFFBDBDBD),
+    cursorColor = HeaderBlue,
+    focusedLabelColor = HeaderBlue,
+    unfocusedLabelColor = Color(0xFF5C5D72)
+)
+
 private fun toMillis(y: Int, m: Int, d: Int): Long =
     Jalali.parse("%04d/%02d/%02d".format(Locale.US, y, m, d)) ?: 0L
 
@@ -956,11 +969,29 @@ fun AccountScreen(db: AppDb, a: Account, onBack: () -> Unit) {
                 } else {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(fromDate, { showFromCalendar = true }, label = { Text("از تاریخ") }, readOnly = true, singleLine = true, modifier = Modifier.weight(1f).height(48.dp))
-                            OutlinedTextField(toDate, { showToCalendar = true }, label = { Text("تا تاریخ") }, readOnly = true, singleLine = true, modifier = Modifier.weight(1f).height(48.dp))
+                            Box(Modifier.weight(1f).height(56.dp)) {
+                                OutlinedTextField(
+                                    value = fromDate, onValueChange = {}, readOnly = true,
+                                    label = { Text("از تاریخ") }, singleLine = true,
+                                    modifier = Modifier.fillMaxSize(),
+                                    trailingIcon = { Text("📅") },
+                                    colors = filterFieldColors()
+                                )
+                                Box(Modifier.matchParentSize().clickable { showFromCalendar = true })
+                            }
+                            Box(Modifier.weight(1f).height(56.dp)) {
+                                OutlinedTextField(
+                                    value = toDate, onValueChange = {}, readOnly = true,
+                                    label = { Text("تا تاریخ") }, singleLine = true,
+                                    modifier = Modifier.fillMaxSize(),
+                                    trailingIcon = { Text("📅") },
+                                    colors = filterFieldColors()
+                                )
+                                Box(Modifier.matchParentSize().clickable { showToCalendar = true })
+                            }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(searchInput, { searchInput = it }, label = { Text("جستجو") }, singleLine = true, modifier = Modifier.weight(1f).height(48.dp))
+                            OutlinedTextField(searchInput, { searchInput = it }, label = { Text("جستجو") }, singleLine = true, modifier = Modifier.weight(1f).height(56.dp), colors = filterFieldColors())
                             Spacer(Modifier.width(8.dp))
                             IconButton(onClick = { showTransactionReport = true }) {
                                 Text("📊", fontSize = 22.sp)

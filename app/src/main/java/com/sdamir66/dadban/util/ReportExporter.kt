@@ -43,33 +43,70 @@ object ReportExporter {
             running += if (account.nature == "debit") debit - credit else credit - debit
             Row(Jalali.format(it.dateMillis), it.note, credit, debit, running)
         }.toMutableList()
-        rows += Row("جمع", "", rows.sumOf { it.credit }, rows.sumOf { it.debit }, running)
+        rows += Row("", "جمع", rows.sumOf { it.credit }, rows.sumOf { it.debit }, running)
         return rows
     }
 
     private fun toHtml(rows: List<Row>): String = buildString {
-        append("<html><meta charset='utf-8'><body dir='ltr'><table border='1'><tr><th>تاریخ</th><th>شرح</th><th>بستانکار</th><th>بدهکار</th><th>مانده</th></tr>")
-        rows.forEach { append("<tr><td>${esc(it.date)}</td><td>${esc(it.note)}</td><td>${it.credit}</td><td>${it.debit}</td><td>${it.balance}</td></tr>") }
+        append("<html><head><meta charset='utf-8'><style>")
+        append("body{font-family:Arial;direction:ltr}table{border-collapse:collapse;width:100%}th,td{border:1px solid #777;padding:6px;text-align:left}th{background:#F0F0F0;font-weight:bold}tr.total{background:#E0E0E0;font-weight:bold}")
+        append("</style></head><body><table><tr><th>تاریخ</th><th>شرح</th><th>بستانکار</th><th>بدهکار</th><th>مانده</th></tr>")
+        rows.forEachIndexed { index, row ->
+            val cls = if (index == rows.lastIndex) " class='total'" else ""
+            append("<tr$cls><td>${esc(row.date)}</td><td>${esc(row.note)}</td><td>${num(row.credit)}</td><td>${num(row.debit)}</td><td>${num(row.balance)}</td></tr>")
+        }
         append("</table></body></html>")
     }
 
     private fun toPdf(rows: List<Row>): ByteArray {
         val document = PdfDocument()
-        val paint = Paint().apply { textSize = 9f; color = android.graphics.Color.BLACK; typeface = android.graphics.Typeface.DEFAULT }
-        var pageNumber = 1
-        var page = document.startPage(PdfDocument.PageInfo.Builder(842, 595, pageNumber).create())
-        var y = 32f
-        page.canvas.drawText("تاریخ | شرح | بستانکار | بدهکار | مانده", 24f, y, paint)
+        val pageWidth = 595f
+        val pageHeight = 842f
+        val left = 40f
+        val right = 555f
+        val widths = floatArrayOf(80f, 180f, 80f, 80f, 80f)
+        val headers = arrayOf("تاریخ", "شرح", "بستانکار", "بدهکار", "مانده")
+        val border = Paint().apply { isAntiAlias = true; color = android.graphics.Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 1f }
+        val fill = Paint().apply { isAntiAlias = true; style = Paint.Style.FILL }
+        val text = Paint().apply { isAntiAlias = true; color = android.graphics.Color.BLACK; textSize = 11f; textAlign = Paint.Align.RIGHT }
+        val title = Paint(text).apply { textSize = 20f; isFakeBoldText = true; textAlign = Paint.Align.LEFT }
+        var pageNo = 1
+        var page = document.startPage(PdfDocument.PageInfo.Builder(pageWidth.toInt(), pageHeight.toInt(), pageNo).create())
+        var y = 40f
+        page.canvas.drawText("گزارش تراکنش‌ها", left, y, title)
+        y += 40f
+        page.canvas.drawText("تعداد: ${rows.size - 1} تراکنش", left, y, Paint(text).apply { textAlign = Paint.Align.LEFT; textSize = 12f })
         y += 24f
-        rows.forEach { row ->
-            if (y > 560f) {
-                document.finishPage(page)
-                page = document.startPage(PdfDocument.PageInfo.Builder(842, 595, ++pageNumber).create())
-                y = 32f
+        fun drawTableHeader() {
+            fill.color = android.graphics.Color.rgb(240, 240, 240)
+            page.canvas.drawRect(left, y, right, y + 28f, fill)
+            var x = left
+            headers.forEachIndexed { i, h ->
+                page.canvas.drawRect(x, y, x + widths[i], y + 28f, border)
+                page.canvas.drawText(h, x + widths[i] - 5f, y + 18f, text)
+                x += widths[i]
             }
-            val line = "${row.date} | ${row.note} | ${num(row.credit)} | ${num(row.debit)} | ${num(row.balance)}"
-            page.canvas.drawText(line.take(130), 24f, y, paint)
-            y += 19f
+            y += 28f
+        }
+        drawTableHeader()
+        rows.forEachIndexed { index, row ->
+            if (y + 28f > pageHeight - 40f) {
+                document.finishPage(page)
+                page = document.startPage(PdfDocument.PageInfo.Builder(pageWidth.toInt(), pageHeight.toInt(), ++pageNo).create())
+                y = 40f
+                drawTableHeader()
+            }
+            fill.color = if (index == rows.lastIndex) android.graphics.Color.rgb(224, 224, 224) else android.graphics.Color.WHITE
+            val values = arrayOf(row.date, row.note, num(row.credit), num(row.debit), num(row.balance))
+            var x = left
+            val rowText = Paint(text).apply { isFakeBoldText = index == rows.lastIndex }
+            values.forEachIndexed { i, value ->
+                page.canvas.drawRect(x, y, x + widths[i], y + 28f, fill)
+                page.canvas.drawRect(x, y, x + widths[i], y + 28f, border)
+                page.canvas.drawText(value.take(32), x + widths[i] - 5f, y + 18f, rowText)
+                x += widths[i]
+            }
+            y += 28f
         }
         document.finishPage(page)
         return java.io.ByteArrayOutputStream().use { out -> document.writeTo(out); document.close(); out.toByteArray() }
